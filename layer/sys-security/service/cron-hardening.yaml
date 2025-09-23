@@ -1,0 +1,277 @@
+# ==========================================
+# CRON SECURITY HARDENING LAYER
+# ==========================================
+# Hardening cron для безопасного выполнения запланированных задач
+# Включает: ограничения доступа, логирование, PATH hardening
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: cron-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: cron hardening with secure task execution and access control
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: cron-hardening
+
+# X-Env-VarPrefix: cron
+
+# X-Env-Var-restrict_user_crontabs: y
+# X-Env-Var-restrict_user_crontabs-Desc: Restrict user crontab access
+# X-Env-Var-restrict_user_crontabs-Required: n
+# X-Env-Var-restrict_user_crontabs-Valid: keywords:y,n
+# X-Env-Var-restrict_user_crontabs-Set: y
+
+# X-Env-Var-enable_logging: y
+# X-Env-Var-enable_logging-Desc: Enable cron job logging
+# X-Env-Var-enable_logging-Required: n
+# X-Env-Var-enable_logging-Valid: keywords:y,n
+# X-Env-Var-enable_logging-Set: y
+
+# X-Env-Var-secure_path: y
+# X-Env-Var-secure_path-Desc: Use secure PATH for cron jobs
+# X-Env-Var-secure_path-Required: n
+# X-Env-Var-secure_path-Valid: keywords:y,n
+# X-Env-Var-secure_path-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - cron
+    - crontabs
+
+  customize-hooks:
+    # cron hardening configuration
+    - |
+      set -eu
+
+      # Создание списка разрешенных пользователей cron
+      cat << 'EOF' > $1/etc/cron.allow
+      # ==========================================
+      # CRON ALLOWED USERS
+      # ==========================================
+      # This file contains the list of users allowed to use cron
+      # If this file exists, only users listed here can use cron
+
+      root
+      # Uncomment to allow specific users
+      # admin
+      # backup
+      # monitoring
+      EOF
+
+      # Убедиться, что cron.deny не существует или пустой
+      : > $1/etc/cron.deny
+
+      # Настройка cron для безопасного выполнения
+      cat << 'EOF' > $1/etc/cron.d/cron-hardening
+      # ==========================================
+      # CRON HARDENING CONFIGURATION
+      # ==========================================
+
+      # Secure PATH for cron jobs
+      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+      # Secure shell
+      SHELL=/bin/bash
+
+      # Home directory
+      HOME=/root
+
+      # Log cron jobs
+      CRONLOG=yes
+
+      # Send mail on errors
+      MAILTO=root
+
+      # Set umask for cron jobs
+      umask 022
+
+      # Environment variables
+      LANG=C
+      LC_ALL=C
+      EOF
+
+      # Создание системных cron задач для безопасности
+      cat << 'EOF' > $1/etc/cron.d/security-checks
+      # ==========================================
+      # SECURITY CHECKS CRON JOBS
+      # ==========================================
+
+      # Run security checks daily at 2 AM
+      0 2 * * * root /usr/local/bin/security-daily-check >/dev/null 2>&1
+
+      # Check file integrity weekly
+      0 3 * * 0 root /usr/local/bin/file-integrity-check >/dev/null 2>&1
+
+      # Update security databases weekly
+      0 4 * * 0 root /usr/local/bin/security-update >/dev/null 2>&1
+
+      # Check for security updates daily
+      0 5 * * * root /usr/local/bin/check-security-updates >/dev/null 2>&1
+
+      # Monitor log files hourly
+      0 * * * * root /usr/local/bin/log-monitor >/dev/null 2>&1
+
+      # Check system resources every 10 minutes
+      */10 * * * * root /usr/local/bin/resource-monitor >/dev/null 2>&1
+      EOF
+
+      # Настройка syslog для логирования cron
+      cat << 'EOF' > $1/etc/rsyslog.d/50-cron.conf
+      # ==========================================
+      # CRON LOGGING CONFIGURATION
+      # ==========================================
+
+      # Log cron messages
+      cron.* /var/log/cron.log
+
+      # Log cron security events
+      if $programname == 'cron' and $msg contains 'FAILED' then /var/log/cron-security.log
+      if $programname == 'cron' and $msg contains 'DENIED' then /var/log/cron-security.log
+      EOF
+
+      # Создание скрипта для проверки cron hardening
+      cat << 'EOF' > $1/usr/local/bin/cron-hardening-check
+      #!/bin/bash
+      # cron hardening checker
+
+      set -e
+
+      echo "========================================="
+      echo "CRON HARDENING CHECK"
+      echo "========================================="
+
+      # Check cron service
+      echo "Cron service status:"
+      systemctl is-active cron >/dev/null 2>&1 && echo "Service: RUNNING" || echo "Service: NOT RUNNING"
+
+      # Check cron version
+      echo -e "\nCron version:"
+      cron --version 2>&1 | head -1
+
+      # Check access control files
+      echo -e "\nAccess control:"
+      [[ -f /etc/cron.allow ]] && echo "cron.allow: EXISTS ($(wc -l < /etc/cron.allow) users allowed)" || echo "cron.allow: NOT FOUND"
+      [[ -f /etc/cron.deny ]] && echo "cron.deny: EXISTS ($(wc -l < /etc/cron.deny) users denied)" || echo "cron.deny: NOT FOUND"
+
+      # Check permissions
+      echo -e "\nFile permissions:"
+      ls -la /etc/cron.allow /etc/cron.deny 2>/dev/null | awk '{print $1, $3, $4, $9}'
+
+      # Check cron directories
+      echo -e "\nCron directories:"
+      for dir in /etc/cron.d /etc/cron.daily /etc/cron.weekly /etc/cron.monthly /var/spool/cron/crontabs; do
+          if [[ -d "$dir" ]]; then
+              echo "$dir: $(stat -c '%a %U:%G' "$dir")"
+          fi
+      done
+
+      # Check running cron jobs
+      echo -e "\nActive cron jobs:"
+      crontab -l 2>/dev/null | wc -l | xargs echo "Root crontabs:"
+      ls /var/spool/cron/crontabs/ 2>/dev/null | wc -l | xargs echo "User crontabs:"
+
+      echo -e "\nCron hardening check completed"
+      EOF
+
+      chmod +x $1/usr/local/bin/cron-hardening-check
+
+      # Создание скрипта для безопасного выполнения cron задач
+      cat << 'EOF' > $1/usr/local/bin/cron-secure-exec
+      #!/bin/bash
+      # Secure cron job execution wrapper
+
+      set -euo pipefail
+
+      # Secure PATH
+      export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+      # Secure umask
+      umask 022
+
+      # Log execution
+      LOG_FILE="/var/log/cron-security.log"
+      echo "$(date '+%Y-%m-%d %H:%M:%S') [CRON-SECURE] Executing: $*" >> "$LOG_FILE"
+
+      # Execute the command
+      exec "$@"
+      EOF
+
+      chmod +x $1/usr/local/bin/cron-secure-exec
+
+      # Создание примера безопасной cron задачи
+      cat << 'EOF' > $1/etc/cron.d/example-secure-job
+      # ==========================================
+      # EXAMPLE SECURE CRON JOB
+      # ==========================================
+
+      # This is an example of a secure cron job
+      # Run backup script securely every day at 1 AM
+      # 0 1 * * * root /usr/local/bin/cron-secure-exec /usr/local/bin/backup-script --quiet
+
+      # Security monitoring
+      # */5 * * * * root /usr/local/bin/cron-secure-exec /usr/local/bin/security-monitor --check
+      EOF
+
+      # Настройка logrotate для cron логов
+      cat << 'EOF' > $1/etc/logrotate.d/cron-hardening
+      # ==========================================
+      # CRON LOGS ROTATION
+      # ==========================================
+
+      /var/log/cron.log
+      /var/log/cron-security.log {
+          weekly
+          missingok
+          rotate 52
+          compress
+          delaycompress
+          create 0640 root adm
+          sharedscripts
+          postrotate
+              if systemctl is-active --quiet rsyslog; then
+                  systemctl reload rsyslog >/dev/null 2>&1 || true
+              fi
+          endscript
+      }
+      EOF
+
+      # Создание cron задачи для проверки целостности
+      cat << 'EOF' > $1/etc/cron.daily/cron-integrity-check
+      #!/bin/bash
+      # Cron integrity check
+
+      set -e
+
+      INTEGRITY_LOG="/var/log/cron-integrity.log"
+
+      echo "$(date): Starting cron integrity check" >> "$INTEGRITY_LOG"
+
+      # Check cron.allow permissions
+      if [[ -f /etc/cron.allow ]]; then
+          PERMS=$(stat -c '%a' /etc/cron.allow)
+          if [[ "$PERMS" != "600" ]]; then
+              echo "$(date): WARNING: cron.allow has incorrect permissions: $PERMS" >> "$INTEGRITY_LOG"
+          fi
+      fi
+
+      # Check for suspicious cron jobs
+      if crontab -l 2>/dev/null | grep -E "(nc|netcat|ncat|wget|curl)" >/dev/null; then
+          echo "$(date): WARNING: Found suspicious commands in root crontab" >> "$INTEGRITY_LOG"
+      fi
+
+      # Check cron service status
+      if ! systemctl is-active --quiet cron; then
+          echo "$(date): WARNING: Cron service is not running" >> "$INTEGRITY_LOG"
+      fi
+
+      echo "$(date): Cron integrity check completed" >> "$INTEGRITY_LOG"
+      EOF
+
+      chmod +x $1/etc/cron.daily/cron-integrity-check
+
+      log_success "cron hardening настроен"

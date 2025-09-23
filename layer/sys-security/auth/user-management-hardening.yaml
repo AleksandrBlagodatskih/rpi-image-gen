@@ -1,0 +1,316 @@
+# ==========================================
+# USER MANAGEMENT SECURITY HARDENING LAYER
+# ==========================================
+# Дополнительное hardening управление пользователями для Raspberry Pi
+# Включает: отключение default пользователей, SSH key enforcement, мониторинг
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: user-management-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: Raspberry Pi specific user management hardening (requires rpi/user-credentials for base user creation)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base,rpi-user-credentials
+# X-Env-Layer-Provides: user-management-hardening
+
+# X-Env-VarPrefix: usermgmt
+
+# X-Env-Var-disable_default_pi: y
+# X-Env-Var-disable_default_pi-Desc: Disable default 'pi' user if exists (Raspberry Pi specific)
+# X-Env-Var-disable_default_pi-Required: n
+# X-Env-Var-disable_default_pi-Valid: keywords:y,n
+# X-Env-Var-disable_default_pi-Set: y
+
+# X-Env-Var-force_ssh_key_only: y
+# X-Env-Var-force_ssh_key_only-Desc: Force SSH key-only authentication for all users
+# X-Env-Var-force_ssh_key_only-Required: n
+# X-Env-Var-force_ssh_key_only-Valid: keywords:y,n
+# X-Env-Var-force_ssh_key_only-Set: y
+
+# X-Env-Var-enable_user_monitoring: y
+# X-Env-Var-enable_user_monitoring-Desc: Enable user account monitoring and auditing
+# X-Env-Var-enable_user_monitoring-Required: n
+# X-Env-Var-enable_user_monitoring-Valid: keywords:y,n
+# X-Env-Var-enable_user_monitoring-Set: y
+
+# X-Env-Var-secure_user_groups: y
+# X-Env-Var-secure_user_groups-Desc: Ensure users are in secure groups only
+# X-Env-Var-secure_user_groups-Required: n
+# X-Env-Var-secure_user_groups-Valid: keywords:y,n
+# X-Env-Var-secure_user_groups-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages: []
+
+  customize-hooks:
+    # Raspberry Pi specific user management hardening
+    - |
+      set -eu
+
+      # Disable default pi user if configured and exists (Raspberry Pi specific)
+      if [[ "${usermgmt_disable_default_pi:-y}" == "y" ]]; then
+        if chroot $1 getent passwd pi >/dev/null 2>&1; then
+          log_info "Отключение пользователя pi (Raspberry Pi default)"
+          chroot $1 usermod -L pi  # Lock the account
+          chroot $1 usermod -s /usr/sbin/nologin pi  # Change shell
+          log_success "Пользователь pi отключен для усиления безопасности"
+        else
+          log_debug "Пользователь pi не найден - пропуск отключения"
+        fi
+      fi
+
+      # Force SSH key-only authentication for all users if configured
+      if [[ "${usermgmt_force_ssh_key_only:-y}" == "y" ]]; then
+        mkdir -p $1/etc/ssh/sshd_config.d
+
+        cat << EOF > $1/etc/ssh/sshd_config.d/95-user-management-hardening.conf
+# ==========================================
+# RASPBERRY PI USER MANAGEMENT HARDENING
+# ==========================================
+# Enforce SSH key-only authentication for all users
+
+# Disable password authentication globally
+PasswordAuthentication no
+PermitEmptyPasswords no
+
+# Disable challenge-response authentication
+ChallengeResponseAuthentication no
+
+# Ensure PAM is used for authentication
+UsePAM yes
+
+# Log authentication attempts
+LogLevel VERBOSE
+
+# Disable root login (reinforce existing settings)
+PermitRootLogin no
+EOF
+
+        log_success "SSH key-only authentication enforced for all users"
+      fi
+
+      # Ensure users are in secure groups only (Raspberry Pi specific)
+      if [[ "${usermgmt_secure_user_groups:-y}" == "y" ]]; then
+        # Get the main user (created by rpi/user-credentials layer)
+        if [[ -n "${IGconf_device_user1:-}" ]]; then
+          MAIN_USER="$IGconf_device_user1"
+
+          # Ensure the user is not in risky groups (Raspberry Pi specific)
+          # Remove from potentially dangerous groups if present
+          for group in video input spi i2c gpio; do
+            if chroot $1 id -nG "$MAIN_USER" 2>/dev/null | grep -qw "$group"; then
+              log_warning "Пользователь $MAIN_USER в группе $group - рекомендуется ограничить доступ к hardware"
+            fi
+          done
+
+          log_success "Проверка групп пользователей завершена"
+        fi
+      fi
+
+      # Create user monitoring script (Raspberry Pi specific)
+      if [[ "${usermgmt_enable_user_monitoring:-y}" == "y" ]]; then
+        cat << 'EOF' > $1/usr/local/bin/rpi-user-security-monitor
+#!/bin/bash
+# ==========================================
+# RASPBERRY PI USER SECURITY MONITORING
+# ==========================================
+# Monitor user accounts and security settings for Raspberry Pi
+
+set -e
+
+SCRIPT_NAME="rpi-user-security-monitor"
+
+show_raspberry_pi_users() {
+    echo "========================================="
+    echo "RASPBERRY PI USER ACCOUNTS STATUS"
+    echo "========================================="
+
+    echo "Raspberry Pi default user status:"
+    if chroot /host-root getent passwd pi >/dev/null 2>&1; then
+        PI_STATUS=$(chroot /host-root passwd -S pi 2>/dev/null | awk '{print $2}')
+        case "$PI_STATUS" in
+            LK) echo "  ✓ pi: LOCKED (secure)" ;;
+            NP) echo "  ⚠️  pi: NO PASSWORD (insecure)" ;;
+            PS) echo "  ✗ pi: HAS PASSWORD (insecure)" ;;
+            *) echo "  ? pi: UNKNOWN STATUS ($PI_STATUS)" ;;
+        esac
+    else
+        echo "  ✓ pi: USER DOES NOT EXIST (secure)"
+    fi
+
+    echo ""
+    echo "Administrative users:"
+    chroot /host-root getent passwd | awk -F: '$3 >= 1000 && $1 != "pi" {print "  - " $1 " (UID:" $3 ")"}' || echo "  No administrative users found"
+
+    echo ""
+    echo "SSH key authentication status:"
+    if [[ -f /host-root/etc/ssh/sshd_config.d/95-user-management-hardening.conf ]]; then
+        if grep -q "PasswordAuthentication no" /host-root/etc/ssh/sshd_config.d/95-user-management-hardening.conf; then
+            echo "  ✓ SSH: KEY-ONLY AUTHENTICATION ENFORCED"
+        else
+            echo "  ⚠️  SSH: PASSWORD AUTHENTICATION ALLOWED"
+        fi
+    else
+        echo "  ? SSH: USER MANAGEMENT CONFIG NOT FOUND"
+    fi
+}
+
+show_hardware_access() {
+    echo ""
+    echo "========================================="
+    echo "HARDWARE ACCESS SECURITY"
+    echo "========================================="
+
+    if [[ -n "${IGconf_device_user1:-}" ]]; then
+        MAIN_USER="$IGconf_device_user1"
+
+        echo "Hardware group membership for user '$MAIN_USER':"
+
+        # Check critical Raspberry Pi hardware groups
+        declare -A hardware_groups=(
+            ["gpio"]="GPIO access"
+            ["i2c"]="I2C bus access"
+            ["spi"]="SPI bus access"
+            ["video"]="Video/GPU access"
+            ["input"]="Input devices access"
+        )
+
+        for group in "${!hardware_groups[@]}"; do
+            if chroot /host-root getent group "$group" >/dev/null 2>&1; then
+                if chroot /host-root id -nG "$MAIN_USER" 2>/dev/null | grep -qw "$group"; then
+                    echo "  ⚠️  $group (${hardware_groups[$group]}): GRANTED"
+                else
+                    echo "  ✓ $group (${hardware_groups[$group]}): DENIED"
+                fi
+            else
+                echo "  ? $group (${hardware_groups[$group]}): GROUP DOES NOT EXIST"
+            fi
+        done
+
+        echo ""
+        echo "Security recommendations:"
+        echo "• GPIO/I2C/SPI access should be granted only when needed"
+        echo "• Video group access is usually safe for desktop users"
+        echo "• Input group access is required for keyboard/mouse"
+    else
+        echo "Main user not configured (IGconf_device_user1 not set)"
+    fi
+}
+
+show_ssh_security() {
+    echo ""
+    echo "========================================="
+    echo "SSH SECURITY CONFIGURATION"
+    echo "========================================="
+
+    if [[ -f /host-root/etc/ssh/sshd_config.d/95-user-management-hardening.conf ]]; then
+        echo "✓ User management SSH config present"
+
+        echo ""
+        echo "SSH security settings:"
+        grep -E "(PasswordAuthentication|PermitRootLogin|ChallengeResponseAuthentication)" \
+             /host-root/etc/ssh/sshd_config.d/95-user-management-hardening.conf || echo "  Config file unreadable"
+    else
+        echo "✗ User management SSH config missing"
+    fi
+
+    echo ""
+    echo "SSH authorized keys:"
+    if [[ -n "${IGconf_device_user1:-}" ]]; then
+        AUTH_KEYS="/host-root/home/${IGconf_device_user1}/.ssh/authorized_keys"
+        if [[ -f "$AUTH_KEYS" ]]; then
+            KEY_COUNT=$(wc -l < "$AUTH_KEYS")
+            echo "  ✓ $KEY_COUNT SSH key(s) configured for ${IGconf_device_user1}"
+        else
+            echo "  ✗ No SSH keys configured for ${IGconf_device_user1}"
+        fi
+    fi
+}
+
+case "${1:-status}" in
+    users)
+        show_raspberry_pi_users
+        ;;
+    hardware)
+        show_hardware_access
+        ;;
+    ssh)
+        show_ssh_security
+        ;;
+    status)
+        show_raspberry_pi_users
+        show_hardware_access
+        show_ssh_security
+        ;;
+    *)
+        echo "Usage: $SCRIPT_NAME {status|users|hardware|ssh}"
+        echo ""
+        echo "Commands:"
+        echo "  status    Show complete Raspberry Pi user security status"
+        echo "  users     Show Raspberry Pi user account information"
+        echo "  hardware  Show hardware access security"
+        echo "  ssh       Show SSH security configuration"
+        echo ""
+        echo "Raspberry Pi specific security monitoring for user accounts and hardware access."
+        exit 1
+        ;;
+esac
+EOF
+
+        chmod +x $1/usr/local/bin/rpi-user-security-monitor
+
+        # Create weekly audit cron job
+        cat << 'EOF' > $1/etc/cron.weekly/rpi-user-security-audit
+#!/bin/bash
+# Weekly Raspberry Pi user security audit
+
+set -e
+
+AUDIT_FILE="/tmp/rpi-user-security-audit-$(date +%Y%m%d).txt"
+
+/usr/local/bin/rpi-user-security-monitor status > "$AUDIT_FILE" 2>&1
+
+# Log the audit
+logger -t rpi-user-security-audit "Weekly Raspberry Pi user security audit completed"
+
+# Send to admin if possible
+if [[ -n "${IGconf_device_user1:-}" ]] && command -v write >/dev/null 2>&1; then
+    echo "Raspberry Pi user security audit completed. Check /tmp/rpi-user-security-audit-$(date +%Y%m%d).txt" | \
+        write "$IGconf_device_user1" 2>/dev/null || true
+fi
+
+# Clean up old audit files (keep last 4 weeks)
+find /tmp -name "rpi-user-security-audit-*.txt" -mtime +28 -delete 2>/dev/null || true
+EOF
+
+        chmod +x $1/etc/cron.weekly/rpi-user-security-audit
+
+        log_success "Raspberry Pi user monitoring enabled"
+      fi
+
+      log_success "Raspberry Pi user management hardening завершен"
+      echo "========================================="
+      echo "RASPBERRY PI USER MANAGEMENT HARDENING"
+      echo "========================================="
+      echo "✓ Default pi user: $(if [[ "${usermgmt_disable_default_pi:-y}" == "y" ]]; then echo "DISABLED"; else echo "ENABLED"; fi)"
+      echo "✓ SSH key-only enforcement: $(if [[ "${usermgmt_force_ssh_key_only:-y}" == "y" ]]; then echo "ENABLED"; else echo "DISABLED"; fi)"
+      echo "✓ Hardware access audit: $(if [[ "${usermgmt_secure_user_groups:-y}" == "y" ]]; then echo "ENABLED"; else echo "DISABLED"; fi)"
+      echo "✓ User monitoring: $(if [[ "${usermgmt_enable_user_monitoring:-y}" == "y" ]]; then echo "ENABLED"; else echo "DISABLED"; fi)"
+      echo ""
+      echo "Monitoring commands:"
+      echo "  rpi-user-security-monitor status"
+      echo "  rpi-user-security-monitor users"
+      echo "  rpi-user-security-monitor hardware"
+      echo "  rpi-user-security-monitor ssh"
+      echo ""
+      echo "Raspberry Pi specific features:"
+      echo "• Monitors default 'pi' user status"
+      echo "• Audits hardware group access (GPIO, I2C, SPI)"
+      echo "• Enforces SSH key-only authentication"
+      echo "• Weekly security audits via cron"
+      echo "========================================="

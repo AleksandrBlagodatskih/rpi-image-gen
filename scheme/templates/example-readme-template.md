@@ -1,0 +1,1 @@
+../examples/example-readme-template.md

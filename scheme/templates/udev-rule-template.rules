@@ -1,0 +1,187 @@
+# ============================================================================
+# ШАБЛОН ПРАВИЛ UDEV ДЛЯ RPI-IMAGE-GEN
+# ============================================================================
+
+# [RULE_DESCRIPTION]
+
+# Общее описание правила:
+# - [ОПИСАНИЕ 1]
+# - [ОПИСАНИЕ 2]
+# - [ОПИСАНИЕ 3]
+
+# Условия срабатывания:
+# - [УСЛОВИЕ 1]
+# - [УСЛОВИЕ 2]
+
+# Действия:
+# - [ДЕЙСТВИЕ 1]
+# - [ДЕЙСТВИЕ 2]
+
+# Тестирование:
+# udevadm test $(udevadm info --query=path --name=[DEVICE_PATH])
+
+# ============================================================================
+# ОСНОВНЫЕ ПРАВИЛА
+# ============================================================================
+
+# Правило с одним условием
+KERNEL=="[DEVICE_NAME]", NAME="[DEVICE_ALIAS]"
+
+# Правило с несколькими условиями
+KERNEL=="[KERNEL_NAME]", SUBSYSTEM=="[SUBSYSTEM]", ATTR{[ATTRIBUTE]}="[VALUE]", SYMLINK+="[SYMLINK_NAME]"
+
+# Правило с подстановкой значений
+KERNEL=="[KERNEL_PATTERN]", SUBSYSTEM=="[SUBSYSTEM]", ENV{ID_MODEL}=="[MODEL_NAME]", SYMLINK+="device-%k"
+
+# Правило для конкретного устройства по пути
+DEVPATH=="[DEVICE_PATH]", MODE="[MODE]", GROUP="[GROUP]", OWNER="[OWNER]"
+
+# Правило для устройств по серийному номеру
+KERNEL=="[KERNEL]", ENV{ID_SERIAL_SHORT}=="[SERIAL]", SYMLINK+="[DEVICE_NAME]"
+
+# ============================================================================
+# ПРИМЕРЫ ПРАВИЛ
+# ============================================================================
+
+# Пример 1: Простое правило для USB устройства
+KERNEL=="ttyUSB*", ATTRS{idVendor}=="[VENDOR_ID]", ATTRS{idProduct}=="[PRODUCT_ID]", MODE="0666", SYMLINK+="usb-tty"
+
+# Пример 2: Правило для GPIO
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", ACTION=="add", PROGRAM="/bin/sh -c 'echo GPIO device %k added'"
+
+# Пример 3: Правило для сетевых устройств
+SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="[MAC_ADDRESS]", NAME="[INTERFACE_NAME]"
+
+# Пример 4: Правило для блочных устройств
+KERNEL=="sd*", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_MODEL}=="[DEVICE_MODEL]", SYMLINK+="[DEVICE_ALIAS]"
+
+# Пример 5: Правило с RUN для выполнения скрипта
+KERNEL=="[KERNEL]", SUBSYSTEM=="[SUBSYSTEM]", ACTION=="add", RUN+="/usr/local/bin/device-handler.sh %k"
+
+# Пример 6: Правило для HID устройств
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="[VENDOR]", ATTRS{idProduct}=="[PRODUCT]", MODE="0660", GROUP="plugdev"
+
+# Пример 7: Правило для I2C устройств
+KERNEL=="i2c-*", SUBSYSTEM=="i2c-dev", ACTION=="add", PROGRAM="/bin/sh -c 'echo I2C device %k detected'"
+
+# Пример 8: Правило для SPI устройств
+KERNEL=="spidev*", SUBSYSTEM=="spidev", ACTION=="add", GROUP="spi", MODE="0660"
+
+# Пример 9: Правило для видеоустройств
+KERNEL=="video*", SUBSYSTEM=="video4linux", ATTR{name}=="[DEVICE_NAME]", SYMLINK+="[CAMERA_NAME]"
+
+# Пример 10: Правило для аудиоустройств
+KERNEL=="card*", SUBSYSTEM=="sound", ENV{ID_MODEL}=="[SOUND_MODEL]", ENV{SOUND_FORM_FACTOR}=="[FORM_FACTOR]", OPTIONS+="event"
+
+# ============================================================================
+# ПРАВИЛА ДЛЯ RASPBERRY PI
+# ============================================================================
+
+# Правило для камеры Raspberry Pi
+KERNEL=="vchiq", SUBSYSTEM=="vchiq", ACTION=="add", RUN+="/usr/bin/vcgencmd get_camera"
+
+# Правило для GPIO чипа Raspberry Pi
+KERNEL=="gpiochip*", SUBSYSTEM=="gpio", ACTION=="add", PROGRAM="/bin/sh -c 'echo GPIO chip %k ready'"
+
+# Правило для I2C шины Raspberry Pi
+KERNEL=="i2c-*", SUBSYSTEM=="i2c", ACTION=="add", GROUP="i2c", MODE="0660"
+
+# Правило для SPI шины Raspberry Pi
+KERNEL=="spidev*", SUBSYSTEM=="spidev", ACTION=="add", GROUP="spi", MODE="0660"
+
+# Правило для последовательного порта Raspberry Pi
+KERNEL=="ttyAMA*", SUBSYSTEM=="tty", GROUP="dialout", MODE="0660"
+
+# Правило для Bluetooth адаптера Raspberry Pi
+KERNEL=="hci*", SUBSYSTEM=="bluetooth", ACTION=="add", RUN+="/usr/local/bin/bluetooth-setup.sh"
+
+# ============================================================================
+# ПЕРЕМЕННЫЕ И ФУНКЦИИ UDEV
+# ============================================================================
+
+# Доступные переменные:
+# %k - Ядро устройства
+# %n - Номер устройства
+# %p - Путь к устройству
+# %b - Базовое имя устройства
+# %c - Базовое имя устройства в /sys/class
+# %s{ATTRIBUTE} - Значение атрибута
+# %E{PROPERTY} - Значение свойства
+# %r - Root устройства
+# %P - Parent устройства
+
+# Доступные функции:
+# %c{N} - Замена символов (N - количество символов)
+# %s{STRING} - Замена подстроки
+# %k - Форматирование ядра устройства
+
+# ============================================================================
+# ОПЕРАТОРЫ И ОПЦИИ
+# ============================================================================
+
+# Операторы сравнения:
+# ==  - Равно
+# !=  - Не равно
+# =   - Присваивание (для ENV и ATTR)
+
+# Операторы присваивания:
+# =   - Присваивание
+# +=  - Добавление
+# :=  - Присваивание с проверкой существования
+
+# Опции правил:
+# ACTION=="add|remove|change" - Действия, для которых применяется правило
+# SUBSYSTEM=="subsys" - Подсистема устройства
+# KERNEL=="pattern" - Шаблон ядра устройства
+# ATTR{attr}=="value" - Атрибут устройства
+# ENV{env}=="value" - Переменная окружения
+# PROGRAM=="command" - Выполнение команды
+# RESULT=="result" - Результат выполнения команды
+# RUN{type}="command" - Выполнение команды при событии
+
+# ============================================================================
+# СТРУКТУРА ПРАВИЛА
+# ============================================================================
+
+# Полная структура правила:
+# [MATCHES] [OPERATORS] [ASSIGNMENTS] [OPTIONS]
+
+# Пример полной структуры:
+KERNEL=="sd*", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", \
+  ATTR{bdi/read_ahead_kb}="128", \
+  ENV{ID_MODEL}=="[MODEL]", \
+  SYMLINK+="[DEVICE_NAME]", \
+  MODE="0660", GROUP="disk", OWNER="root", \
+  RUN+="/usr/local/bin/device-setup.sh %k", \
+  OPTIONS+="last_rule"
+
+# ============================================================================
+# ОТЛАДКА ПРАВИЛ
+# ============================================================================
+
+# Включение отладки:
+# udevadm control --log-priority=debug
+# udevadm test /sys/class/[DEVICE_TYPE]/[DEVICE_NAME]
+# udevadm monitor --kernel --subsystem-match=[SUBSYSTEM]
+
+# Просмотр информации об устройстве:
+# udevadm info --query=all --name=[DEVICE_NAME]
+# udevadm info --attribute-walk --name=[DEVICE_NAME]
+
+# Тестирование правила:
+# udevadm test $(udevadm info --query=path --name=[DEVICE_NAME])
+
+# ============================================================================
+# ПРИМЕЧАНИЯ РАЗРАБОТЧИКА
+# ============================================================================
+
+# 1. Все правила должны иметь уникальные имена файлов
+# 2. Правила выполняются в лексикографическом порядке имен файлов
+# 3. Используйте udevadm test для проверки правил
+# 4. Не используйте сложные команды в RUN без необходимости
+# 5. Все пути должны быть абсолютными
+# 6. Тестируйте правила на целевой системе
+# 7. Используйте GROUP и MODE для правильных прав доступа
+# 8. Документируйте все правила и их назначение
+# 9. Используйте SYMLINK для создания понятных имен устройств
+# 10. Проверяйте правила после обновления ядра

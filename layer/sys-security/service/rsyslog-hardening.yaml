@@ -1,0 +1,293 @@
+# ==========================================
+# RSYSLOG SECURITY HARDENING LAYER
+# ==========================================
+# Hardening rsyslog для безопасного логирования системы
+# Включает: secure logging, log rotation, remote logging security
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: rsyslog-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: rsyslog hardening with secure logging and remote protection
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: rsyslog-hardening
+
+# X-Env-VarPrefix: rsyslog
+
+# X-Env-Var-enable_secure_logging: y
+# X-Env-Var-enable_secure_logging-Desc: Enable secure logging features
+# X-Env-Var-enable_secure_logging-Required: n
+# X-Env-Var-enable_secure_logging-Valid: keywords:y,n
+# X-Env-Var-enable_secure_logging-Set: y
+
+# X-Env-Var-enable_log_rotation: y
+# X-Env-Var-enable_log_rotation-Desc: Enable automatic log rotation
+# X-Env-Var-enable_log_rotation-Required: n
+# X-Env-Var-enable_log_rotation-Valid: keywords:y,n
+# X-Env-Var-enable_log_rotation-Set: y
+
+# X-Env-Var-max_log_size: "100M"
+# X-Env-Var-max_log_size-Desc: Maximum log file size
+# X-Env-Var-max_log_size-Required: n
+# X-Env-Var-max_log_size-Valid: string
+# X-Env-Var-max_log_size-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - rsyslog
+    - rsyslog-relp
+    - logrotate
+
+  customize-hooks:
+    # rsyslog hardening configuration
+    - |
+      set -eu
+      mkdir -p $1/etc/rsyslog.d $1/var/log/remote
+
+      # Основная конфигурация rsyslog
+      cat << 'EOF' > $1/etc/rsyslog.conf
+      # ==========================================
+      # RSYSLOG SECURE CONFIGURATION
+      # ==========================================
+
+      #### MODULES ####
+
+      # Load required modules
+      module(load="imuxsock")    # provides support for local system logging
+      module(load="imklog")      # provides kernel logging support
+
+      # Load RELP for secure remote logging (optional)
+      # module(load="imrelp")     # RELP input
+
+      #### GLOBAL DIRECTIVES ####
+
+      # Use default timestamp format
+      $ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
+
+      # File ownership
+      $FileOwner root
+      $FileGroup adm
+      $FileCreateMode 0640
+      $DirCreateMode 0755
+      $Umask 0022
+
+      # Include all config files in /etc/rsyslog.d/
+      $IncludeConfig /etc/rsyslog.d/*.conf
+
+      #### RULES ####
+
+      # Log all kernel messages to the console
+      kern.*                                                 /dev/console
+
+      # Log anything (except mail) of level info or higher
+      *.info;mail.none;authpriv.none;cron.none                /var/log/messages
+
+      # Log all the mail messages in one place
+      mail.*                                                  /var/log/maillog
+
+      # Log cron stuff
+      cron.*                                                  /var/log/cron
+
+      # Everybody gets emergency messages
+      *.emerg                                                 :omusrmsg:*
+
+      # Save news errors of level crit and higher in a special file
+      uucp,news.crit                                          /var/log/spooler
+
+      # Save boot messages also to boot.log
+      local7.*                                                /var/log/boot.log
+
+      #### SECURITY LOGGING ####
+
+      # Authentication related logs
+      auth,authpriv.*                                         /var/log/secure
+
+      # Log suspicious activity
+      *.warn                                                  /var/log/warn
+
+      # Emergency messages to all users
+      *.emerg                                                 *
+
+      #### REMOTE LOGGING ####
+      # Uncomment the following to enable remote logging
+      # *.* @@remote-server.example.com:514
+      # *.* @@(z4)remote-server.example.com:6514  # RELP with TLS
+      EOF
+
+      # Создание конфигурации для secure logging
+      cat << 'EOF' > $1/etc/rsyslog.d/90-security.conf
+      # ==========================================
+      # RSYSLOG SECURITY CONFIGURATION
+      # ==========================================
+
+      # Template for secure logging
+      $template SecureFormat,"%TIMESTAMP:::date-rfc3339% %HOSTNAME% %syslogtag%%msg:::sp-if-no-1st-sp%%msg:::drop-last-lf%\n"
+
+      # Use secure format for auth logs
+      auth,authpriv.* /var/log/auth.log;SecureFormat
+
+      # Log sudo commands
+      local2.* /var/log/sudo.log;SecureFormat
+
+      # Log SSH connections
+      if $programname == 'sshd' then /var/log/ssh.log;SecureFormat
+
+      # Log firewall events
+      if $programname == 'kernel' and $msg contains 'IPTABLES' then /var/log/firewall.log;SecureFormat
+
+      # Log audit events
+      if $programname == 'auditd' then /var/log/audit.log;SecureFormat
+
+      # Log systemd security events
+      if $programname == 'systemd' and $msg contains 'Failed' then /var/log/systemd-security.log;SecureFormat
+
+      # Rate limiting for repeated messages
+      $RepeatedMsgReduction on
+
+      # Queue configuration for reliability
+      $WorkDirectory /var/spool/rsyslog
+      $ActionQueueType LinkedList
+      $ActionQueueFileName security_queue
+      $ActionQueueMaxDiskSpace 1g
+      $ActionQueueSaveOnShutdown on
+      $ActionResumeRetryCount -1
+
+      # TLS configuration for remote logging (if enabled)
+      # $DefaultNetstreamDriver gtls
+      # $DefaultNetstreamDriverCAFile /etc/ssl/certs/ca-certificates.crt
+      # $DefaultNetstreamDriverCertFile /etc/ssl/certs/rsyslog.crt
+      # $DefaultNetstreamDriverKeyFile /etc/ssl/private/rsyslog.key
+      EOF
+
+      # Настройка logrotate для безопасной ротации логов
+      cat << EOF > $1/etc/logrotate.d/rsyslog-hardening
+      # ==========================================
+      # LOGROTATE RSYSLOG HARDENING
+      # ==========================================
+
+      /var/log/messages
+      /var/log/secure
+      /var/log/maillog
+      /var/log/cron
+      /var/log/spooler
+      /var/log/boot.log
+      /var/log/auth.log
+      /var/log/sudo.log
+      /var/log/ssh.log
+      /var/log/firewall.log
+      /var/log/audit.log
+      /var/log/systemd-security.log
+      /var/log/warn {
+          daily
+          missingok
+          rotate 52
+          compress
+          delaycompress
+          sharedscripts
+          postrotate
+              /usr/lib/rsyslog/rsyslog-rotate
+          endscript
+          create 0640 root adm
+          su root adm
+      }
+      EOF
+
+      # Создание директорий для логов
+      mkdir -p $1/var/log/auth $1/var/log/security $1/var/log/remote
+      chmod 750 $1/var/log/auth $1/var/log/security $1/var/log/remote
+
+      # Настройка прав доступа к логам
+      cat << 'EOF' > $1/etc/logrotate.d/security-logs
+      # ==========================================
+      # SECURITY LOGS ROTATION
+      # ==========================================
+
+      /var/log/auth.log
+      /var/log/sudo.log
+      /var/log/ssh.log
+      /var/log/firewall.log
+      /var/log/audit.log {
+          weekly
+          missingok
+          rotate 12
+          compress
+          delaycompress
+          create 0600 root root
+          sharedscripts
+          postrotate
+              if /usr/lib/rsyslog/rsyslog-rotate; then
+                  systemctl reload rsyslog >/dev/null 2>&1 || true
+              fi
+          endscript
+      }
+      EOF
+
+      # Создание скрипта для проверки rsyslog hardening
+      cat << 'EOF' > $1/usr/local/bin/rsyslog-hardening-check
+      #!/bin/bash
+      # rsyslog hardening checker
+
+      set -e
+
+      echo "========================================="
+      echo "RSYSLOG HARDENING CHECK"
+      echo "========================================="
+
+      # Check rsyslog version
+      echo "rsyslog version: $(rsyslogd -v 2>&1 | head -1)"
+
+      # Check configuration
+      echo -e "\nChecking configuration syntax..."
+      rsyslogd -N1 >/dev/null 2>&1 && echo "Configuration syntax: OK" || echo "Configuration syntax: ERROR"
+
+      # Check log files permissions
+      echo -e "\nChecking log file permissions:"
+      ls -la /var/log/ | grep -E '(auth|secure|messages)' | head -3
+
+      # Check running status
+      echo -e "\nrsyslog service status:"
+      systemctl is-active rsyslog >/dev/null 2>&1 && echo "Service: RUNNING" || echo "Service: NOT RUNNING"
+
+      # Check logrotate configuration
+      echo -e "\nlogrotate configuration check:"
+      logrotate -d /etc/logrotate.d/rsyslog-hardening >/dev/null 2>&1 && echo "logrotate: OK" || echo "logrotate: ERROR"
+
+      echo -e "\nrsyslog hardening check completed"
+      EOF
+
+      chmod +x $1/usr/local/bin/rsyslog-hardening-check
+
+      # Настройка cron для еженедельной проверки логов
+      cat << 'EOF' > $1/etc/cron.weekly/log-integrity-check
+      #!/bin/bash
+      # Log integrity check
+
+      set -e
+
+      LOG_DIR="/var/log"
+      CHECK_FILE="/var/log/log-integrity-check.log"
+
+      echo "$(date): Starting log integrity check" >> "$CHECK_FILE"
+
+      # Check for suspicious patterns
+      if grep -r "FAILED\|DENIED\|REJECTED" "$LOG_DIR" >/dev/null 2>&1; then
+          echo "$(date): Found security events in logs" >> "$CHECK_FILE"
+          # Send alert (uncomment if mail is configured)
+          # echo "Security events detected in system logs" | mail -s "Security Alert" root
+      fi
+
+      # Check log file sizes
+      find "$LOG_DIR" -name "*.log" -size +100M -exec ls -lh {} \; >> "$CHECK_FILE" 2>/dev/null
+
+      echo "$(date): Log integrity check completed" >> "$CHECK_FILE"
+      EOF
+
+      chmod +x $1/etc/cron.weekly/log-integrity-check
+
+      log_success "rsyslog hardening настроен"

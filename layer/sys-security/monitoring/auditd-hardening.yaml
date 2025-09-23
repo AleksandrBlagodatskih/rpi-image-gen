@@ -1,0 +1,262 @@
+# ==========================================
+# AUDITD SECURITY MONITORING LAYER
+# ==========================================
+# Настройка auditd для системного аудита и мониторинга безопасности
+# Включает: правила аудита, логирование, мониторинг изменений
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: auditd-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: auditd hardening for comprehensive system auditing and security monitoring
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: auditd-hardening
+
+# X-Env-VarPrefix: audit
+
+# X-Env-Var-enable_file_monitoring: y
+# X-Env-Var-enable_file_monitoring-Desc: Enable monitoring of critical system files
+# X-Env-Var-enable_file_monitoring-Required: n
+# X-Env-Var-enable_file_monitoring-Valid: keywords:y,n
+# X-Env-Var-enable_file_monitoring-Set: y
+
+# X-Env-Var-enable_process_monitoring: y
+# X-Env-Var-enable_process_monitoring-Desc: Enable monitoring of process execution
+# X-Env-Var-enable_process_monitoring-Required: n
+# X-Env-Var-enable_process_monitoring-Valid: keywords:y,n
+# X-Env-Var-enable_process_monitoring-Set: y
+
+# X-Env-Var-enable_network_monitoring: y
+# X-Env-Var-enable_network_monitoring-Desc: Enable monitoring of network activity
+# X-Env-Var-enable_network_monitoring-Required: n
+# X-Env-Var-enable_network_monitoring-Valid: keywords:y,n
+# X-Env-Var-enable_network_monitoring-Set: y
+
+# X-Env-Var-log_max_size: 50
+# X-Env-Var-log_max_size-Desc: Maximum audit log size in MB
+# X-Env-Var-log_max_size-Required: n
+# X-Env-Var-log_max_size-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - auditd
+    - audispd-plugins
+
+  customize-hooks:
+    # auditd hardening configuration
+    - |
+      set -eu
+      mkdir -p $1/etc/audit
+
+      # Основная конфигурация auditd
+      cat << EOF > $1/etc/audit/auditd.conf
+      # ==========================================
+      # AUDITD CONFIGURATION
+      # ==========================================
+
+      # Audit log file location
+      log_file = /var/log/audit/audit.log
+
+      # Maximum size of the audit log file in MB
+      log_format = RAW
+      log_group = root
+      priority_boost = 4
+      flush = INCREMENTAL
+      freq = 20
+      num_logs = 5
+      disp_qos = lossy
+      dispatcher = /sbin/audispd
+      name_format = NONE
+      max_log_file = ${audit_log_max_size:-50}
+      max_log_file_action = ROTATE
+      space_left = 75
+      space_left_action = SYSLOG
+      action_mail_acct = root
+      admin_space_left = 50
+      admin_space_left_action = SUSPEND
+      disk_full_action = SUSPEND
+      disk_error_action = SUSPEND
+      tcp_listen_queue = 5
+      tcp_max_per_addr = 1
+      tcp_client_ports = 1024-65535
+      use_libwrap = yes
+      tcp_client_max_idle = 0
+      enable_krb5 = no
+      krb5_principal = auditd
+      EOF
+
+      # Правила аудита для системной безопасности
+      cat << EOF > $1/etc/audit/rules.d/audit-hardening.rules
+      # ==========================================
+      # AUDIT HARDENING RULES
+      # ==========================================
+
+      # Delete all existing rules
+      -D
+
+      # Buffer size
+      -b 8192
+
+      # Failure mode: panic (2) or log (1)
+      -f 1
+
+      # Rate limiting
+      -r 0
+EOF
+
+      # Monitor system calls
+      cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Monitor system calls
+      -a always,exit -F arch=b64 -S adjtimex -S settimeofday -S clock_settime -k time-change
+      -a always,exit -F arch=b32 -S adjtimex -S settimeofday -S clock_settime -k time-change
+      -a always,exit -F arch=b64 -S clock_settime -k time-change
+      -a always,exit -F arch=b32 -S clock_settime -k time-change
+
+      # Monitor user/group changes
+      -w /etc/group -p wa -k identity
+      -w /etc/passwd -p wa -k identity
+      -w /etc/gshadow -p wa -k identity
+      -w /etc/shadow -p wa -k identity
+      -w /etc/security/opasswd -p wa -k identity
+EOF
+
+      # Monitor system configuration changes
+      cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Monitor system configuration changes
+      -w /etc/selinux/ -p wa -k MAC-policy
+      -w /etc/apparmor/ -p wa -k MAC-policy
+      -w /etc/libaudit.conf -p wa -k auditconfig
+      -w /etc/audisp/ -p wa -k audispconfig
+      -w /etc/rsyslog.conf -p wa -k syslog
+      -w /etc/syslog-ng/ -p wa -k syslog
+
+      # Monitor network configuration
+      -w /etc/hosts -p wa -k network
+      -w /etc/network/ -p wa -k network
+      -w /etc/iptables/ -p wa -k network
+EOF
+
+      # Monitor SSH configuration
+      cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Monitor SSH configuration
+      -w /etc/ssh/sshd_config -p wa -k sshd
+      -w /etc/ssh/sshd_config.d/ -p wa -k sshd
+
+      # Monitor PAM configuration
+      -w /etc/pam.d/ -p wa -k pam
+      -w /etc/security/ -p wa -k pam
+
+      # Monitor system binaries
+      -w /bin/su -p x -k privileged
+      -w /usr/bin/sudo -p x -k privileged
+      -w /usr/bin/su -p x -k privileged
+
+      # Monitor file system mounts
+      -a always,exit -F arch=b64 -S mount -S umount2 -k mount
+      -a always,exit -F arch=b32 -S mount -S umount2 -k mount
+
+      # Monitor kernel module loading
+      -w /sbin/insmod -p x -k modules
+      -w /sbin/rmmod -p x -k modules
+      -w /sbin/modprobe -p x -k modules
+      -a always,exit -F arch=b64 -S init_module -S delete_module -k modules
+      -a always,exit -F arch=b32 -S init_module -S delete_module -k modules
+
+      # Monitor login/logout
+      -w /var/log/lastlog -p wa -k logins
+      -w /var/log/wtmp -p wa -k logins
+      -w /var/log/btmp -p wa -k logins
+EOF
+
+      # Monitor process execution
+      if [[ "${audit_enable_process_monitoring:-y}" == "y" ]]; then
+        cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Monitor process execution
+      -a always,exit -F arch=b64 -S execve -k exec
+      -a always,exit -F arch=b32 -S execve -k exec
+EOF
+      fi
+
+      # Monitor privilege escalation
+      cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Monitor privilege escalation
+      -a always,exit -F arch=b64 -S setuid -S setgid -S setreuid -S setregid -S setresuid -S setresgid -k priv_esc
+      -a always,exit -F arch=b32 -S setuid -S setgid -S setreuid -S setregid -S setresuid -S setresgid -k priv_esc
+EOF
+
+      # Monitor file access
+      if [[ "${audit_enable_file_monitoring:-y}" == "y" ]]; then
+        cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Monitor file access
+      -a always,exit -F arch=b64 -S openat -F exit=-EACCES -k access
+      -a always,exit -F arch=b64 -S openat -F exit=-EPERM -k access
+      -a always,exit -F arch=b32 -S openat -F exit=-EACCES -k access
+      -a always,exit -F arch=b32 -S openat -F exit=-EPERM -k access
+EOF
+      fi
+
+      # Monitor network activity
+      if [[ "${audit_enable_network_monitoring:-y}" == "y" ]]; then
+        cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Monitor network activity
+      -a always,exit -F arch=b64 -S socket -F a2=2 -k network
+      -a always,exit -F arch=b32 -S socket -F a2=2 -k network
+EOF
+      fi
+
+      # Lock the audit configuration
+      cat << 'EOF' >> $1/etc/audit/rules.d/audit-hardening.rules
+
+      # Lock the audit configuration
+      -e 2
+      EOF
+
+      # Настройка аудита для Docker (если установлен)
+      cat << 'EOF' > $1/etc/audit/rules.d/docker-audit.rules
+      # ==========================================
+      # DOCKER AUDIT RULES
+      # ==========================================
+
+      # Monitor Docker daemon
+      -w /usr/bin/dockerd -p x -k docker
+      -w /usr/bin/docker -p x -k docker
+
+      # Monitor Docker configuration
+      -w /etc/docker/ -p wa -k docker
+      -w /etc/docker/daemon.json -p wa -k docker
+
+      # Monitor Docker containers (if running)
+      -w /var/lib/docker/ -p wa -k docker
+      EOF
+
+      # Создание скрипта для ротации логов аудита
+      cat << 'EOF' > $1/etc/cron.daily/audit-rotate
+      #!/bin/bash
+      # Rotate audit logs
+
+      set -e
+
+      # Check if auditd is running
+      if systemctl is-active --quiet auditd; then
+          # Trigger log rotation
+          auditctl -R /etc/audit/rules.d/audit-hardening.rules
+          log_success "Audit logs rotated"
+      fi
+      EOF
+
+      chmod +x $1/etc/cron.daily/audit-rotate
+
+      log_success "auditd hardening настроен"

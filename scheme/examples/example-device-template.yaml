@@ -1,0 +1,130 @@
+# ==========================================
+# ПРИМЕР КОНФИГУРАЦИИ УСТРОЙСТВА RPI-IMAGE-GEN
+# ==========================================
+#
+# [НАЗВАНИЕ УСТРОЙСТВА]
+#
+# [ОПИСАНИЕ УСТРОЙСТВА]
+#
+# Особенности:
+# - [Особенность 1]
+# - [Особенность 2]
+# - [Особенность 3]
+#
+# Требования:
+# - [Требование 1]
+# - [Требование 2]
+# ==========================================
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: [device-name]              # Имя слоя устройства
+# X-Env-Layer-Category: device                 # Категория: device
+# X-Env-Layer-Desc: [description]              # Описание устройства
+# X-Env-Layer-Version: 1.0.0                   # Версия слоя
+# X-Env-Layer-Requires: [dependencies]         # Зависимости
+# X-Env-Layer-Provides: device                 # Что предоставляет
+#
+# X-Env-VarPrefix: device                      # Префикс переменных
+#
+# ПЕРЕМЕННЫЕ УСТРОЙСТВА (DEVICE VARIABLES)
+# ==========================================
+# X-Env-Var-class: [device-class]              # Класс устройства
+# X-Env-Var-class-Desc: Device class           # Описание
+# X-Env-Var-class-Required: n                  # Обязательность: y/n
+# X-Env-Var-class-Valid: keywords:[values]     # Допустимые значения
+# X-Env-Var-class-Set: y                       # Устанавливается: y/n
+#
+# X-Env-Var-storage_type: [storage-type]       # Тип носителя
+# X-Env-Var-storage_type-Desc: Storage media type
+# X-Env-Var-storage_type-Required: n
+# X-Env-Var-storage_type-Valid: keywords:sd,nvme
+# X-Env-Var-storage_type-Set: y
+#
+# X-Env-Var-assetdir: ${DIRECTORY}             # Каталог ресурсов
+# X-Env-Var-assetdir-Desc: Device specific asset directory
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: string
+# X-Env-Var-assetdir-Set: y
+#
+# ДОПОЛНИТЕЛЬНЫЕ ПЕРЕМЕННЫЕ (OPTIONAL VARIABLES)
+# ==========================================
+# X-Env-Var-hostname: [hostname]               # Имя хоста по умолчанию
+# X-Env-Var-hostname-Desc: Default hostname
+# X-Env-Var-hostname-Required: n
+# X-Env-Var-hostname-Valid: string
+# X-Env-Var-hostname-Set: y
+#
+# X-Env-Var-sector_size: 512                  # Размер сектора
+# X-Env-Var-sector_size-Desc: Storage sector size
+# X-Env-Var-sector_size-Required: n
+# X-Env-Var-sector_size-Valid: integer
+# X-Env-Var-sector_size-Set: y
+#
+# METAEND
+# ==========================================
+
+# КОНФИГУРАЦИЯ MMDEBSTRAP (MMDEBSTRAP CONFIGURATION)
+# ==========================================
+---
+mmdebstrap:
+  # Пакеты, специфичные для устройства
+  packages:
+    - firmware-brcm80211                        # Wi-Fi прошивка
+    # - firmware-realtek                        # Realtek Wi-Fi (если нужно)
+    # - bluez-firmware                          # Bluetooth прошивка
+
+  # Ключевые кольца для верификации пакетов
+  # keyrings:
+  #   - /usr/share/keyrings/raspberrypi-archive-keyring.gpg
+
+  # Опции APT
+  # aptopt:
+  #   - "APT::Install-Recommends false"          # Не устанавливать рекомендованные
+
+  # Хуки настройки (customize hooks)
+  # customize-hooks:
+  #   - device-setup.sh                          # Скрипт настройки устройства
+
+# ==========================================
+# ПРИМЕР КОНФИГУРАЦИИ ДЛЯ RASPBERRY PI 5
+# ==========================================
+
+# METABEGIN
+# X-Env-Layer-Name: mypi5                      # Имя слоя устройства
+# X-Env-Layer-Category: device                 # Категория: device
+# X-Env-Layer-Desc: Custom Raspberry Pi 5 device # Описание устройства
+# X-Env-Layer-Version: 1.0.0                   # Версия слоя
+# X-Env-Layer-Requires: device-base,rpi-boot-firmware,rpi-linux-2712
+# X-Env-Layer-Provides: device                 # Что предоставляет
+#
+# X-Env-VarPrefix: device                      # Префикс переменных
+#
+# X-Env-Var-class: pi5                         # Класс устройства
+# X-Env-Var-class-Desc: Device class           # Описание
+# X-Env-Var-class-Required: n                  # Обязательность: y/n
+# X-Env-Var-class-Valid: keywords:pi5          # Допустимые значения
+# X-Env-Var-class-Set: y                       # Устанавливается: y/n
+#
+# X-Env-Var-storage_type: sd                   # Тип носителя
+# X-Env-Var-storage_type-Desc: Storage media type
+# X-Env-Var-storage_type-Required: n
+# X-Env-Var-storage_type-Valid: keywords:sd,nvme
+# X-Env-Var-storage_type-Set: y
+#
+# X-Env-Var-assetdir: ${DIRECTORY}             # Каталог ресурсов
+# X-Env-Var-assetdir-Desc: Device specific asset directory
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: string
+# X-Env-Var-assetdir-Set: y
+#
+# METAEND
+# ---
+# mmdebstrap:
+#   packages:
+#     - firmware-brcm80211
+#     - custom-package
+#
+#   customize-hooks:
+#     - device-custom-setup.sh

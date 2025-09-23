@@ -1,0 +1,575 @@
+# ==========================================
+# APPARMOR SECURITY HARDENING LAYER
+# ==========================================
+# Настройка AppArmor для mandatory access control
+# Включает: базовые профили, enforcement mode, monitoring
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: apparmor-hardening
+# X-Env-Layer-Category: base
+# X-Env-Layer-Desc: AppArmor hardening with mandatory access control profiles
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: apparmor-hardening
+
+# X-Env-VarPrefix: apparmor
+
+# X-Env-Var-enable_enforce_mode: y
+# X-Env-Var-enable_enforce_mode-Desc: Enable AppArmor enforce mode instead of complain
+# X-Env-Var-enable_enforce_mode-Required: n
+# X-Env-Var-enable_enforce_mode-Valid: keywords:y,n
+# X-Env-Var-enable_enforce_mode-Set: y
+
+# X-Env-Var-enable_audit_logging: y
+# X-Env-Var-enable_audit_logging-Desc: Enable AppArmor audit logging
+# X-Env-Var-enable_audit_logging-Required: n
+# X-Env-Var-enable_audit_logging-Valid: keywords:y,n
+# X-Env-Var-enable_audit_logging-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - apparmor
+    - apparmor-utils
+    - apparmor-profiles
+    - apparmor-profiles-extra
+
+  customize-hooks:
+    # AppArmor hardening configuration
+    - |
+      set -eu
+      mkdir -p $1/etc/apparmor.d
+
+      # Основная конфигурация AppArmor
+      cat << EOF > $1/etc/apparmor/parser.conf
+      # ==========================================
+      # APPARMOR PARSER CONFIGURATION
+      # ==========================================
+
+      # AppArmor parser configuration for hardening
+      # Cache location
+      cache-loc /etc/apparmor.d/cache
+
+      # Features
+      features-file /usr/share/apparmor-features/features
+
+      # Include paths
+      include /etc/apparmor.d
+      include /usr/share/apparmor
+      EOF
+
+      # Настройка tunables для AppArmor
+      cat << EOF > $1/etc/apparmor.d/tunables/global
+      # ==========================================
+      # APPARMOR GLOBAL TUNABLES
+      # ==========================================
+
+      # @{HOME} variable for user homes
+      @{HOME}=/home/* /root
+
+      # @{HOMEDIRS} for all home directories
+      @{HOMEDIRS}=@{HOME}
+
+      # @{sys} for system directories
+      @{sys}=/usr/share /usr/local /opt
+
+      # @{run} for runtime directories
+      @{run}=/run /var/run
+
+      # @{cache} for cache directories
+      @{cache}=@{HOME}/.cache @{run}/user/*/ @{run}/systemd/user/* /var/cache
+
+      # @{log} for log directories
+      @{log}=/var/log /var/adm
+
+      # @{tmp} for temporary directories
+      @{tmp}=/tmp /var/tmp @{HOME}/.tmp
+
+      # @{mnt} for mount points
+      @{mnt}=/mnt /media
+
+      # @{proc} for proc filesystem
+      @{proc}=/proc /proc/*/attr
+
+      # @{etc_ro} for read-only etc files
+      @{etc_ro}=/etc /usr/local/etc
+
+      # @{bin} for executable directories
+      @{bin}=/bin /sbin /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin
+      EOF
+
+      # Создание базового профиля для системных служб
+      cat << 'EOF' > $1/etc/apparmor.d/usr.bin.systemctl
+      # ==========================================
+      # SYSTEMCTL APPARMOR PROFILE
+      # ==========================================
+
+      #include <tunables/global>
+
+      /usr/bin/systemctl {
+        #include <abstractions/base>
+        #include <abstractions/nameservice>
+        #include <abstractions/consoles>
+
+        capability dac_override,
+        capability dac_read_search,
+        capability sys_admin,
+        capability sys_ptrace,
+
+        # System directories
+        /etc/systemd/system/** r,
+        /etc/systemd/user/** r,
+        /usr/lib/systemd/system/** r,
+        /usr/lib/systemd/user/** r,
+        /run/systemd/system/** rwk,
+        /run/systemd/user/** rwk,
+        /var/lib/systemd/** rwk,
+
+        # System binaries
+        /usr/bin/systemctl rix,
+        /usr/bin/systemd rix,
+        /usr/lib/systemd/systemd rix,
+
+        # Logs
+        /var/log/journal/** rwk,
+        /run/log/journal/** rwk,
+
+        # PID files
+        /run/systemd/**/*.pid rwk,
+        /run/**/*.pid rwk,
+
+        # D-Bus
+        /run/dbus/system_bus_socket rw,
+        /run/systemd/userdb/io.systemd.DynamicUser rw,
+
+        # Temporary files
+        /tmp/systemd-* rw,
+        /run/systemd/* rw,
+
+        # Profile for systemctl itself
+        /proc/** r,
+        /sys/fs/cgroup/** r,
+        /sys/kernel/security/apparmor/** r,
+
+        # Network (for network units)
+        network inet dgram,
+        network inet stream,
+        network inet6 dgram,
+        network inet6 stream,
+        network netlink raw,
+        network packet dgram,
+
+        # Signals
+        signal (receive) peer=systemd,
+        signal (send,receive) peer=systemd-*,
+
+        # ptrace for debugging
+        ptrace (read,trace) peer=systemd,
+
+        # Deny dangerous operations
+        deny /etc/shadow rw,
+        deny /etc/passwd rw,
+        deny /etc/group rw,
+        deny /etc/sudoers rw,
+        deny /etc/sudoers.d/** rw,
+      }
+      EOF
+
+      # Создание профиля для SSH
+      cat << 'EOF' > $1/etc/apparmor.d/usr.sbin.sshd
+      # ==========================================
+      # SSHD APPARMOR PROFILE
+      # ==========================================
+
+      #include <tunables/global>
+
+      /usr/sbin/sshd {
+        #include <abstractions/base>
+        #include <abstractions/nameservice>
+        #include <abstractions/openssl>
+
+        capability chown,
+        capability dac_override,
+        capability dac_read_search,
+        capability fowner,
+        capability fsetid,
+        capability kill,
+        capability setgid,
+        capability setuid,
+        capability sys_chroot,
+        capability sys_tty_config,
+
+        network inet stream,
+        network inet6 stream,
+        network inet dgram,
+        network inet6 dgram,
+
+        # SSH configuration
+        /etc/ssh/sshd_config r,
+        /etc/ssh/sshd_config.d/** r,
+        /etc/ssh/ssh_host_*_key r,
+
+        # User keys
+        @{HOME}/.ssh/ r,
+        @{HOME}/.ssh/** rwk,
+
+        # Authorized keys
+        @{HOME}/.ssh/authorized_keys r,
+        @{HOME}/.ssh/authorized_keys2 r,
+
+        # SSH directories
+        /etc/ssh/ r,
+        /var/run/sshd.pid rw,
+        /var/log/auth.log w,
+
+        # PAM
+        /etc/pam.d/sshd r,
+        /etc/security/ r,
+        /lib/*/security/pam_*so r,
+        /lib/security/pam_*so r,
+
+        # NSS
+        /etc/nsswitch.conf r,
+        /etc/passwd r,
+        /etc/group r,
+        /etc/shadow r,
+        /etc/hosts r,
+        /etc/resolv.conf r,
+
+        # System directories
+        /proc/*/stat r,
+        /proc/*/status r,
+        /proc/*/cmdline r,
+        /proc/loadavg r,
+        /proc/sys/kernel/random/entropy_avail r,
+
+        # TTY handling
+        /dev/ptmx rw,
+        /dev/pts/* rw,
+        /dev/tty rw,
+        /dev/console rw,
+
+        # Temporary files
+        /tmp/ssh-* rw,
+        @{tmp}/ssh-* rw,
+
+        # Deny dangerous operations
+        deny /etc/shadow w,
+        deny /etc/passwd w,
+        deny /etc/group w,
+        deny @{HOME}/.ssh/authorized_keys w,
+        deny /etc/ssh/ssh_host_*_key w,
+
+        # Audit logging
+        audit /var/log/auth.log w,
+      }
+      EOF
+
+      # Настройка AppArmor для enforce mode
+      cat << EOF > $1/etc/apparmor.d/tunables/security
+      # ==========================================
+      # APPARMOR SECURITY TUNABLES
+      # ==========================================
+
+      # Security settings
+      @{security}=/sys/kernel/security
+
+      # Audit settings
+      @{audit}=/var/log/audit
+      EOF
+
+      # Создание скрипта для управления профилями
+      cat << 'EOF' > $1/usr/local/bin/apparmor-hardening
+      #!/bin/bash
+      # AppArmor hardening management script
+
+      set -e
+
+      case "$1" in
+          enable)
+              # Enable all profiles in enforce mode
+              aa-enforce /etc/apparmor.d/*
+              systemctl reload apparmor
+              echo "AppArmor profiles enabled in enforce mode"
+              ;;
+          complain)
+              # Switch to complain mode for testing
+              aa-complain /etc/apparmor.d/*
+              systemctl reload apparmor
+              echo "AppArmor profiles switched to complain mode"
+              ;;
+          status)
+              # Show status
+              apparmor_status
+              ;;
+          reload)
+              # Reload profiles
+              systemctl reload apparmor
+              echo "AppArmor profiles reloaded"
+              ;;
+          *)
+              echo "Usage: $0 {enable|complain|status|reload}"
+              exit 1
+              ;;
+      esac
+      EOF
+
+      chmod +x $1/usr/local/bin/apparmor-hardening
+
+      # Raspberry Pi specific AppArmor profiles
+      # ==========================================
+
+      # Raspberry Pi firmware access profile
+      cat << 'EOF' > $1/etc/apparmor.d/usr.bin.rpi-firmware
+      # ==========================================
+      # RASPBERRY PI FIRMWARE ACCESS PROFILE
+      # ==========================================
+      # Profile for Raspberry Pi firmware utilities
+
+      /usr/bin/vcgencmd {
+        #include <abstractions/base>
+        #include <abstractions/bash>
+
+        # Firmware access
+        /opt/vc/bin/vcgencmd rix,
+        /usr/bin/vcgencmd rix,
+
+        # System information access
+        /proc/cpuinfo r,
+        /proc/device-tree/ r,
+        /proc/device-tree/** r,
+
+        # GPIO access (limited)
+        /dev/gpiomem rw,
+
+        # VideoCore mailbox
+        /dev/vcio rw,
+        /dev/vcsm rw,
+
+        # I2C/SPI access (if available)
+        /dev/i2c-* rw,
+        /dev/spidev* rw,
+
+        # System logs
+        /var/log/syslog w,
+
+        # Deny dangerous operations
+        deny /etc/shadow w,
+        deny /etc/passwd w,
+        deny /boot/config.txt w,
+      }
+      EOF
+
+      # Raspberry Pi GPIO access profile
+      cat << 'EOF' > $1/etc/apparmor.d/usr.bin.gpio
+      # ==========================================
+      # RASPBERRY PI GPIO ACCESS PROFILE
+      # ==========================================
+      # Profile for GPIO utilities (pigpio, wiringpi, etc.)
+
+      /usr/bin/gpio {
+        #include <abstractions/base>
+
+        # GPIO access
+        /dev/gpiomem rw,
+        /dev/mem r,
+        /sys/class/gpio/ r,
+        /sys/class/gpio/** rw,
+
+        # GPIO device files
+        /dev/gpiochip* rw,
+
+        # System information
+        /proc/cpuinfo r,
+
+        # Logs
+        /var/log/syslog w,
+
+        # Deny dangerous operations
+        deny /etc/shadow w,
+        deny /etc/passwd w,
+        deny /boot/config.txt w,
+      }
+      EOF
+
+      # Raspberry Pi camera access profile
+      cat << 'EOF' > $1/etc/apparmor.d/usr.bin.raspistill
+      # ==========================================
+      # RASPBERRY PI CAMERA ACCESS PROFILE
+      # ==========================================
+      # Profile for Raspberry Pi camera utilities
+
+      /usr/bin/raspistill /usr/bin/raspivid /usr/bin/raspiyuv {
+        #include <abstractions/base>
+        #include <abstractions/bash>
+
+        # Camera access
+        /dev/vchiq rw,
+
+        # GPU memory
+        /dev/vcsm rw,
+
+        # System information
+        /proc/cpuinfo r,
+        /proc/device-tree/ r,
+
+        # Camera configuration
+        /boot/config.txt r,
+
+        # Temporary files
+        @{tmp}/** rw,
+        /tmp/** rw,
+
+        # User home for output
+        @{HOME}/ r,
+        @{HOME}/** rw,
+
+        # Logs
+        /var/log/syslog w,
+
+        # Deny dangerous operations
+        deny /etc/shadow w,
+        deny /etc/passwd w,
+        deny /boot/config.txt w,
+      }
+      EOF
+
+      # Raspberry Pi boot configuration access
+      cat << 'EOF' > $1/etc/apparmor.d/usr.bin.raspi-config
+      # ==========================================
+      # RASPBERRY PI CONFIGURATION ACCESS PROFILE
+      # ==========================================
+      # Profile for raspi-config and similar utilities
+
+      /usr/bin/raspi-config /usr/bin/raspi-config-nonint {
+        #include <abstractions/base>
+        #include <abstractions/bash>
+
+        # Boot configuration (read-only for safety)
+        /boot/config.txt r,
+        /boot/cmdline.txt r,
+
+        # System configuration files
+        /etc/hostname r,
+        /etc/hosts r,
+        /etc/locale.gen r,
+        /etc/default/locale r,
+        /etc/default/keyboard r,
+
+        # Network configuration
+        /etc/network/interfaces r,
+        /etc/wpa_supplicant/wpa_supplicant.conf r,
+
+        # Device tree
+        /proc/device-tree/ r,
+        /proc/device-tree/** r,
+
+        # System information
+        /proc/cpuinfo r,
+        /proc/meminfo r,
+
+        # Temporary files
+        @{tmp}/** rw,
+        /tmp/** rw,
+
+        # Logs
+        /var/log/syslog w,
+
+        # Deny dangerous operations - no write access to critical files
+        deny /boot/config.txt w,
+        deny /boot/cmdline.txt w,
+        deny /etc/shadow w,
+        deny /etc/passwd w,
+        deny /etc/sudoers w,
+      }
+      EOF
+
+      # Raspberry Pi I2C/SPI tools profile
+      cat << 'EOF' > $1/etc/apparmor.d/usr.bin.i2c-tools
+      # ==========================================
+      # RASPBERRY PI I2C/SPI TOOLS PROFILE
+      # ==========================================
+      # Profile for i2c-tools and SPI utilities
+
+      /usr/sbin/i2cdetect /usr/sbin/i2cdump /usr/sbin/i2cget /usr/sbin/i2cset {
+        #include <abstractions/base>
+
+        # I2C device access
+        /dev/i2c-* rw,
+
+        # System information
+        /proc/cpuinfo r,
+
+        # Logs
+        /var/log/syslog w,
+
+        # Deny dangerous operations
+        deny /etc/shadow w,
+        deny /etc/passwd w,
+        deny /boot/config.txt w,
+      }
+      EOF
+
+      # Set appropriate mode for Raspberry Pi profiles
+      if [[ "${apparmor_enable_enforce_mode:-y}" == "y" ]]; then
+        # Switch Raspberry Pi profiles to enforce mode
+        aa-enforce /etc/apparmor.d/usr.bin.rpi-firmware 2>/dev/null || true
+        aa-enforce /etc/apparmor.d/usr.bin.gpio 2>/dev/null || true
+        aa-enforce /etc/apparmor.d/usr.bin.raspistill 2>/dev/null || true
+        aa-enforce /etc/apparmor.d/usr.bin.raspi-config 2>/dev/null || true
+        aa-enforce /etc/apparmor.d/usr.bin.i2c-tools 2>/dev/null || true
+        log_success "Raspberry Pi specific AppArmor profiles enabled in enforce mode"
+      else
+        # Switch to complain mode for testing
+        aa-complain /etc/apparmor.d/usr.bin.rpi-firmware 2>/dev/null || true
+        aa-complain /etc/apparmor.d/usr.bin.gpio 2>/dev/null || true
+        aa-complain /etc/apparmor.d/usr.bin.raspistill 2>/dev/null || true
+        aa-complain /etc/apparmor.d/usr.bin.raspi-config 2>/dev/null || true
+        aa-complain /etc/apparmor.d/usr.bin.i2c-tools 2>/dev/null || true
+        log_success "Raspberry Pi specific AppArmor profiles enabled in complain mode"
+      fi
+
+      # Включение AppArmor в загрузке
+      cat << EOF > $1/etc/init.d/apparmor-hardening
+      #!/bin/bash
+      ### BEGIN INIT INFO
+      # Provides:          apparmor-hardening
+      # Required-Start:    apparmor
+      # Required-Stop:
+      # Default-Start:     S
+      # Default-Stop:
+      # Short-Description: AppArmor hardening initialization
+      ### END INIT INFO
+
+      case "\$1" in
+          start)
+              # Enable AppArmor profiles
+              /usr/local/bin/apparmor-hardening enable
+              ;;
+          stop)
+              # Switch to complain mode
+              /usr/local/bin/apparmor-hardening complain
+              ;;
+          restart)
+              # Reload profiles
+              /usr/local/bin/apparmor-hardening reload
+              ;;
+          status)
+              # Show status
+              /usr/local/bin/apparmor-hardening status
+              ;;
+          *)
+              echo "Usage: \$0 {start|stop|restart|status}"
+              exit 1
+              ;;
+      esac
+      EOF
+
+      chmod +x $1/etc/init.d/apparmor-hardening
+
+      log_success "AppArmor hardening настроен"

@@ -1,0 +1,241 @@
+{#
+==========================================
+ШАБЛОН JINJA2 ДЛЯ RPI-IMAGE-GEN: [TEMPLATE_NAME]
+==========================================
+
+[КРАТКОЕ ОПИСАНИЕ ШАБЛОНА]
+
+Назначение:
+- [Назначение 1]
+- [Назначение 2]
+- [Назначение 3]
+
+Входные переменные:
+- [VARIABLE_1]: [Описание переменной 1]
+- [VARIABLE_2]: [Описание переменной 2]
+- [VARIABLE_3]: [Описание переменной 3]
+
+Выход:
+- [ТИП ВЫХОДНОГО ФАЙЛА]: [Описание выходного файла]
+
+Использование:
+    jinja2 -D variable1=value1 -D variable2=value2 template.j2 output.file
+
+Пример:
+    jinja2 -D device_name=rpi5 -D hostname=my-pi template.j2 config.txt
+
+Автор: [AUTHOR_NAME]
+Версия: [VERSION]
+Дата: [DATE]
+==========================================
+#}
+
+{# ============================================================================
+   НАЧАЛО ШАБЛОНА
+   ============================================================================ #}
+
+{# Статический текст, который будет включен без изменений #}
+[STATIC_HEADER_TEXT]
+Generated from template: {{ template_name | default('unknown') }}
+Generated at: {{ generation_time | default('unknown') }}
+
+{# ============================================================================
+   ПЕРЕМЕННЫЕ И УСЛОВИЯ
+   ============================================================================ #}
+
+{# Использование переменных #}
+{% if device_name is defined and device_name %}
+Device: {{ device_name }}
+{% else %}
+Device: default-device
+{% endif %}
+
+{# Многострочный блок с условным содержимым #}
+{% if enable_feature %}
+# Feature enabled
+FEATURE_ENABLED=1
+{% else %}
+# Feature disabled
+FEATURE_DISABLED=1
+{% endif %}
+
+{# Циклы для обработки списков #}
+{% if additional_packages is defined %}
+{% for package in additional_packages %}
+PACKAGE_{{ loop.index }}={{ package }}
+{% endfor %}
+{% endif %}
+
+{# ============================================================================
+   ФИЛЬТРЫ И ПРЕОБРАЗОВАНИЯ
+   ============================================================================ #}
+
+{# Фильтры для преобразования данных #}
+{% if hostname is defined %}
+HOSTNAME={{ hostname | upper }}
+{% endif %}
+
+{% if description is defined %}
+DESCRIPTION="{{ description | replace('"', '\\"') }}"
+{% endif %}
+
+{# Математические операции #}
+{% if memory_mb is defined %}
+MEMORY_KB={{ memory_mb | int * 1024 }}
+{% endif %}
+
+{# ============================================================================
+   ВКЛЮЧЕНИЕ ДРУГИХ ШАБЛОНОВ
+   ============================================================================ #}
+
+{# Включение другого шаблона (если есть) #}
+{# {% include 'common-header.j2' %} #}
+
+{# ============================================================================
+   БЛОКИ ДЛЯ ПЕРЕОПРЕДЕЛЕНИЯ
+   ============================================================================ #}
+
+{# Определяем блоки, которые можно переопределить в наследуемых шаблонах #}
+{% block header %}
+# Default header
+[HEADER_SECTION]
+{% endblock %}
+
+{% block configuration %}
+# Configuration section
+{% if config_items is defined %}
+{% for key, value in config_items.items() %}
+{{ key | upper }}={{ value }}
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block footer %}
+# Default footer
+[FOOTER_SECTION]
+{% endblock %}
+
+{# ============================================================================
+   МАКРОСЫ (ФУНКЦИИ ШАБЛОНА)
+   ============================================================================ #}
+
+{# Определяем макрос для повторяющегося содержимого #}
+{% macro service_config(name, port, enabled=true) %}
+[{{ name }}]
+{% if enabled %}
+ENABLED=1
+{% else %}
+ENABLED=0
+{% endif %}
+PORT={{ port }}
+NAME={{ name | replace('_', '-') }}
+{% endmacro %}
+
+{# Использование макроса #}
+{% if services is defined %}
+{% for service in services %}
+{{ service_config(service.name, service.port, service.enabled) }}
+{% endfor %}
+{% endif %}
+
+{# ============================================================================
+   УСЛОВНЫЕ БЛОКИ ДЛЯ РАЗНЫХ СРЕД
+   ============================================================================ #}
+
+{# Разные настройки для разных сред #}
+{% if environment == 'development' %}
+# Development environment
+DEBUG=1
+LOG_LEVEL=DEBUG
+{% elif environment == 'production' %}
+# Production environment
+DEBUG=0
+LOG_LEVEL=ERROR
+{% else %}
+# Default environment
+DEBUG=0
+LOG_LEVEL=INFO
+{% endif %}
+
+{# ============================================================================
+   КОММЕНТАРИИ И ДОКУМЕНТАЦИЯ
+   ============================================================================ #}
+
+{# Многострочный комментарий #}
+{% if debug_info %}
+#
+# Debug Information:
+# Template: {{ template_name }}
+# Variables: {{ template_vars | join(', ') }}
+# Generated: {{ generation_time }}
+#
+{% endif %}
+
+{# ============================================================================
+   ФОРМАТИРОВАНИЕ И ВЫВОД
+   ============================================================================ #}
+
+{# Форматированный вывод #}
+{% if custom_settings is defined %}
+# Custom Settings
+{% for key, value in custom_settings.items() %}
+CUSTOM_{{ key | upper }}="{{ value }}"
+{% endfor %}
+{% endif %}
+
+{# ============================================================================
+   ЗАВЕРШЕНИЕ ШАБЛОНА
+   ============================================================================ #}
+
+{# Финальный статический текст #}
+[END_OF_CONFIG]
+# Template generation completed
+
+{# ============================================================================
+   ДОКУМЕНТАЦИЯ РАЗРАБОТЧИКА
+   ============================================================================ #}
+
+{#
+ПРИМЕЧАНИЯ:
+
+1. Все переменные должны быть переданы при вызове jinja2
+2. Для булевых значений используйте 1/0 или true/false
+3. Строки с пробелами должны быть в кавычках
+4. Используйте фильтры для безопасного форматирования
+
+ИЗВЕСТНЫЕ ПРОБЛЕМЫ:
+
+1. [Проблема 1] - [Описание проблемы]
+2. [Проблема 2] - [Описание проблемы]
+
+ПЛАНЫ РАЗВИТИЯ:
+
+1. [План 1] - [Описание плана]
+2. [План 2] - [Описание плана]
+
+ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ:
+
+# Пример 1: Базовое использование
+jinja2 -D device_name=rpi5 -D hostname=my-pi template.j2 output.conf
+
+# Пример 2: С дополнительными переменными
+jinja2 \
+  -D device_name=rpi5 \
+  -D hostname=my-pi \
+  -D enable_ssh=true \
+  -D additional_packages='["vim", "htop"]' \
+  template.j2 output.conf
+
+# Пример 3: В скрипте
+python3 -c "
+import jinja2
+env = jinja2.Environment(loader=jinja2.FileSystemLoader('.'))
+template = env.get_template('template.j2')
+result = template.render(
+    device_name='rpi5',
+    hostname='my-pi',
+    environment='production'
+)
+print(result)
+"
+#}

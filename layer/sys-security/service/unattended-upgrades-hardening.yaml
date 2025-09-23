@@ -1,0 +1,340 @@
+# ==========================================
+# UNATTENDED UPGRADES SECURITY HARDENING LAYER
+# ==========================================
+# Автоматические обновления безопасности для Debian систем
+# Включает: автоматическую установку обновлений безопасности, email уведомления, blacklist
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: unattended-upgrades-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: Automatic security updates with email notifications and package blacklisting (requires base system)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: unattended-upgrades-hardening
+
+# X-Env-VarPrefix: unattended
+
+# X-Env-Var-enable_auto_updates: y
+# X-Env-Var-enable_auto_updates-Desc: Enable automatic security updates
+# X-Env-Var-enable_auto_updates-Required: n
+# X-Env-Var-enable_auto_updates-Valid: keywords:y,n
+# X-Env-Var-enable_auto_updates-Set: y
+
+# X-Env-Var-enable_email_notifications: n
+# X-Env-Var-enable_email_notifications-Desc: Enable email notifications for updates
+# X-Env-Var-enable_email_notifications-Required: n
+# X-Env-Var-enable_email_notifications-Valid: keywords:y,n
+# X-Env-Var-enable_email_notifications-Set: y
+
+# X-Env-Var-email_recipient: root
+# X-Env-Var-email_recipient-Desc: Email recipient for update notifications
+# X-Env-Var-email_recipient-Required: n
+# X-Env-Var-email_recipient-Valid: string
+# X-Env-Var-email_recipient-Set: y
+
+# X-Env-Var-auto_reboot: n
+# X-Env-Var-auto_reboot-Desc: Automatically reboot after kernel updates
+# X-Env-Var-auto_reboot-Required: n
+# X-Env-Var-auto_reboot-Valid: keywords:y,n
+# X-Env-Var-auto_reboot-Set: y
+
+# X-Env-Var-update_interval: daily
+# X-Env-Var-update_interval-Desc: Update check interval
+# X-Env-Var-update_interval-Required: n
+# X-Env-Var-update_interval-Valid: keywords:hourly,daily,weekly
+# X-Env-Var-update_interval-Set: y
+
+# X-Env-Var-blacklist_packages: ""
+# X-Env-Var-blacklist_packages-Desc: Comma-separated list of packages to exclude from auto-updates
+# X-Env-Var-blacklist_packages-Required: n
+# X-Env-Var-blacklist_packages-Valid: string
+# X-Env-Var-blacklist_packages-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - unattended-upgrades
+    - apt-listchanges
+    # Email notifications (optional)
+    # - mailutils
+    # - postfix
+
+  customize-hooks:
+    # Unattended upgrades configuration
+    - |
+      set -eu
+
+      # Enable unattended-upgrades if configured
+      if [[ "${unattended_enable_auto_updates:-y}" == "y" ]]; then
+
+        # Configure unattended-upgrades
+        mkdir -p $1/etc/apt/apt.conf.d
+
+        cat << EOF > $1/etc/apt/apt.conf.d/50unattended-upgrades
+        // ==========================================
+// UNATTENDED-UPGRADES CONFIGURATION
+// ==========================================
+// Automatically upgrade packages from these (origin:archive) pairs
+//
+// Note: This option will also download and install updates from
+// Raspberry Pi repository (archive.raspberrypi.org)
+
+Unattended-Upgrade::Origins-Pattern {
+    // Debian security updates
+    "origin=Debian,codename=\${distro_codename},label=Debian-Security";
+    "origin=Debian,codename=\${distro_codename}-security,label=Debian-Security";
+
+    // Raspberry Pi updates (if applicable)
+    "origin=Raspberry Pi Foundation,codename=\${distro_codename},label=Raspberry Pi Foundation";
+
+    // Debian updates (optional - comment out for security-only)
+    // "origin=Debian,codename=\${distro_codename},label=Debian";
+    // "origin=Debian,codename=\${distro_codename}-updates,label=Debian";
+};
+
+// List of packages to not update (regexp are supported)
+Unattended-Upgrade::Package-Blacklist {
+    // Critical system packages that should not be auto-updated
+    "linux-image.*";
+    "raspberrypi-kernel.*";
+    "systemd";
+    "dbus";
+    // User-specified blacklist
+    $(if [[ -n "${unattended_blacklist_packages:-}" ]]; then
+        echo "${unattended_blacklist_packages//,/\";}";
+        echo "\";}";
+    fi)
+};
+
+// This option allows you to control if on a unclean dpkg exit
+// unattended-upgrades will automatically run
+//   dpkg --force-confold --configure -a
+// The default is true, to ensure updates keep getting installed
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+
+// If this option is set, the post-update hooks will not be run.
+// This allows you to delay the actions defined in the post-update
+// hooks until later. This may be useful if you want to run the
+// post-update hooks manually, or if you want to delay them because
+// of a user defined reason.
+Unattended-Upgrade::PostUpdateHooks {};
+
+// Do automatic removal of new unused dependencies after the upgrade
+// (equivalent to apt-get autoremove)
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+
+// Automatic reboot after kernel upgrades
+Unattended-Upgrade::Automatic-Reboot "${unattended_auto_reboot:-false}";
+
+// Time to wait before automatic reboot (in seconds)
+Unattended-Upgrade::Automatic-Reboot-Time "02:00";
+
+// Send email notifications
+$(if [[ "${unattended_enable_email_notifications:-n}" == "y" ]]; then
+    echo "// Send email to this address for problems or packages upgrades"
+    echo "Unattended-Upgrade::Mail \"${unattended_email_recipient:-root}\";"
+    echo ""
+    echo "// Set this value to \"true\" to get emails only on errors."
+    echo "Unattended-Upgrade::MailOnlyOnError \"false\";"
+    echo ""
+    echo "// Send email to this address for problems or packages upgrades"
+    echo "// If empty or unset then no email is sent, an alias for Unattended-Upgrade::Mail"
+    echo "Unattended-Upgrade::Sender \"unattended-upgrades@${HOSTNAME:-localhost}\";"
+fi)
+
+// Do not install recommended packages
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+
+// For security, we use only trusted sources
+APT::Get::AllowUnauthenticated "false";
+EOF
+
+        # Configure apt-listchanges for better update notifications
+        cat << EOF > $1/etc/apt/listchanges.conf
+        // ==========================================
+// APT-LISTCHANGES CONFIGURATION
+// ==========================================
+
+[apt]
+frontend=pager
+email_address=${unattended_email_recipient:-root}
+confirm=0
+save_seen=/var/lib/apt/listchanges.db
+which=news
+EOF
+
+        # Create systemd timer for more frequent checks if needed
+        if [[ "${unattended_update_interval:-daily}" != "daily" ]]; then
+          mkdir -p $1/etc/systemd/system/apt-daily.timer.d
+
+          cat << EOF > $1/etc/systemd/system/apt-daily.timer.d/override.conf
+[Timer]
+OnCalendar=
+OnCalendar=${unattended_update_interval:-daily}
+EOF
+        fi
+
+        # Enable the service
+        mkdir -p $1/etc/systemd/system/timers.target.wants
+        ln -sf /lib/systemd/system/apt-daily.timer $1/etc/systemd/system/timers.target.wants/apt-daily.timer
+        ln -sf /lib/systemd/system/apt-daily-upgrade.timer $1/etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer
+
+        # Create monitoring script for unattended upgrades
+        cat << 'EOF' > $1/usr/local/bin/unattended-upgrades-monitor
+#!/bin/bash
+# ==========================================
+# UNATTENDED UPGRADES MONITORING SCRIPT
+# ==========================================
+# Monitor and report on unattended upgrade status
+
+set -e
+
+SCRIPT_NAME="unattended-upgrades-monitor"
+LOG_FILE="/var/log/unattended-upgrades/unattended-upgrades.log"
+
+show_status() {
+    echo "========================================="
+    echo "UNATTENDED UPGRADES STATUS"
+    echo "========================================="
+
+    # Check if service is enabled
+    if systemctl is-enabled --quiet apt-daily.timer 2>/dev/null; then
+        echo "✓ apt-daily.timer: ENABLED"
+    else
+        echo "✗ apt-daily.timer: DISABLED"
+    fi
+
+    if systemctl is-enabled --quiet apt-daily-upgrade.timer 2>/dev/null; then
+        echo "✓ apt-daily-upgrade.timer: ENABLED"
+    else
+        echo "✗ apt-daily-upgrade.timer: DISABLED"
+    fi
+
+    # Check configuration
+    if [[ -f /etc/apt/apt.conf.d/50unattended-upgrades ]]; then
+        echo "✓ Configuration: PRESENT"
+    else
+        echo "✗ Configuration: MISSING"
+    fi
+
+    # Show next run times
+    echo ""
+    echo "Next run times:"
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl list-timers apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || echo "Unable to get timer information"
+    fi
+
+    # Show recent activity
+    echo ""
+    echo "Recent activity:"
+    if [[ -f "$LOG_FILE" ]]; then
+        tail -10 "$LOG_FILE" 2>/dev/null || echo "No recent log entries"
+    else
+        echo "No log file found"
+    fi
+}
+
+show_history() {
+    echo "========================================="
+    echo "UNATTENDED UPGRADES HISTORY"
+    echo "========================================="
+
+    if [[ -f "$LOG_FILE" ]]; then
+        # Extract upgrade information from logs
+        grep -E "(Starting|Packages|Inst|Upgrade|Unattended)" "$LOG_FILE" | tail -20
+    else
+        echo "No upgrade history available"
+    fi
+}
+
+check_pending() {
+    echo "========================================="
+    echo "PENDING UPDATES"
+    echo "========================================="
+
+    # Check for available updates
+    if command -v apt >/dev/null 2>&1; then
+        echo "Available updates:"
+        apt list --upgradable 2>/dev/null | grep -v "Listing" || echo "No updates available"
+    else
+        echo "apt command not available"
+    fi
+}
+
+case "${1:-status}" in
+    status)
+        show_status
+        ;;
+    history)
+        show_history
+        ;;
+    pending)
+        check_pending
+        ;;
+    *)
+        echo "Usage: $SCRIPT_NAME {status|history|pending}"
+        echo ""
+        echo "Commands:"
+        echo "  status   Show current status and configuration"
+        echo "  history  Show upgrade history"
+        echo "  pending  Show pending updates"
+        exit 1
+        ;;
+esac
+EOF
+
+        chmod +x $1/usr/local/bin/unattended-upgrades-monitor
+
+        # Create log directory
+        mkdir -p $1/var/log/unattended-upgrades
+
+        # Create cron job for weekly status report
+        cat << 'EOF' > $1/etc/cron.weekly/unattended-upgrades-report
+#!/bin/bash
+# Weekly unattended upgrades status report
+
+set -e
+
+REPORT_FILE="/tmp/unattended-upgrades-report-$(date +%Y%m%d).txt"
+
+/usr/local/bin/unattended-upgrades-monitor status > "$REPORT_FILE"
+/usr/local/bin/unattended-upgrades-monitor history >> "$REPORT_FILE"
+
+# Send email if configured
+if [[ -n "${unattended_email_recipient:-}" ]] && command -v mail >/dev/null 2>&1; then
+    mail -s "Weekly Unattended Upgrades Report - $(hostname)" "${unattended_email_recipient}" < "$REPORT_FILE"
+fi
+
+# Clean up
+rm -f "$REPORT_FILE"
+EOF
+
+        chmod +x $1/etc/cron.weekly/unattended-upgrades-report
+
+        log_success "Unattended upgrades настроены"
+        echo "========================================="
+        echo "UNATTENDED UPGRADES CONFIGURED"
+        echo "========================================="
+        echo "✓ Automatic security updates: ENABLED"
+        echo "✓ Email notifications: $(if [[ "${unattended_enable_email_notifications:-n}" == "y" ]]; then echo "ENABLED"; else echo "DISABLED"; fi)"
+        echo "✓ Auto reboot: $(if [[ "${unattended_auto_reboot:-n}" == "y" ]]; then echo "ENABLED"; else echo "DISABLED"; fi)"
+        echo "✓ Update interval: ${unattended_update_interval:-daily}"
+        echo ""
+        echo "Monitoring commands:"
+        echo "  unattended-upgrades-monitor status"
+        echo "  unattended-upgrades-monitor history"
+        echo "  unattended-upgrades-monitor pending"
+        echo ""
+        echo "Configuration: /etc/apt/apt.conf.d/50unattended-upgrades"
+        echo "Logs: /var/log/unattended-upgrades/"
+        echo "========================================="
+
+      else
+        log_warning "Unattended upgrades отключены по конфигурации"
+      fi

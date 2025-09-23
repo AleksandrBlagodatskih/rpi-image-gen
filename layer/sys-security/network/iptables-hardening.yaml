@@ -1,0 +1,414 @@
+# ==========================================
+# IPTABLES SECURITY HARDENING LAYER
+# ==========================================
+# Hardening сетевого фильтра iptables для защиты от атак
+# Включает: базовые правила, защиту от сканирования, rate limiting
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: iptables-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: iptables hardening with basic firewall rules and attack protection
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: iptables-hardening
+
+# X-Env-VarPrefix: iptables
+
+# X-Env-Var-enable_scan_protection: y
+# X-Env-Var-enable_scan_protection-Desc: Enable protection against port scanning
+# X-Env-Var-enable_scan_protection-Required: n
+# X-Env-Var-enable_scan_protection-Valid: keywords:y,n
+# X-Env-Var-enable_scan_protection-Set: y
+
+# X-Env-Var-enable_syn_flood_protection: y
+# X-Env-Var-enable_syn_flood_protection-Desc: Enable SYN flood protection
+# X-Env-Var-enable_syn_flood_protection-Required: n
+# X-Env-Var-enable_syn_flood_protection-Valid: keywords:y,n
+# X-Env-Var-enable_syn_flood_protection-Set: y
+
+# X-Env-Var-log_dropped_packets: y
+# X-Env-Var-log_dropped_packets-Desc: Log dropped packets for monitoring
+# X-Env-Var-log_dropped_packets-Required: n
+# X-Env-Var-log_dropped_packets-Valid: keywords:y,n
+# X-Env-Var-log_dropped_packets-Set: y
+
+# X-Env-Var-use_ufw: y
+# X-Env-Var-use_ufw-Desc: Use UFW (Uncomplicated Firewall) instead of raw iptables (recommended for Raspberry Pi)
+# X-Env-Var-use_ufw-Required: n
+# X-Env-Var-use_ufw-Valid: keywords:y,n
+# X-Env-Var-use_ufw-Set: y
+
+# X-Env-Var-ufw_default_incoming: deny
+# X-Env-Var-ufw_default_incoming-Desc: UFW default policy for incoming traffic
+# X-Env-Var-ufw_default_incoming-Required: n
+# X-Env-Var-ufw_default_incoming-Valid: keywords:allow,deny,reject
+# X-Env-Var-ufw_default_incoming-Set: y
+
+# X-Env-Var-ufw_default_outgoing: allow
+# X-Env-Var-ufw_default_outgoing-Desc: UFW default policy for outgoing traffic
+# X-Env-Var-ufw_default_outgoing-Required: n
+# X-Env-Var-ufw_default_outgoing-Valid: keywords:allow,deny,reject
+# X-Env-Var-ufw_default_outgoing-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - iptables
+    - iptables-persistent
+    - iproute2
+    # UFW (Uncomplicated Firewall) - recommended for Raspberry Pi
+    - ufw
+
+  customize-hooks:
+    # iptables hardening rules
+    - |
+      set -eu
+      mkdir -p $1/etc/iptables
+
+      # Создание iptables правил для IPv4
+      cat << 'EOF' > $1/etc/iptables/rules.v4
+      # ==========================================
+      # IPTABLES SECURITY HARDENING RULES
+      # ==========================================
+
+      *filter
+
+      # Default policies
+      :INPUT DROP [0:0]
+      :FORWARD DROP [0:0]
+      :OUTPUT ACCEPT [0:0]
+
+      # Allow loopback
+      -A INPUT -i lo -j ACCEPT
+      -A OUTPUT -o lo -j ACCEPT
+
+      # Allow established connections
+      -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+      # Allow ICMP (with rate limiting)
+      -A INPUT -p icmp --icmp-type echo-request -m limit --limit 1/second -j ACCEPT
+      -A INPUT -p icmp --icmp-type echo-request -j DROP
+
+      # Drop invalid packets
+      -A INPUT -m conntrack --ctstate INVALID -j DROP
+EOF
+
+      # Protection against TCP SYN flood
+      if [[ "${iptables_enable_syn_flood_protection:-y}" == "y" ]]; then
+        cat << 'EOF' >> $1/etc/iptables/rules.v4
+
+      # Protection against TCP SYN flood
+      -A INPUT -p tcp --syn -m limit --limit 1/second -j ACCEPT
+      -A INPUT -p tcp --syn -j DROP
+EOF
+      fi
+
+      # Protection against port scanning
+      if [[ "${iptables_enable_scan_protection:-y}" == "y" ]]; then
+        cat << 'EOF' >> $1/etc/iptables/rules.v4
+
+      # Protection against port scanning (TCP)
+      -A INPUT -p tcp --tcp-flags ALL NONE -j DROP
+      -A INPUT -p tcp --tcp-flags ALL ALL -j DROP
+      -A INPUT -p tcp --tcp-flags ALL FIN,URG,PSH -j DROP
+      -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
+      -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
+      -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
+      -A INPUT -p tcp --tcp-flags ALL ACK,RST,ACK,RST,SYN -j DROP
+EOF
+      fi
+
+      # Protection against UDP flood
+      cat << 'EOF' >> $1/etc/iptables/rules.v4
+
+      # Protection against UDP flood
+      -A INPUT -p udp -m limit --limit 10/second -j ACCEPT
+      -A INPUT -p udp -j DROP
+EOF
+
+      # Log dropped packets
+      if [[ "${iptables_log_dropped_packets:-y}" == "y" ]]; then
+        cat << 'EOF' >> $1/etc/iptables/rules.v4
+
+      # Log and drop suspicious packets
+      -A INPUT -m limit --limit 5/min -j LOG --log-prefix "IPTABLES SECURITY: " --log-level 4
+EOF
+      fi
+
+      cat << 'EOF' >> $1/etc/iptables/rules.v4
+      -A INPUT -j DROP
+
+      COMMIT
+      EOF
+
+      # Создание iptables правил для IPv6
+      cat << 'EOF' > $1/etc/iptables/rules.v6
+      # ==========================================
+      # IPTABLES IPv6 SECURITY HARDENING
+      # ==========================================
+
+      *filter
+
+      # Default policies
+      :INPUT DROP [0:0]
+      :FORWARD DROP [0:0]
+      :OUTPUT ACCEPT [0:0]
+
+      # Allow loopback
+      -A INPUT -i lo -j ACCEPT
+      -A OUTPUT -o lo -j ACCEPT
+
+      # Allow established connections
+      -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+      # Allow ICMPv6 (essential for IPv6)
+      -A INPUT -p ipv6-icmp -j ACCEPT
+      -A OUTPUT -p ipv6-icmp -j ACCEPT
+
+      # Allow DHCPv6
+      -A INPUT -p udp --dport 546 -j ACCEPT
+      -A OUTPUT -p udp --dport 547 -j ACCEPT
+
+      # Log and drop everything else
+      -A INPUT -m limit --limit 5/min -j LOG --log-prefix "IPTABLES6 SECURITY: " --log-level 4
+      -A INPUT -j DROP
+
+      COMMIT
+      EOF
+
+      # Применение правил при загрузке
+      cat << 'EOF' > $1/etc/network/if-pre-up.d/iptables
+      #!/bin/bash
+      /sbin/iptables-restore < /etc/iptables/rules.v4
+      /sbin/ip6tables-restore < /etc/iptables/rules.v6
+      EOF
+
+      chmod +x $1/etc/network/if-pre-up.d/iptables
+
+      log_success "iptables hardening настроен"
+
+      # UFW (Uncomplicated Firewall) Configuration - Recommended for Raspberry Pi
+      # ==========================================
+
+      if [[ "${iptables_use_ufw:-y}" == "y" ]]; then
+        log_info "Настройка UFW (Uncomplicated Firewall)"
+
+        # Configure UFW defaults
+        cat << EOF > $1/etc/ufw/ufw.conf
+# ==========================================
+# UFW CONFIGURATION - RASPBERRY PI HARDENING
+# ==========================================
+
+# Set to yes to start on boot. If set to "no", you will need to
+# manually start ufw through some other means such as init scripts
+ENABLED=yes
+
+# Please note that changing the LOGLEVEL to anything other than
+# 'low' or 'off' can cause issues with apt-get updates and dpkg
+# due to how it interacts with the package management system
+LOGLEVEL=low
+EOF
+
+        # Configure UFW default policies
+        ufw --force reset >/dev/null 2>&1 || true
+
+        # Set default policies
+        ufw --force enable >/dev/null 2>&1 || true
+        ufw default deny incoming
+        ufw default allow outgoing
+
+        # Allow SSH (essential for Raspberry Pi management)
+        ufw allow ssh
+        ufw allow 22/tcp
+
+        # Allow common services (optional - uncomment as needed)
+        # ufw allow http
+        # ufw allow https
+        # ufw allow 80/tcp
+        # ufw allow 443/tcp
+
+        # Allow local network access (for Raspberry Pi cluster management)
+        # ufw allow from 192.168.0.0/16
+        # ufw allow from 10.0.0.0/8
+
+        # Raspberry Pi specific rules
+        # Allow mDNS (for device discovery)
+        ufw allow 5353/udp
+
+        # Allow DHCP (if needed)
+        # ufw allow 67:68/udp
+
+        # Rate limiting for SSH to prevent brute force
+        ufw limit ssh
+
+        # Save UFW configuration
+        ufw --force enable
+
+        # Create UFW hardening script
+        cat << 'EOF' > $1/usr/local/bin/ufw-hardening
+#!/bin/bash
+# ==========================================
+# UFW HARDENING MANAGEMENT SCRIPT
+# ==========================================
+# Manage UFW firewall rules for Raspberry Pi security
+
+set -e
+
+SCRIPT_NAME="ufw-hardening"
+UFW_CONFIG="/etc/ufw/ufw.conf"
+
+show_status() {
+    echo "========================================="
+    echo "UFW FIREWALL STATUS - RASPBERRY PI"
+    echo "========================================="
+
+    if command -v ufw >/dev/null 2>&1; then
+        echo "UFW Status:"
+        ufw status verbose | head -20
+        echo ""
+
+        echo "UFW Configuration ($UFW_CONFIG):"
+        if [[ -f "$UFW_CONFIG" ]]; then
+            grep -E "^(ENABLED|LOGLEVEL)" "$UFW_CONFIG" 2>/dev/null || echo "Configuration file unreadable"
+        else
+            echo "Configuration file not found"
+        fi
+
+        echo ""
+        echo "Active Rules Count:"
+        ufw status numbered 2>/dev/null | grep -c "^\[" || echo "Unable to count rules"
+    else
+        echo "UFW is not installed"
+        exit 1
+    fi
+}
+
+show_raspberry_pi_rules() {
+    echo ""
+    echo "========================================="
+    echo "RASPBERRY PI SPECIFIC RULES"
+    echo "========================================="
+
+    echo "SSH Protection:"
+    ufw status | grep -i ssh || echo "No SSH rules found"
+
+    echo ""
+    echo "mDNS (Device Discovery):"
+    ufw status | grep 5353 || echo "mDNS not allowed"
+
+    echo ""
+    echo "Rate Limiting:"
+    ufw status | grep "LIMIT" || echo "No rate limiting configured"
+
+    echo ""
+    echo "Local Network Access:"
+    ufw status | grep -E "(192\.168|10\.0|172\.16)" || echo "No local network rules"
+}
+
+add_raspberry_pi_defaults() {
+    echo "Adding Raspberry Pi optimized firewall rules..."
+
+    # Allow essential services
+    ufw allow ssh >/dev/null 2>&1
+    ufw allow 5353/udp >/dev/null 2>&1  # mDNS
+    ufw limit ssh >/dev/null 2>&1       # Rate limit SSH
+
+    # Allow common Raspberry Pi services (optional)
+    read -p "Allow HTTP/HTTPS (y/N)? " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        ufw allow http >/dev/null 2>&1
+        ufw allow https >/dev/null 2>&1
+    fi
+
+    read -p "Allow local network access (192.168.0.0/16) (y/N)? " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        ufw allow from 192.168.0.0/16 >/dev/null 2>&1
+    fi
+
+    ufw reload >/dev/null 2>&1
+    echo "Raspberry Pi firewall rules added"
+}
+
+case "${1:-status}" in
+    status)
+        show_status
+        show_raspberry_pi_rules
+        ;;
+    add-pi-rules)
+        add_raspberry_pi_defaults
+        ;;
+    reload)
+        ufw reload
+        echo "UFW rules reloaded"
+        ;;
+    reset)
+        echo "WARNING: This will reset all firewall rules!"
+        read -p "Are you sure? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            ufw --force reset
+            ufw default deny incoming
+            ufw default allow outgoing
+            ufw allow ssh
+            ufw --force enable
+            echo "UFW reset to secure defaults"
+        fi
+        ;;
+    *)
+        echo "Usage: $SCRIPT_NAME {status|add-pi-rules|reload|reset}"
+        echo ""
+        echo "Commands:"
+        echo "  status         Show firewall status and Raspberry Pi rules"
+        echo "  add-pi-rules   Add Raspberry Pi optimized rules interactively"
+        echo "  reload         Reload firewall rules"
+        echo "  reset          Reset to secure defaults (WARNING: removes all rules)"
+        exit 1
+        ;;
+esac
+EOF
+
+        chmod +x $1/usr/local/bin/ufw-hardening
+
+        # Create UFW systemd override for better Raspberry Pi integration
+        mkdir -p $1/etc/systemd/system/ufw.service.d
+
+        cat << EOF > $1/etc/systemd/system/ufw.service.d/override.conf
+[Unit]
+Description=UFW Firewall (Raspberry Pi Hardened)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStartPost=/usr/local/bin/ufw-hardening status
+EOF
+
+        log_success "UFW настроен для Raspberry Pi"
+
+        echo "========================================="
+        echo "UFW FIREWALL CONFIGURED FOR RASPBERRY PI"
+        echo "========================================="
+        echo "✓ UFW enabled with secure defaults"
+        echo "✓ SSH access allowed with rate limiting"
+        echo "✓ mDNS allowed for device discovery"
+        echo "✓ Default deny incoming policy"
+        echo "✓ Default allow outgoing policy"
+        echo ""
+        echo "Management commands:"
+        echo "  ufw status                    - Show firewall status"
+        echo "  ufw-hardening status         - Show Raspberry Pi specific rules"
+        echo "  ufw-hardening add-pi-rules   - Add Raspberry Pi optimized rules"
+        echo ""
+        echo "Configuration: /etc/ufw/ufw.conf"
+        echo "Rules: /etc/ufw/"
+        echo "========================================="
+
+      else
+        log_info "UFW отключен по конфигурации - используется raw iptables"
+      fi

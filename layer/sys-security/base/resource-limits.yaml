@@ -1,0 +1,112 @@
+# ==========================================
+# RESOURCE LIMITS SECURITY LAYER
+# ==========================================
+# Ограничения системных ресурсов для предотвращения DoS атак
+# Включает: ulimits, системные лимиты, memory limits
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: resource-limits
+# X-Env-Layer-Category: base
+# X-Env-Layer-Desc: System resource limits to prevent DoS attacks
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: resource-limits
+
+# X-Env-VarPrefix: limits
+
+# X-Env-Var-max_processes: 1024
+# X-Env-Var-max_processes-Desc: Maximum number of processes per user
+# X-Env-Var-max_processes-Required: n
+# X-Env-Var-max_processes-Set: y
+
+# X-Env-Var-max_open_files: 1024
+# X-Env-Var-max_open_files-Desc: Maximum number of open files per user
+# X-Env-Var-max_open_files-Required: n
+# X-Env-Var-max_open_files-Set: y
+
+# X-Env-Var-disable_core_dumps: y
+# X-Env-Var-disable_core_dumps-Desc: Disable core dumps for security
+# X-Env-Var-disable_core_dumps-Required: n
+# X-Env-Var-disable_core_dumps-Valid: keywords:y,n
+# X-Env-Var-disable_core_dumps-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages: []
+
+  customize-hooks:
+    # System resource limits
+    - |
+      set -eu
+      mkdir -p $1/etc/security/limits.d
+
+      # Создание системных лимитов
+      cat << EOF > $1/etc/security/limits.d/90-resource-limits.conf
+      # ==========================================
+      # SYSTEM RESOURCE LIMITS
+      # ==========================================
+
+      # Default limits for all users
+EOF
+
+      # Добавление core dump ограничений
+      if [[ "${limits_disable_core_dumps:-y}" == "y" ]]; then
+        cat << EOF >> $1/etc/security/limits.d/90-resource-limits.conf
+      *               soft    core            0
+      *               hard    core            0
+EOF
+      fi
+
+      # Основные лимиты ресурсов
+      cat << EOF >> $1/etc/security/limits.d/90-resource-limits.conf
+      *               soft    data            unlimited
+      *               hard    data            unlimited
+      *               soft    fsize           unlimited
+      *               hard    fsize           unlimited
+      *               soft    memlock         64
+      *               hard    memlock         64
+      *               soft    nofile          ${limits_max_open_files:-1024}
+      *               hard    nofile          1048576
+      *               soft    rss             unlimited
+      *               hard    rss             unlimited
+      *               soft    stack           unlimited
+      *               hard    stack           unlimited
+      *               soft    cpu             unlimited
+      *               hard    cpu             unlimited
+      *               soft    nproc           ${limits_max_processes:-1024}
+      *               hard    nproc           ${limits_max_processes:-1024}
+      *               soft    as              unlimited
+      *               hard    as              unlimited
+      *               soft    locks           unlimited
+      *               hard    locks           unlimited
+      *               soft    sigpending      1024
+      *               hard    sigpending      1024
+      *               soft    msgqueue        819200
+      *               hard    msgqueue        819200
+      *               soft    nice            0
+      *               hard    nice            0
+      *               soft    rtprio          0
+      *               hard    rtprio          0
+      EOF
+
+      # Настройки systemd для ограничений ресурсов
+      mkdir -p $1/etc/systemd/system.conf.d
+      cat << EOF > $1/etc/systemd/system.conf.d/90-resource-limits.conf
+      [Manager]
+EOF
+
+      if [[ "${limits_disable_core_dumps:-y}" == "y" ]]; then
+        echo "DefaultLimitCORE=0" >> $1/etc/systemd/system.conf.d/90-resource-limits.conf
+      fi
+
+      cat << EOF >> $1/etc/systemd/system.conf.d/90-resource-limits.conf
+      DefaultLimitNOFILE=${limits_max_open_files:-1024}:524288
+      DefaultLimitNPROC=${limits_max_processes:-1024}:${limits_max_processes:-1024}
+      EOF
+
+      log_success "Resource limits настроены"

@@ -1,0 +1,171 @@
+# ==========================================
+# SSH SERVER SECURITY HARDENING LAYER
+# ==========================================
+# Hardening SSH сервера для безопасного удаленного доступа
+# Включает: протокол, аутентификация, шифры, логирование
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: ssh-server-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: SSH server hardening with secure ciphers, authentication and logging (requires openssh-server)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base,openssh-server
+# X-Env-Layer-Provides: ssh-server-hardening
+
+# X-Env-VarPrefix: ssh_security
+
+# X-Env-Var-disable_root_login: y
+# X-Env-Var-disable_root_login-Desc: Disable root login via SSH
+# X-Env-Var-disable_root_login-Required: n
+# X-Env-Var-disable_root_login-Valid: keywords:y,n
+# X-Env-Var-disable_root_login-Set: y
+
+
+# X-Env-Var-port: 22
+# X-Env-Var-port-Desc: SSH server port
+# X-Env-Var-port-Required: n
+# X-Env-Var-port-Set: y
+
+# X-Env-Var-max_auth_tries: 3
+# X-Env-Var-max_auth_tries-Desc: Maximum authentication attempts
+# X-Env-Var-max_auth_tries-Required: n
+# X-Env-Var-max_auth_tries-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages: []
+
+  customize-hooks:
+    # SSH server hardening
+    - |
+      set -eu
+      mkdir -p $1/etc/ssh/sshd_config.d
+
+      # Создание hardening конфигурации SSH
+      cat << EOF > $1/etc/ssh/sshd_config.d/90-ssh-hardening.conf
+      # ==========================================
+      # SSH SERVER SECURITY HARDENING
+      # ==========================================
+
+      # Basic settings
+      Port ${ssh_security_port:-22}
+      ListenAddress 0.0.0.0
+      ListenAddress ::
+
+      # Protocol and authentication
+      Protocol 2
+      HostKey /etc/ssh/ssh_host_rsa_key
+      HostKey /etc/ssh/ssh_host_ecdsa_key
+      HostKey /etc/ssh/ssh_host_ed25519_key
+      ServerKeyBits 4096
+
+      # Login restrictions
+      PermitRootLogin ${ssh_security_disable_root_login:-no}
+      PermitEmptyPasswords no
+      MaxAuthTries ${ssh_security_max_auth_tries:-3}
+      MaxSessions 10
+
+      # Authentication methods (controlled by openssh-server layer)
+      # Use IGconf_ssh_pubkey_only from openssh-server layer for auth control
+      ChallengeResponseAuthentication no
+      KerberosAuthentication no
+      GSSAPIAuthentication no
+      UsePAM yes
+
+      # Key exchange algorithms (secure only)
+      KexAlgorithms curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256
+
+      # Host key algorithms (secure only)
+      HostKeyAlgorithms rsa-sha2-512,rsa-sha2-256,ssh-ed25519,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256
+
+      # Ciphers (secure only)
+      Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+
+      # MACs (secure only)
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256,umac-128-etm@openssh.com
+
+      # Logging and monitoring
+      LogLevel VERBOSE
+      SyslogFacility AUTH
+      PrintMotd no
+      PrintLastLog yes
+
+      # Connection settings
+      TCPKeepAlive yes
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+      UseDNS no
+      Compression delayed
+
+      # Restrictions
+      AllowTcpForwarding no
+      X11Forwarding no
+      AllowAgentForwarding no
+      PermitTTY yes
+      PermitTunnel no
+
+      # Timeouts
+      LoginGraceTime 30
+      MaxStartups 10:30:100
+
+      # File permissions
+      StrictModes yes
+      IgnoreRhosts yes
+      RhostsRSAAuthentication no
+      RhostsAuthentication no
+      HostbasedAuthentication no
+      EOF
+
+      # Настройка прав на SSH ключи
+      cat << 'EOF' > $1/etc/ssh/sshd_config.d/91-ssh-permissions.conf
+      # ==========================================
+      # SSH FILE PERMISSIONS
+      # ==========================================
+
+      # Ensure proper permissions on SSH keys
+      # This is handled by post-install scripts
+
+      # Disable weak algorithms globally
+      # (additional security layer)
+      EOF
+
+      # Создание скрипта для генерации сильных SSH ключей
+      cat << 'EOF' > $1/etc/ssh/generate-strong-keys.sh
+      #!/bin/bash
+      # Generate strong SSH host keys
+
+      set -e
+
+      # Remove weak keys if exist
+      rm -f /etc/ssh/ssh_host_dsa_key*
+      rm -f /etc/ssh/ssh_host_rsa_key*
+
+      # Generate strong RSA key (4096 bits)
+      if [ ! -f /etc/ssh/ssh_host_rsa_key ]; then
+          ssh-keygen -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key -N "" -C "root@$(hostname)"
+      fi
+
+      # Generate ECDSA key (521 bits)
+      if [ ! -f /etc/ssh/ssh_host_ecdsa_key ]; then
+          ssh-keygen -t ecdsa -b 521 -f /etc/ssh/ssh_host_ecdsa_key -N "" -C "root@$(hostname)"
+      fi
+
+      # Generate Ed25519 key
+      if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
+          ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -N "" -C "root@$(hostname)"
+      fi
+
+      # Set proper permissions
+      chmod 600 /etc/ssh/ssh_host_*_key
+      chmod 644 /etc/ssh/ssh_host_*_key.pub
+      chmod 755 /etc/ssh
+      EOF
+
+      chmod +x $1/etc/ssh/generate-strong-keys.sh
+
+      log_success "SSH server hardening настроен"

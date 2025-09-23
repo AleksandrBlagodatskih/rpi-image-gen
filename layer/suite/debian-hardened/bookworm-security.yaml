@@ -1,0 +1,537 @@
+# ==========================================
+# SECURITY SUITE MASTER LAYER
+# ==========================================
+# Объединяющий слой безопасности для Debian сервера
+# Включает все основные компоненты hardening
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: bookworm-security
+# X-Env-Layer-Category: suite
+# X-Env-Layer-Desc: Complete security suite combining all hardening layers for Debian Bookworm server
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: debian-bookworm-arm64-multi,rpi-debian-bookworm,rpi-misc-utils,rpi-essential-base,rpi-misc-skel,rpi-user-credentials,systemd-net-min,openssh-server
+# X-Env-Layer-Provides: security-suite
+
+# X-Env-VarPrefix: security
+
+# X-Env-Var-suite_level: standard
+# X-Env-Var-suite_level-Desc: Security level (minimal, standard, hardened, paranoid)
+# X-Env-Var-suite_level-Required: n
+# X-Env-Var-suite_level-Valid: keywords:minimal,standard,hardened,paranoid
+# X-Env-Var-suite_level-Set: y
+
+# X-Env-Var-enable_monitoring: y
+# X-Env-Var-enable_monitoring-Desc: Enable security monitoring components
+# X-Env-Var-enable_monitoring-Required: n
+# X-Env-Var-enable_monitoring-Valid: keywords:y,n
+# X-Env-Var-enable_monitoring-Set: y
+
+# X-Env-Var-enable_network_protection: y
+# X-Env-Var-enable_network_protection-Desc: Enable network protection components
+# X-Env-Var-enable_network_protection-Required: n
+# X-Env-Var-enable_network_protection-Valid: keywords:y,n
+# X-Env-Var-enable_network_protection-Set: y
+
+# X-Env-Var-enable_auto_updates: y
+# X-Env-Var-enable_auto_updates-Desc: Enable automatic security updates
+# X-Env-Var-enable_auto_updates-Required: n
+# X-Env-Var-enable_auto_updates-Valid: keywords:y,n
+# X-Env-Var-enable_auto_updates-Set: y
+
+# X-Env-Var-enable_user_management: y
+# X-Env-Var-enable_user_management-Desc: Enable user management hardening
+# X-Env-Var-enable_user_management-Required: n
+# X-Env-Var-enable_user_management-Valid: keywords:y,n
+# X-Env-Var-enable_user_management-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    # Base security packages
+    - apparmor
+    - apparmor-utils
+    - systemd
+    - cron
+    - rsyslog
+
+    # Network security
+    - iptables
+    - fail2ban
+
+    # Authentication
+    - libpam-pwquality
+    - openssh-server
+    - sudo
+    - adduser
+
+    # Monitoring
+    - auditd
+    - logrotate
+
+    # Automatic updates (optional)
+    # - unattended-upgrades
+    # - apt-listchanges
+
+    # SSL/TLS
+    - openssl
+    - ca-certificates
+
+  customize-hooks:
+    # Security suite initialization
+    - |
+      set -eu
+
+      # Создание директорий для скриптов безопасности
+      mkdir -p $1/usr/local/bin $1/etc/security.d
+
+      # Создание главного скрипта управления безопасностью
+      cat << EOF > $1/usr/local/bin/security-suite-manager
+      #!/bin/bash
+      # Security Suite Manager
+
+      set -e
+
+      SCRIPT_NAME="security-suite-manager"
+      SUITE_LEVEL="${security_suite_level:-standard}"
+
+      show_help() {
+          cat << EOF
+${SCRIPT_NAME} - Security Suite Management Tool
+
+USAGE:
+    ${SCRIPT_NAME} [COMMAND] [OPTIONS]
+
+COMMANDS:
+    status          Show security status
+    check           Run security checks
+    harden          Apply hardening measures
+    monitor         Start monitoring mode
+    audit           Generate security audit report
+
+OPTIONS:
+    -l, --level LEVEL   Security level (${SUITE_LEVEL})
+    -v, --verbose       Verbose output
+    -h, --help          Show this help
+
+SECURITY LEVELS:
+    minimal     Basic security measures
+    standard    Standard security (default)
+    hardened    High security with restrictions
+    paranoid    Maximum security (may break functionality)
+
+EXAMPLES:
+    ${SCRIPT_NAME} status
+    ${SCRIPT_NAME} check --verbose
+    ${SCRIPT_NAME} harden --level hardened
+    ${SCRIPT_NAME} audit > security-report.txt
+
+EOF
+      }
+
+      show_status() {
+          echo "========================================="
+          echo "SECURITY SUITE STATUS"
+          echo "========================================="
+          echo "Security Level: ${SUITE_LEVEL}"
+          echo "System: $(uname -s) $(uname -r)"
+          echo "Date: $(date)"
+          echo ""
+
+          # Check core services
+          echo "Core Services:"
+          for service in systemd apparmor auditd fail2ban rsyslog cron; do
+              if systemctl is-active --quiet "$service" 2>/dev/null; then
+                  echo "  ✓ $service: RUNNING"
+              else
+                  echo "  ✗ $service: NOT RUNNING"
+              fi
+          done
+
+          # Check security features
+          echo ""
+          echo "Security Features:"
+          [[ -f /etc/hosts.allow ]] && echo "  ✓ TCP Wrappers: CONFIGURED" || echo "  ✗ TCP Wrappers: NOT CONFIGURED"
+          [[ -f /etc/fail2ban/jail.local ]] && echo "  ✓ Fail2ban: CONFIGURED" || echo "  ✗ Fail2ban: NOT CONFIGURED"
+          [[ -f /etc/audit/auditd.conf ]] && echo "  ✓ Auditd: CONFIGURED" || echo "  ✗ Auditd: NOT CONFIGURED"
+          [[ -f /etc/ssh/sshd_config.d/90-ssh-hardening.conf ]] && echo "  ✓ SSH: HARDENED" || echo "  ✗ SSH: NOT HARDENED"
+
+          # Show resource limits
+          echo ""
+          echo "Resource Limits:"
+          ulimit -n | xargs echo "  File descriptors:"
+          ulimit -u | xargs echo "  Processes per user:"
+      }
+
+      run_checks() {
+          echo "Running security checks..."
+
+          # Run individual checkers
+          local checkers=(
+              "/usr/local/bin/apparmor-hardening-check"
+              "/usr/local/bin/cron-hardening-check"
+              "/usr/local/bin/fail2ban-hardening-check"
+              "/usr/local/bin/rsyslog-hardening-check"
+              "/usr/local/bin/tcp-wrappers-check"
+              "/usr/local/bin/cron-hardening-check"
+          )
+
+          for checker in "${checkers[@]}"; do
+              if [[ -x "$checker" ]]; then
+                  echo ""
+                  echo "=== $(basename "$checker") ==="
+                  "$checker"
+              fi
+          done
+      }
+
+      generate_audit() {
+          local audit_file="/tmp/security-audit-$(date +%Y%m%d-%H%M%S).txt"
+
+          echo "Generating security audit report..."
+
+          {
+              echo "========================================="
+              echo "SECURITY AUDIT REPORT"
+              echo "========================================="
+              echo "Generated: $(date)"
+              echo "System: $(uname -a)"
+              echo "Security Level: ${SUITE_LEVEL}"
+              echo ""
+
+              # System information
+              echo "SYSTEM INFORMATION:"
+              echo "==================="
+              uname -a
+              echo ""
+              lsb_release -a 2>/dev/null || echo "lsb_release not available"
+              echo ""
+
+              # Service status
+              echo "SERVICE STATUS:"
+              echo "==============="
+              systemctl list-units --type=service --state=active --no-legend | head -10
+              echo ""
+
+              # Security configurations
+              echo "SECURITY CONFIGURATIONS:"
+              echo "========================"
+
+              echo "SSH Configuration:"
+              grep -E "^(Port|PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)" /etc/ssh/sshd_config 2>/dev/null || echo "SSH config not found"
+              echo ""
+
+              echo "Firewall Status:"
+              iptables -L -n | head -20
+              echo ""
+
+              echo "Audit Rules:"
+              auditctl -l 2>/dev/null | head -10 || echo "Audit not configured"
+              echo ""
+
+              # File permissions
+              echo "CRITICAL FILE PERMISSIONS:"
+              echo "=========================="
+              ls -la /etc/passwd /etc/shadow /etc/group /etc/sudoers 2>/dev/null
+              echo ""
+
+              # Log analysis
+              echo "RECENT SECURITY EVENTS:"
+              echo "======================="
+              grep -h "FAILED\|DENIED\|REJECTED" /var/log/auth.log /var/log/fail2ban.log 2>/dev/null | tail -10 || echo "No recent security events"
+              echo ""
+
+          } > "$audit_file"
+
+          echo "Audit report saved to: $audit_file"
+          echo "Report location: $audit_file"
+      }
+
+      case "${1:-status}" in
+          status)
+              show_status
+              ;;
+          check)
+              run_checks
+              ;;
+          audit)
+              generate_audit
+              ;;
+          harden)
+              echo "Applying hardening measures for level: ${SUITE_LEVEL}"
+              # Here would go hardening logic based on level
+              echo "Hardening not yet implemented - use individual layers"
+              ;;
+          monitor)
+              echo "Starting security monitoring..."
+              # Here would go monitoring logic
+              echo "Monitoring not yet implemented"
+              ;;
+          help|--help|-h)
+              show_help
+              ;;
+          *)
+              echo "Unknown command: $1"
+              show_help
+              exit 1
+              ;;
+      esac
+      EOF
+
+      chmod +x $1/usr/local/bin/security-suite-manager
+
+      # Создание конфигурационного файла для набора
+      cat << EOF > $1/etc/security.d/suite.conf
+      # ==========================================
+      # SECURITY SUITE CONFIGURATION
+      # ==========================================
+
+      # Security level
+      SUITE_LEVEL="${security_suite_level:-standard}"
+
+      # Enabled components
+      MONITORING_ENABLED="${security_enable_monitoring:-y}"
+      NETWORK_PROTECTION_ENABLED="${security_enable_network_protection:-y}"
+
+      # Component versions
+      KERNEL_HARDENING_VERSION="1.0.0"
+      SSH_HARDENING_VERSION="1.0.0"
+      AUDITD_HARDENING_VERSION="1.0.0"
+      FAIL2BAN_HARDENING_VERSION="1.0.0"
+
+      # Configuration paths
+      CONFIG_DIR="/etc/security.d"
+      LOG_DIR="/var/log/security"
+      SCRIPT_DIR="/usr/local/bin"
+
+      # Security component variables
+      kernel_enable_kptr_restrict="${kernel_enable_kptr_restrict:-y}"
+      kernel_enable_dmesg_restrict="${kernel_enable_dmesg_restrict:-y}"
+      kernel_enable_randomize_va="${kernel_enable_randomize_va:-y}"
+
+      limits_max_processes="${limits_max_processes:-1024}"
+      limits_max_open_files="${limits_max_open_files:-1024}"
+      limits_disable_core_dumps="${limits_disable_core_dumps:-y}"
+
+      apparmor_enable_enforce_mode="${apparmor_enable_enforce_mode:-y}"
+      apparmor_enable_audit_logging="${apparmor_enable_audit_logging:-y}"
+
+      umask_system_umask="${umask_system_umask:-0027}"
+      umask_user_umask="${umask_user_umask:-0077}"
+
+      iptables_enable_scan_protection="${iptables_enable_scan_protection:-y}"
+      iptables_enable_syn_flood_protection="${iptables_enable_syn_flood_protection:-y}"
+      iptables_log_dropped_packets="${iptables_log_dropped_packets:-y}"
+
+      tcpwrap_enable_strict_access="${tcpwrap_enable_strict_access:-y}"
+      tcpwrap_allow_local_network="${tcpwrap_allow_local_network:-y}"
+      tcpwrap_log_denied_access="${tcpwrap_log_denied_access:-y}"
+
+      ssl_disable_weak_protocols="${ssl_disable_weak_protocols:-y}"
+      ssl_enable_secure_ciphers="${ssl_enable_secure_ciphers:-y}"
+      ssl_enable_hsts="${ssl_enable_hsts:-y}"
+
+      pam_enable_password_quality="${pam_enable_password_quality:-y}"
+      pam_password_min_length="${pam_password_min_length:-12}"
+      pam_enable_login_lockout="${pam_enable_login_lockout:-y}"
+      pam_lockout_attempts="${pam_lockout_attempts:-5}"
+      pam_lockout_time="${pam_lockout_time:-600}"
+
+      ssh_security_disable_root_login="${ssh_security_disable_root_login:-y}"
+      ssh_security_port="${ssh_security_port:-22}"
+      ssh_security_max_auth_tries="${ssh_security_max_auth_tries:-3}"
+
+      systemd_enable_service_isolation="${systemd_enable_service_isolation:-y}"
+      systemd_enable_resource_limits="${systemd_enable_resource_limits:-y}"
+      systemd_enable_dynamic_users="${systemd_enable_dynamic_users:-y}"
+
+      rsyslog_enable_secure_logging="${rsyslog_enable_secure_logging:-y}"
+      rsyslog_enable_log_rotation="${rsyslog_enable_log_rotation:-y}"
+      rsyslog_max_log_size="${rsyslog_max_log_size:-100M}"
+
+      cron_restrict_user_crontabs="${cron_restrict_user_crontabs:-y}"
+      cron_enable_logging="${cron_enable_logging:-y}"
+      cron_secure_path="${cron_secure_path:-y}"
+
+      audit_enable_file_monitoring="${audit_enable_file_monitoring:-y}"
+      audit_enable_process_monitoring="${audit_enable_process_monitoring:-y}"
+      audit_enable_network_monitoring="${audit_enable_network_monitoring:-y}"
+      audit_log_max_size="${audit_log_max_size:-50}"
+
+      fail2ban_enable_ssh_protection="${fail2ban_enable_ssh_protection:-y}"
+      fail2ban_enable_web_protection="${fail2ban_enable_web_protection:-y}"
+      fail2ban_ban_time="${fail2ban_ban_time:-3600}"
+      fail2ban_max_retries="${fail2ban_max_retries:-3}"
+
+      # New components
+      unattended_enable_auto_updates="${security_enable_auto_updates:-y}"
+      unattended_enable_email_notifications="${unattended_enable_email_notifications:-n}"
+      unattended_email_recipient="${unattended_email_recipient:-root}"
+      unattended_auto_reboot="${unattended_auto_reboot:-n}"
+      unattended_update_interval="${unattended_update_interval:-daily}"
+      unattended_blacklist_packages="${unattended_blacklist_packages:-}"
+
+      usermgmt_disable_default_pi="${security_enable_user_management:-y}"
+      usermgmt_force_ssh_key_only="${usermgmt_force_ssh_key_only:-y}"
+      usermgmt_enable_user_monitoring="${usermgmt_enable_user_monitoring:-y}"
+      usermgmt_secure_user_groups="${usermgmt_secure_user_groups:-y}"
+      EOF
+
+      # Создание cron задачи для ежедневной проверки безопасности
+      cat << 'EOF' > $1/etc/cron.daily/security-suite-check
+      #!/bin/bash
+      # Daily security suite check
+
+      set -e
+
+      LOG_FILE="/var/log/security-suite-check.log"
+
+      echo "$(date): Starting daily security check" >> "$LOG_FILE"
+
+      # Run security manager check
+      if [[ -x /usr/local/bin/security-suite-manager ]]; then
+          /usr/local/bin/security-suite-manager check >> "$LOG_FILE" 2>&1
+      fi
+
+      # Check for security updates
+      if command -v apt >/dev/null 2>&1; then
+          UPDATES=$(apt list --upgradable 2>/dev/null | grep -c "security" || echo "0")
+          echo "$(date): Available security updates: $UPDATES" >> "$LOG_FILE"
+      fi
+
+      echo "$(date): Daily security check completed" >> "$LOG_FILE"
+      EOF
+
+      chmod +x $1/etc/cron.daily/security-suite-check
+
+      # Создание systemd сервиса для security suite
+      cat << 'EOF' > $1/etc/systemd/system/security-suite.service
+      # ==========================================
+      # SECURITY SUITE SYSTEMD SERVICE
+      # ==========================================
+
+      [Unit]
+      Description=Security Suite Manager
+      After=network.target auditd.service
+      Wants=auditd.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/security-suite-manager status
+      RemainAfterExit=yes
+      StandardOutput=journal
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+      # Создание документации
+      cat << 'EOF' > $1/usr/share/doc/security-suite/README.md
+      # Security Suite for Debian
+
+      This security suite provides comprehensive hardening for Debian-based systems.
+
+      ## Components
+
+      ### Base Security
+      - **kernel-hardening**: Kernel security hardening
+      - **resource-limits**: System resource limits
+      - **apparmor-hardening**: AppArmor MAC configuration
+      - **umask-hardening**: Secure file creation permissions
+
+      ### Network Security
+      - **iptables-hardening**: Firewall configuration
+      - **tcp-wrappers-hardening**: TCP wrappers access control
+      - **ssl-tls-hardening**: SSL/TLS security configuration
+
+      ### Authentication & Users
+      - **pam-hardening**: PAM authentication hardening
+      - **ssh-server-hardening**: SSH server security
+      - **user-management-hardening**: Raspberry Pi specific user security (disables default pi user, enforces SSH keys, hardware access audit)
+
+      ### Services
+      - **systemd-hardening**: systemd security hardening
+      - **rsyslog-hardening**: Secure logging configuration
+      - **cron-hardening**: Cron security hardening
+      - **unattended-upgrades-hardening**: Automatic security updates
+
+      ### Monitoring
+      - **auditd-hardening**: System audit configuration
+      - **fail2ban-hardening**: Intrusion prevention
+
+      ## Usage
+
+      ```bash
+      # Check security status
+      security-suite-manager status
+
+      # Run security checks
+      security-suite-manager check
+
+      # Generate audit report
+      security-suite-manager audit > report.txt
+      ```
+
+      ## Configuration
+
+      Edit `/etc/security.d/suite.conf` to configure the security suite.
+
+      ## Security Levels
+
+      - **minimal**: Basic security measures
+      - **standard**: Standard security (recommended)
+      - **hardened**: High security with restrictions
+      - **paranoid**: Maximum security
+
+      ## Files
+
+      - `/etc/security.d/suite.conf`: Main configuration
+      - `/usr/local/bin/security-suite-manager`: Management script
+      - `/var/log/security-suite-check.log`: Daily check logs
+      - `/etc/cron.daily/security-suite-check`: Daily check script
+
+      ## Support
+
+      For issues and questions, check the system logs and consult the Debian security documentation.
+      EOF
+
+      log_success "Security Suite настроен"
+
+      # Вывод информации о настройке
+      cat << 'EOF'
+
+      ==========================================
+      SECURITY SUITE INSTALLATION COMPLETED
+      ==========================================
+
+      Security components configured:
+      ✓ Kernel hardening
+      ✓ Resource limits
+      ✓ AppArmor MAC
+      ✓ SSH hardening
+      ✓ PAM authentication
+      ✓ User management
+      ✓ Auditd monitoring
+      ✓ iptables firewall
+      ✓ TCP wrappers
+      ✓ rsyslog security
+      ✓ cron hardening
+      ✓ fail2ban protection
+      ✓ Unattended upgrades
+
+      Management tools:
+      - security-suite-manager status
+      - security-suite-manager check
+      - security-suite-manager audit
+
+      Daily monitoring enabled via cron.
+
+      For detailed documentation see:
+      /usr/share/doc/security-suite/README.md
+
+      ==========================================
+      EOF

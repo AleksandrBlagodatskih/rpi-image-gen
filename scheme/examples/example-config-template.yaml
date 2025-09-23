@@ -1,0 +1,113 @@
+# ==========================================
+# ПРИМЕР КОНФИГУРАЦИИ RPI-IMAGE-GEN
+# ==========================================
+#
+# [НАЗВАНИЕ ПРИМЕРА]
+#
+# [КРАТКОЕ ОПИСАНИЕ ПРИМЕРА]
+#
+# Особенности:
+# - [Особенность 1]
+# - [Особенность 2]
+# - [Особенность 3]
+#
+# Использование:
+#   rpi-image-gen build -S ./examples/[example-name]/ -c [config-name].yaml
+#
+# Требования:
+# - [Требование 1]
+# - [Требование 2]
+# ==========================================
+
+# Секция: Устройство (Device Configuration)
+device:
+  layer: "[device-layer]"                    # Слой устройства: rpi5, rpi4, pi3, cm4
+  hostname: "[hostname]"                     # Имя хоста (опционально)
+  user1pass: "[password]"                    # Пароль пользователя (пустой = отключен)
+
+  # Дополнительные переменные устройства
+  # storage_type: "sd"                       # Тип носителя: sd, nvme
+  # sector_size: 512                        # Размер сектора
+  # custom_var: "custom_value"              # Пользовательская переменная
+
+# Секция: Образ (Image Configuration)
+image:
+  layer: "[image-layer]"                     # Тип образа: image-rpios, image-rota
+  boot_part_size: "[boot-size]"              # Размер загрузочного раздела
+  root_part_size: "[root-size]"              # Размер корневого раздела
+  name: "[image-name]"                       # Имя выходного файла
+
+  # Дополнительные параметры образа
+  # system_part_size: "[system-size]"        # Размер системного раздела (для A/B)
+  # provider: "genimage"                     # Поставщик образа
+  # outputdir: "./work"                      # Каталог для выходных файлов
+
+# Секция: Слои (Layer Configuration)
+layer:
+  base: "[base-layer]"                       # Базовый слой
+
+  # Дополнительные слои
+  # - "openssh-server"                       # SSH сервер
+  # - "ca-certificates"                      # Сертификаты ЦС
+  # - "fake-hwclock"                        # Аппаратные часы
+  # - "systemd-net-min"                     # Минимальная сеть
+  # - "custom-layer"                        # Пользовательский слой
+
+# Секция: Переменные окружения (Environment Variables)
+# Определяет переменные для процесса сборки
+# IGconf_sys_workroot: "./work"              # Рабочий каталог
+# IGconf_sys_apt_proxy_http: ""              # HTTP прокси для APT
+# IGconf_sys_apt_cachedir: ""                # Кеш APT
+# IGconf_sys_apt_keydir: ""                  # Каталог ключей APT
+# IGconf_target_dir: "./work/root"           # Целевой каталог файловой системы
+
+# Секция: Хуки (Hooks)
+# Определяет скрипты для выполнения на разных этапах
+# image_prebuild: ""                         # Перед сборкой файловой системы
+# image_postbuild: ""                        # После сборки файловой системы
+# device_prebuild: ""                        # Перед сборкой устройства
+# device_postbuild: ""                       # После сборки устройства
+# image_preimage: ""                         # Перед созданием образа
+# image_postimage: ""                        # После создания образа
+# device_preimage: ""                        # Перед созданием образа устройства
+# device_postimage: ""                       # После создания образа устройства
+
+# Секция: Развертывание (Deployment)
+# Определяет параметры развертывания готового образа
+# deploy_dir: ""                             # Каталог для развертывания
+# deploy_hook: ""                            # Скрипт развертывания
+
+# Секция: SBOM (Software Bill of Materials)
+# Определяет параметры генерации спецификации ПО
+# sbom_hook: ""                              # Скрипт генерации SBOM
+
+# ==========================================
+# ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ
+# ==========================================
+
+# Минимальная конфигурация для Raspberry Pi 5
+# device:
+#   layer: "rpi5"
+# image:
+#   layer: "image-rpios"
+#   boot_part_size: "200%"
+#   root_part_size: "300%"
+#   name: "minimal-image"
+# layer:
+#   base: "bookworm-minbase"
+
+# Полная конфигурация с дополнительными слоями
+# device:
+#   layer: "rpi5"
+#   hostname: "my-pi"
+#   user1pass: "mypassword"
+# image:
+#   layer: "image-rota"
+#   boot_part_size: "200%"
+#   system_part_size: "400%"
+#   name: "full-system"
+# layer:
+#   base: "bookworm-minbase"
+#   - "openssh-server"
+#   - "ca-certificates"
+#   - "fake-hwclock"

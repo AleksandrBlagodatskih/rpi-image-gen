@@ -1,0 +1,181 @@
+[Unit]
+Description=[SERVICE_DESCRIPTION]
+After=[AFTER_SERVICES]
+Requires=[REQUIRED_SERVICES]
+Wants=[WANTED_SERVICES]
+
+# Documentation
+Documentation=[DOCUMENTATION_URLS]
+
+# Conditions and restrictions
+ConditionPathExists=[CONDITION_PATHS]
+ConditionPathExistsGlob=[CONDITION_PATH_GLOBS]
+
+# Environment and working directory
+Environment=[ENVIRONMENT_VARIABLES]
+WorkingDirectory=[WORKING_DIRECTORY]
+
+[Service]
+# Service type and behavior
+Type=[SERVICE_TYPE]
+Restart=[RESTART_POLICY]
+RestartSec=[RESTART_SECONDS]
+
+# User and group
+User=[SERVICE_USER]
+Group=[SERVICE_GROUP]
+
+# Execution
+ExecStart=[EXEC_START_COMMAND]
+ExecStartPre=[EXEC_START_PRE_COMMANDS]
+ExecStartPost=[EXEC_START_POST_COMMANDS]
+ExecStop=[EXEC_STOP_COMMAND]
+ExecStopPost=[EXEC_STOP_POST_COMMANDS]
+ExecReload=[EXEC_RELOAD_COMMAND]
+
+# Resource limits
+LimitNOFILE=[LIMIT_NOFILE]
+LimitNPROC=[LIMIT_NPROC]
+MemoryLimit=[MEMORY_LIMIT]
+CPUQuota=[CPU_QUOTA]
+
+# Security settings
+NoNewPrivileges=[NO_NEW_PRIVILEGES]
+ProtectSystem=[PROTECT_SYSTEM]
+ProtectHome=[PROTECT_HOME]
+ReadWritePaths=[READ_WRITE_PATHS]
+PrivateTmp=[PRIVATE_TMP]
+PrivateDevices=[PRIVATE_DEVICES]
+
+# Logging
+StandardOutput=[STANDARD_OUTPUT]
+StandardError=[STANDARD_ERROR]
+SyslogIdentifier=[SYSLOG_IDENTIFIER]
+
+# Timeout settings
+TimeoutStartSec=[TIMEOUT_START]
+TimeoutStopSec=[TIMEOUT_STOP]
+TimeoutSec=[TIMEOUT_GENERIC]
+
+[Install]
+WantedBy=[WANTED_BY_TARGETS]
+RequiredBy=[REQUIRED_BY_TARGETS]
+Also=[ALSO_INSTALL]
+
+# ============================================================================
+# ПРИМЕРЫ КОНФИГУРАЦИЙ
+# ============================================================================
+
+# Пример 1: Простой сервис
+[Unit]
+Description=My Custom Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/my-service
+Restart=always
+User=myuser
+
+[Install]
+WantedBy=multi-user.target
+
+# Пример 2: Сервис с подробной конфигурацией
+[Unit]
+Description=Advanced Custom Service
+Documentation=https://example.com/docs
+After=network-online.target syslog.target
+Wants=network-online.target
+Requires=syslog.target
+
+[Service]
+Type=notify
+Restart=on-failure
+RestartSec=5s
+User=service-user
+Group=service-group
+WorkingDirectory=/var/lib/my-service
+
+ExecStart=/usr/bin/my-service --config /etc/my-service.conf
+ExecReload=/bin/kill -HUP $MAINPID
+
+LimitNOFILE=65536
+MemoryLimit=512M
+CPUQuota=50%
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=my-service
+
+TimeoutStartSec=30s
+TimeoutStopSec=10s
+
+[Install]
+WantedBy=multi-user.target
+
+# Пример 3: Сервис-контейнер
+[Unit]
+Description=Containerized Service
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/bin/docker run --rm -p 8080:80 my-container
+ExecStop=/usr/bin/docker stop my-container
+
+[Install]
+WantedBy=multi-user.target
+
+# ============================================================================
+# ОПИСАНИЕ ПАРАМЕТРОВ
+# ============================================================================
+
+# [Unit] Section:
+# Description - Человеко-читаемое описание сервиса
+# After - Службы, которые должны быть запущены перед этим сервисом
+# Requires - Службы, от которых зависит этот сервис (жесткая зависимость)
+# Wants - Службы, которые желательно запустить (мягкая зависимость)
+# Documentation - Ссылки на документацию
+
+# [Service] Section:
+# Type - Тип сервиса (simple, forking, oneshot, notify, idle)
+# Restart - Политика перезапуска (no, on-success, on-failure, on-abort, always)
+# RestartSec - Задержка перед перезапуском в секундах
+# User/Group - Пользователь и группа для запуска сервиса
+# ExecStart - Команда для запуска сервиса
+# ExecStartPre/Post - Команды до/после запуска
+# ExecStop/StopPost - Команды для остановки
+# ExecReload - Команда для перезагрузки конфигурации
+# LimitNOFILE/NPROC - Ограничения ресурсов
+# MemoryLimit/CPUQuota - Ограничения памяти и CPU
+# NoNewPrivileges - Запрет повышения привилегий
+# ProtectSystem/Home - Защита системных каталогов
+# PrivateTmp/Devices - Изоляция временных файлов и устройств
+# StandardOutput/Error - Перенаправление вывода
+# SyslogIdentifier - Идентификатор в syslog
+# TimeoutStartSec/StopSec - Таймауты запуска/остановки
+
+# [Install] Section:
+# WantedBy - Цели, в которые будет установлен сервис
+# RequiredBy - Обязательные цели
+# Also - Дополнительные unit-файлы для установки
+
+# ============================================================================
+# ПРИМЕЧАНИЯ РАЗРАБОТЧИКА
+# ============================================================================
+
+# 1. Все пути должны быть абсолютными
+# 2. Используйте systemctl daemon-reload после изменений
+# 3. Тестируйте сервис перед установкой в автозагрузку
+# 4. Используйте journalctl для просмотра логов
+# 5. Не используйте Type=forking без необходимости
+# 6. Устанавливайте разумные ограничения ресурсов
+# 7. Используйте Security hardening опции
+# 8. Документируйте все параметры и зависимости

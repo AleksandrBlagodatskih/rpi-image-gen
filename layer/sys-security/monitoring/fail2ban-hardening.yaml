@@ -1,0 +1,371 @@
+# ==========================================
+# FAIL2BAN SECURITY MONITORING LAYER
+# ==========================================
+# Настройка fail2ban для предотвращения brute-force атак
+# Включает: SSH protection, web server protection, custom jails
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: fail2ban-hardening
+# X-Env-Layer-Category: app
+# X-Env-Layer-Desc: fail2ban hardening for intrusion prevention and brute-force protection
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: fail2ban-hardening
+
+# X-Env-VarPrefix: fail2ban
+
+# X-Env-Var-enable_ssh_protection: y
+# X-Env-Var-enable_ssh_protection-Desc: Enable SSH brute-force protection
+# X-Env-Var-enable_ssh_protection-Required: n
+# X-Env-Var-enable_ssh_protection-Valid: keywords:y,n
+# X-Env-Var-enable_ssh_protection-Set: y
+
+# X-Env-Var-enable_web_protection: y
+# X-Env-Var-enable_web_protection-Desc: Enable web server protection
+# X-Env-Var-enable_web_protection-Required: n
+# X-Env-Var-enable_web_protection-Valid: keywords:y,n
+# X-Env-Var-enable_web_protection-Set: y
+
+# X-Env-Var-ban_time: 3600
+# X-Env-Var-ban_time-Desc: Ban time in seconds for detected attacks
+# X-Env-Var-ban_time-Required: n
+# X-Env-Var-ban_time-Set: y
+
+# X-Env-Var-max_retries: 3
+# X-Env-Var-max_retries-Desc: Maximum retries before banning
+# X-Env-Var-max_retries-Required: n
+# X-Env-Var-max_retries-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - fail2ban
+    - iptables
+    - python3-pyinotify
+
+  customize-hooks:
+    # fail2ban hardening configuration
+    - |
+      set -eu
+      mkdir -p $1/etc/fail2ban/jail.d $1/etc/fail2ban/filter.d $1/var/lib/fail2ban
+
+      # Основная конфигурация fail2ban
+      cat << EOF > $1/etc/fail2ban/jail.local
+      # ==========================================
+      # FAIL2BAN HARDENING CONFIGURATION
+      # ==========================================
+
+      [DEFAULT]
+      # Ban hosts for one hour
+      bantime = ${fail2ban_ban_time:-3600}
+
+      # Override /etc/fail2ban/jail.d/00-firewalld.conf
+      banaction = iptables-multiport
+
+      # A host is banned if it has generated "maxretry" during the last "findtime" seconds
+      findtime = 600
+      maxretry = ${fail2ban_max_retries:-3}
+
+      # "ignoreip" can be a list of IP addresses, CIDR masks or DNS hosts. Fail2ban
+      # will not ban a host which matches an address in this list. Several addresses
+      # can be defined using space (and/or comma) separator
+      ignoreip = 127.0.0.1/8 ::1 192.168.0.0/16 10.0.0.0/8 172.16.0.0/12
+
+      # Enable logging to the systemd journal
+      logtarget = /var/log/fail2ban.log
+
+      # Socket file used to communicate with the server
+      socket = /var/run/fail2ban/fail2ban.sock
+
+      # PID file
+      pidfile = /var/run/fail2ban/fail2ban.pid
+
+      # Database file
+      dbfile = /var/lib/fail2ban/fail2ban.sqlite3
+
+      # Database purge age in seconds (30 days)
+      dbpurgeage = 2592000
+      EOF
+
+      # SSH jail configuration
+      if [[ "${fail2ban_enable_ssh_protection:-y}" == "y" ]]; then
+        cat << EOF > $1/etc/fail2ban/jail.d/ssh.conf
+      # ==========================================
+      # SSH BRUTE-FORCE PROTECTION
+      # ==========================================
+
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = ${fail2ban_max_retries:-3}
+      bantime = ${fail2ban_ban_time:-3600}
+      findtime = 600
+
+      # Additional SSH protection
+      [dropbear]
+      enabled = false
+      port = ssh
+      filter = dropbear
+      logpath = /var/log/auth.log
+
+      [selinux-ssh]
+      enabled = false
+      port = ssh
+      filter = selinux-ssh
+      logpath = /var/log/audit/audit.log
+      EOF
+      fi
+
+      # Web server protection
+      if [[ "${fail2ban_enable_web_protection:-y}" == "y" ]]; then
+        cat << EOF > $1/etc/fail2ban/jail.d/web.conf
+      # ==========================================
+      # WEB SERVER PROTECTION
+      # ==========================================
+
+      [nginx-http-auth]
+      enabled = false
+      port = http,https
+      filter = nginx-http-auth
+      logpath = /var/log/nginx/error.log
+
+      [nginx-noscript]
+      enabled = false
+      port = http,https
+      filter = nginx-noscript
+      logpath = /var/log/nginx/access.log
+
+      [nginx-badbots]
+      enabled = false
+      port = http,https
+      filter = nginx-badbots
+      logpath = /var/log/nginx/access.log
+
+      [nginx-noproxy]
+      enabled = false
+      port = http,https
+      filter = nginx-noproxy
+      logpath = /var/log/nginx/access.log
+
+      [apache-auth]
+      enabled = false
+      port = http,https
+      filter = apache-auth
+      logpath = /var/log/apache2/*error.log
+
+      [apache-noscript]
+      enabled = false
+      port = http,https
+      filter = apache-noscript
+      logpath = /var/log/apache2/*access.log
+
+      [apache-overflows]
+      enabled = false
+      port = http,https
+      filter = apache-overflows
+      logpath = /var/log/apache2/*error.log
+
+      [apache-badbots]
+      enabled = false
+      port = http,https
+      filter = apache-badbots
+      logpath = /var/log/apache2/*access.log
+      EOF
+      fi
+
+      # Custom security jails
+      cat << EOF > $1/etc/fail2ban/jail.d/custom-security.conf
+      # ==========================================
+      # CUSTOM SECURITY JAILS
+      # ==========================================
+
+      [recidive]
+      enabled = true
+      filter = recidive
+      logpath = /var/log/fail2ban.log
+      action = iptables-allports[name=recidive]
+      bantime = 604800  ; 1 week
+      findtime = 86400  ; 1 day
+      maxretry = 5
+
+      [systemd-journal]
+      enabled = false
+      filter = systemd-journal
+      logpath = /var/log/journal/*/system.journal
+      action = iptables-allports[name=systemd]
+
+      [pam-generic]
+      enabled = false
+      filter = pam-generic
+      logpath = /var/log/auth.log
+      port = all
+      EOF
+
+      # Custom filters for advanced detection
+      cat << 'EOF' > $1/etc/fail2ban/filter.d/custom-ssh.conf
+      # ==========================================
+      # CUSTOM SSH FILTER
+      # ==========================================
+
+      # Fail2Ban filter for SSH with additional patterns
+
+      [Definition]
+      failregex = ^%(__prefix_line)s(?:error: )?authentication failure; logname=\S* uid=\S* euid=\S* tty=\S* ruser=\S* rhost=<HOST>(?:\s+user=\S*)?\s*$
+                   ^%(__prefix_line)sFailed [-/\w]+ for .* from <HOST>(?: port \d+)?(?: ssh\d*)?(: (ruser .*|(\S+ ID \S+ \(serial \d+\) CA )?\S+ %(__md5hex)s(?::\S+)?|(invalid user )?\S+|(authenticating user )?\S+ \S+)?)?\s*$
+                   ^%(__prefix_line)sROOT LOGIN REFUSED.* FROM <HOST>\s*$
+                   ^%(__prefix_line)s[iI](?:llegal|nvalid) user .* from <HOST>(?: port \d+)?(?: ssh\d*)?\s*$
+                   ^%(__prefix_line)sUser \S+ from <HOST> not allowed because not in any group\s*$
+                   ^%(__prefix_line)sUser \S+ from <HOST> not allowed because account is locked\s*$
+                   ^%(__prefix_line)sUser \S+ from <HOST> not allowed because account is disabled\s*$
+                   ^%(__prefix_line)sauthentication failure; logname=\S* uid=\S* euid=\S* tty=\S* ruser=\S* rhost=<HOST>\s*$
+                   ^%(__prefix_line)srefused connect from \S+ \(<HOST>\)\s*$
+                   ^%(__prefix_line)sAddress <HOST> .* POSSIBLE BREAK-IN ATTEMPT\s*$
+                   ^%(__prefix_line)sUser \S+ not allowed because shell \S+ is not in /etc/shells from <HOST>\s*$
+                   ^%(__prefix_line)sUser \S+ from <HOST> not allowed because a group is listed in DenyGroups\s*$
+                   ^%(__prefix_line)sUser \S+ from <HOST> not allowed because listed in DenyUsers\s*$
+                   ^%(__prefix_line)sConnection from <HOST> closed by \S+\s*$
+
+      ignoreregex =
+
+      # Author: Fail2Ban Team
+      # Modified for enhanced security
+      EOF
+
+      # Action configuration for secure banning
+      cat << 'EOF' > $1/etc/fail2ban/action.d/secure-iptables.conf
+      # ==========================================
+      # SECURE IPTABLES ACTION
+      # ==========================================
+
+      [Definition]
+
+      actionstart = iptables -N f2b-<name>
+                  iptables -A f2b-<name> -j RETURN
+                  iptables -I <chain> -p <protocol> --dport <port> -j f2b-<name>
+
+      actionstop = iptables -D <chain> -p <protocol> --dport <port> -j f2b-<name>
+                   iptables -F f2b-<name>
+                   iptables -X f2b-<name>
+
+      actioncheck = iptables -n -L <chain> | grep -q 'f2b-<name>'
+
+      actionban = iptables -I f2b-<name> 1 -s <ip> -j DROP
+                   echo "Banned <ip> for <name>" | logger -p security.info -t fail2ban
+
+      actionunban = iptables -D f2b-<name> -s <ip> -j DROP
+                    echo "Unbanned <ip> for <name>" | logger -p security.info -t fail2ban
+
+      [Init]
+      chain = INPUT
+      protocol = tcp
+      EOF
+
+      # Создание скрипта для проверки fail2ban
+      cat << 'EOF' > $1/usr/local/bin/fail2ban-hardening-check
+      #!/bin/bash
+      # fail2ban hardening checker
+
+      set -e
+
+      echo "========================================="
+      echo "FAIL2BAN HARDENING CHECK"
+      echo "========================================="
+
+      # Check fail2ban service
+      echo "Fail2ban service status:"
+      systemctl is-active fail2ban >/dev/null 2>&1 && echo "Service: RUNNING" || echo "Service: NOT RUNNING"
+
+      # Check fail2ban version
+      echo -e "\nFail2ban version:"
+      fail2ban-server --version 2>&1 | head -1
+
+      # Check active jails
+      echo -e "\nActive jails:"
+      fail2ban-client status 2>/dev/null | grep "Jail list:" | sed 's/^[^:]*:\s*//' | tr ',' '\n' | wc -l | xargs echo "Total active jails:"
+
+      # Check banned IPs
+      echo -e "\nCurrently banned IPs:"
+      fail2ban-client status sshd 2>/dev/null | grep "Banned IP list:" | sed 's/^[^:]*:\s*//' | tr -d '\n' | wc -w | xargs echo "Banned IPs in sshd jail:"
+
+      # Check configuration
+      echo -e "\nConfiguration validation:"
+      fail2ban-client -t >/dev/null 2>&1 && echo "Configuration: VALID" || echo "Configuration: INVALID"
+
+      # Check log file
+      echo -e "\nLog file status:"
+      [[ -f /var/log/fail2ban.log ]] && echo "Log file: EXISTS ($(stat -c%s /var/log/fail2ban.log) bytes)" || echo "Log file: MISSING"
+
+      echo -e "\nFail2ban hardening check completed"
+      EOF
+
+      chmod +x $1/usr/local/bin/fail2ban-hardening-check
+
+      # Настройка logrotate для fail2ban
+      cat << 'EOF' > $1/etc/logrotate.d/fail2ban-hardening
+      # ==========================================
+      # FAIL2BAN LOGS ROTATION
+      # ==========================================
+
+      /var/log/fail2ban.log {
+          weekly
+          missingok
+          rotate 12
+          compress
+          delaycompress
+          create 0640 root adm
+          sharedscripts
+          postrotate
+              if systemctl is-active --quiet fail2ban; then
+                  fail2ban-client reload >/dev/null 2>&1 || true
+              fi
+          endscript
+      }
+      EOF
+
+      # Создание cron задачи для fail2ban maintenance
+      cat << 'EOF' > $1/etc/cron.daily/fail2ban-maintenance
+      #!/bin/bash
+      # fail2ban maintenance tasks
+
+      set -e
+
+      MAINTENANCE_LOG="/var/log/fail2ban-maintenance.log"
+
+      echo "$(date): Starting fail2ban maintenance" >> "$MAINTENANCE_LOG"
+
+      # Check service status
+      if ! systemctl is-active --quiet fail2ban; then
+          echo "$(date): WARNING: fail2ban service is not running" >> "$MAINTENANCE_LOG"
+          systemctl start fail2ban
+      fi
+
+      # Clean old bans (older than 30 days)
+      if command -v fail2ban-client >/dev/null 2>&1; then
+          # Get list of jails
+          JAILS=$(fail2ban-client status | grep "Jail list:" | sed 's/^[^:]*:\s*//' | sed 's/,//g')
+
+          for jail in $JAILS; do
+              BANNED=$(fail2ban-client status "$jail" 2>/dev/null | grep "Banned IP list:" | wc -w)
+              echo "$(date): Jail $jail has $BANNED banned IPs" >> "$MAINTENANCE_LOG"
+          done
+      fi
+
+      # Check database size
+      if [[ -f /var/lib/fail2ban/fail2ban.sqlite3 ]]; then
+          DB_SIZE=$(stat -c%s /var/lib/fail2ban/fail2ban.sqlite3)
+          echo "$(date): Database size: $DB_SIZE bytes" >> "$MAINTENANCE_LOG"
+      fi
+
+      echo "$(date): Fail2ban maintenance completed" >> "$MAINTENANCE_LOG"
+      EOF
+
+      chmod +x $1/etc/cron.daily/fail2ban-maintenance
+
+      log_success "fail2ban hardening настроен"

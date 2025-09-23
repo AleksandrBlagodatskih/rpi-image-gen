@@ -1,0 +1,285 @@
+# ==========================================
+# TCP WRAPPERS SECURITY HARDENING LAYER
+# ==========================================
+# Hardening TCP wrappers для контроля доступа к сетевым сервисам
+# Включает: hosts.allow, hosts.deny, access control rules
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: tcp-wrappers-hardening
+# X-Env-Layer-Category: base
+# X-Env-Layer-Desc: TCP wrappers hardening with secure access control rules
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: tcp-wrappers-hardening
+
+# X-Env-VarPrefix: tcpwrap
+
+# X-Env-Var-enable_strict_access: y
+# X-Env-Var-enable_strict_access-Desc: Enable strict access control (deny all by default)
+# X-Env-Var-enable_strict_access-Required: n
+# X-Env-Var-enable_strict_access-Valid: keywords:y,n
+# X-Env-Var-enable_strict_access-Set: y
+
+# X-Env-Var-allow_local_network: y
+# X-Env-Var-allow_local_network-Desc: Allow access from local network
+# X-Env-Var-allow_local_network-Required: n
+# X-Env-Var-allow_local_network-Valid: keywords:y,n
+# X-Env-Var-allow_local_network-Set: y
+
+# X-Env-Var-log_denied_access: y
+# X-Env-Var-log_denied_access-Desc: Log denied access attempts
+# X-Env-Var-log_denied_access-Required: n
+# X-Env-Var-log_denied_access-Valid: keywords:y,n
+# X-Env-Var-log_denied_access-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages:
+    - tcpd
+    - libwrap0
+
+  customize-hooks:
+    # TCP wrappers hardening configuration
+    - |
+      set -eu
+
+      # Создание hosts.deny - запретить все по умолчанию
+      cat << 'EOF' > $1/etc/hosts.deny
+      # ==========================================
+      # HOSTS.DENY - DENY ALL BY DEFAULT
+      # ==========================================
+      # This file describes the names of the hosts which are
+      # *not* allowed to use the local INET services, as decided
+      # by the '/usr/sbin/tcpd' server.
+
+      # Deny all services by default
+      ALL: ALL
+
+      # Specific deny rules for additional security
+      sshd: ALL EXCEPT LOCAL
+      telnetd: ALL
+      ftpd: ALL
+      sendmail: ALL
+      apache: ALL
+      nginx: ALL
+      EOF
+
+      # Создание hosts.allow - разрешить только доверенные хосты
+      cat << EOF > $1/etc/hosts.allow
+      # ==========================================
+      # HOSTS.ALLOW - ALLOW TRUSTED HOSTS
+      # ==========================================
+      # This file describes the names of the hosts which are
+      # allowed to use the local INET services, as decided
+      # by the '/usr/sbin/tcpd' server.
+
+      # Allow localhost/loopback
+      ALL: 127.0.0.1
+      ALL: 127.0.0.0/8
+      ALL: ::1
+      ALL: ::1/128
+
+      # Allow local network (192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12)
+      ALL: 192.168.0.0/255.255.0.0
+      ALL: 10.0.0.0/255.0.0.0
+      ALL: 172.16.0.0/255.240.0.0
+
+      # Allow IPv6 local networks
+      ALL: fe80::/10
+      ALL: fc00::/7
+
+      # Specific service rules
+      sshd: 192.168.1.0/255.255.255.0 : ALLOW
+      sshd: 10.0.0.0/255.255.255.0 : ALLOW
+
+      # Allow specific external IPs (uncomment and modify as needed)
+      # sshd: 203.0.113.1 : ALLOW
+      # sshd: 198.51.100.0/24 : ALLOW
+
+      # Allow monitoring systems
+      # nagios: 192.168.1.100 : ALLOW
+      # zabbix: 192.168.1.101 : ALLOW
+
+      # Deny with logging (examples)
+      # ALL EXCEPT sshd: .evil.com : DENY
+      # ALL: .spamhaus.org : DENY
+      EOF
+
+      # Создание расширенной конфигурации для специфических сервисов
+      cat << 'EOF' > $1/etc/hosts.allow.d/ssh.conf
+      # ==========================================
+      # SSH SPECIFIC ACCESS RULES
+      # ==========================================
+
+      # Allow SSH from trusted networks only
+      sshd: 192.168.0.0/255.255.0.0 : ALLOW
+      sshd: 10.0.0.0/255.0.0.0 : ALLOW
+      sshd: 172.16.0.0/255.240.0.0 : ALLOW
+
+      # Allow SSH from specific external hosts (whitelist)
+      # sshd: trusted-host.example.com : ALLOW
+
+      # Rate limiting (if supported by tcpd)
+      # sshd: .example.com : spawn (/usr/sbin/safe_finger -l @%h | /usr/bin/mail -s "SSH attempt from %c" root) &
+
+      # Log suspicious activity
+      sshd: ALL : spawn (/bin/echo "SSH connection attempt from %c to %s" | /usr/bin/logger -p auth.info -t tcpwrappers) : DENY
+      EOF
+
+      # Настройка для других сервисов
+      cat << 'EOF' > $1/etc/hosts.allow.d/services.conf
+      # ==========================================
+      # GENERAL SERVICES ACCESS RULES
+      # ==========================================
+
+      # Web servers
+      httpd: 192.168.0.0/255.255.0.0 : ALLOW
+      apache2: 192.168.0.0/255.255.0.0 : ALLOW
+      nginx: 192.168.0.0/255.255.0.0 : ALLOW
+
+      # Mail servers
+      sendmail: 127.0.0.1 : ALLOW
+      postfix: 127.0.0.1 : ALLOW
+      dovecot: 192.168.0.0/255.255.0.0 : ALLOW
+
+      # FTP servers
+      vsftpd: 192.168.0.0/255.255.0.0 : ALLOW
+      proftpd: 192.168.0.0/255.255.0.0 : ALLOW
+
+      # Database servers (local only)
+      mysql: 127.0.0.1 : ALLOW
+      postgresql: 127.0.0.1 : ALLOW
+      redis: 127.0.0.1 : ALLOW
+
+      # Monitoring
+      snmpd: 192.168.1.0/255.255.255.0 : ALLOW
+      nagios: 192.168.1.100 : ALLOW
+
+      # Log denied attempts
+      ALL: ALL : spawn (/bin/echo "Access denied from %c to %s" | /usr/bin/logger -p auth.info -t tcpwrappers) : DENY
+      EOF
+
+      # Создание скрипта для проверки TCP wrappers
+      cat << 'EOF' > $1/usr/local/bin/tcp-wrappers-check
+      #!/bin/bash
+      # TCP wrappers configuration checker
+
+      set -e
+
+      echo "========================================="
+      echo "TCP WRAPPERS HARDENING CHECK"
+      echo "========================================="
+
+      # Check if tcpd is available
+      if command -v tcpd >/dev/null 2>&1; then
+          echo "TCP wrappers (tcpd): INSTALLED"
+      else
+          echo "TCP wrappers (tcpd): NOT INSTALLED"
+          exit 1
+      fi
+
+      # Check configuration files
+      echo -e "\nConfiguration files:"
+      [[ -f /etc/hosts.allow ]] && echo "hosts.allow: EXISTS" || echo "hosts.allow: MISSING"
+      [[ -f /etc/hosts.deny ]] && echo "hosts.deny: EXISTS" || echo "hosts.deny: MISSING"
+
+      # Check permissions
+      echo -e "\nFile permissions:"
+      ls -la /etc/hosts.allow /etc/hosts.deny 2>/dev/null | awk '{print $1, $3, $4, $9}'
+
+      # Test tcpd functionality
+      echo -e "\nTesting TCP wrappers functionality:"
+      if echo "test" | tcpd -d -i stdin sshd 192.168.1.1 - 2>/dev/null; then
+          echo "tcpd functionality: OK"
+      else
+          echo "tcpd functionality: ERROR"
+      fi
+
+      # Show current rules summary
+      echo -e "\nAccess rules summary:"
+      echo "Allowed networks:"
+      grep -E "^[^#]*ALLOW" /etc/hosts.allow /etc/hosts.allow.d/* 2>/dev/null | wc -l | xargs echo "ALLOW rules:"
+      echo "Denied networks:"
+      grep -E "^[^#]*DENY" /etc/hosts.deny /etc/hosts.allow.d/* 2>/dev/null | wc -l | xargs echo "DENY rules:"
+
+      echo -e "\nTCP wrappers hardening check completed"
+      EOF
+
+      chmod +x $1/usr/local/bin/tcp-wrappers-check
+
+      # Создание скрипта для обновления правил
+      cat << 'EOF' > $1/usr/local/bin/update-tcp-wrappers
+      #!/bin/bash
+      # Update TCP wrappers rules
+
+      set -e
+
+      RULES_DIR="/etc/hosts.allow.d"
+      ALLOW_FILE="/etc/hosts.allow"
+      DENY_FILE="/etc/hosts.deny"
+
+      echo "Updating TCP wrappers rules..."
+
+      # Backup existing files
+      cp "$ALLOW_FILE" "${ALLOW_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
+      cp "$DENY_FILE" "${DENY_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
+
+      # Rebuild hosts.allow from fragments
+      {
+          echo "# =========================================="
+          echo "# HOSTS.ALLOW - GENERATED $(date)"
+          echo "# =========================================="
+          echo ""
+          cat "$RULES_DIR"/*.conf 2>/dev/null || true
+      } > "$ALLOW_FILE"
+
+      # Validate configuration
+      if tcpd -d -i stdin sshd 127.0.0.1 - < /dev/null >/dev/null 2>&1; then
+          echo "Configuration validated successfully"
+          log_success "TCP wrappers rules updated"
+      else
+          echo "Configuration validation failed, restoring backup"
+          mv "${ALLOW_FILE}.backup."* "$ALLOW_FILE" 2>/dev/null || true
+          exit 1
+      fi
+      EOF
+
+      chmod +x $1/usr/local/bin/update-tcp-wrappers
+
+      # Настройка cron для еженедельной проверки
+      cat << 'EOF' > $1/etc/cron.weekly/tcp-wrappers-audit
+      #!/bin/bash
+      # TCP wrappers audit
+
+      set -e
+
+      AUDIT_LOG="/var/log/tcp-wrappers-audit.log"
+
+      echo "$(date): TCP wrappers audit started" >> "$AUDIT_LOG"
+
+      # Check for suspicious patterns in logs
+      if grep -i "denied\|rejected\|failed" /var/log/auth.log | grep -i "tcpwrappers" >/dev/null 2>&1; then
+          echo "$(date): Found denied connections in logs" >> "$AUDIT_LOG"
+          # Count denied attempts
+          DENIED_COUNT=$(grep -c "Access denied" /var/log/auth.log)
+          echo "$(date): Total denied attempts: $DENIED_COUNT" >> "$AUDIT_LOG"
+      fi
+
+      # Check configuration integrity
+      if /usr/local/bin/tcp-wrappers-check >/dev/null 2>&1; then
+          echo "$(date): Configuration integrity: OK" >> "$AUDIT_LOG"
+      else
+          echo "$(date): Configuration integrity: FAILED" >> "$AUDIT_LOG"
+      fi
+
+      echo "$(date): TCP wrappers audit completed" >> "$AUDIT_LOG"
+      EOF
+
+      chmod +x $1/etc/cron.weekly/tcp-wrappers-audit
+
+      log_success "TCP wrappers hardening настроен"

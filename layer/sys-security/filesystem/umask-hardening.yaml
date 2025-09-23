@@ -1,0 +1,100 @@
+# ==========================================
+# UMASK SECURITY HARDENING LAYER
+# ==========================================
+# Hardening umask для безопасного создания файлов и каталогов
+# Включает: системный umask, пользовательские настройки
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: umask-hardening
+# X-Env-Layer-Category: base
+# X-Env-Layer-Desc: umask hardening for secure file and directory creation
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: umask-hardening
+
+# X-Env-VarPrefix: umask
+
+# X-Env-Var-system_umask: 0027
+# X-Env-Var-system_umask-Desc: Default system umask (027 = rwxr-x---)
+# X-Env-Var-system_umask-Required: n
+# X-Env-Var-system_umask-Valid: regex:^[0-7]{4}$
+# X-Env-Var-system_umask-Set: y
+
+# X-Env-Var-user_umask: 0077
+# X-Env-Var-user_umask-Desc: Default user umask (077 = rw-------)
+# X-Env-Var-user_umask-Required: n
+# X-Env-Var-user_umask-Valid: regex:^[0-7]{4}$
+# X-Env-Var-user_umask-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages: []
+
+  customize-hooks:
+    # umask hardening configuration
+    - |
+      set -eu
+
+      # Настройка системного umask в profile
+      cat << EOF >> $1/etc/profile
+      # ==========================================
+      # SYSTEM UMASK HARDENING
+      # ==========================================
+
+      # Set secure default umask for all users
+      # 0027 = owner: rwx, group: rx, others: ---
+      # 0077 = owner: rwx, others: ---
+      if [ "\$UID" -gt 199 ] && [ "\$(/usr/bin/id -gn)" = "\$(/usr/bin/id -un)" ]; then
+          umask ${umask_user_umask:-0077}
+      else
+          umask ${umask_system_umask:-0027}
+      fi
+      EOF
+
+      # Настройка umask для bash
+      cat << EOF >> $1/etc/bash.bashrc
+      # ==========================================
+      # BASH UMASK SETTINGS
+      # ==========================================
+
+      # Set secure umask for interactive shells
+      if [ "\$UID" -gt 199 ] && [ "\$(id -gn)" = "\$(id -un)" ]; then
+          umask ${umask_user_umask:-0077}
+      else
+          umask ${umask_system_umask:-0027}
+      fi
+      EOF
+
+      # Настройка umask для systemd user sessions
+      mkdir -p $1/etc/systemd/user.conf.d
+      cat << EOF > $1/etc/systemd/user.conf.d/90-umask.conf
+      [Manager]
+      DefaultUMask=${umask_user_umask:-0077}
+      EOF
+
+      # Настройка umask для root
+      cat << EOF >> $1/root/.bashrc
+      # ==========================================
+      # ROOT UMASK SETTINGS
+      # ==========================================
+
+      # Set restrictive umask for root
+      umask ${umask_system_umask:-0027}
+      EOF
+
+      # Настройка umask для PAM (если не настроено в pam-hardening)
+      if [ ! -f $1/etc/pam.d/common-session ]; then
+          cat << EOF > $1/etc/pam.d/common-session
+      session optional        pam_umask.so umask=${umask_user_umask:-0077}
+          EOF
+      else
+          # Добавить umask в существующий файл
+          sed -i '/pam_env.so/ a session    optional    pam_umask.so umask='${umask_user_umask:-0077}'' $1/etc/pam.d/common-session
+      fi
+
+      log_success "umask hardening настроен"

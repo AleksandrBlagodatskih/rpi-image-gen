@@ -1,0 +1,368 @@
+# ==========================================
+# SYSTEMD SECURITY HARDENING LAYER
+# ==========================================
+# Hardening systemd для безопасной инициализации системы
+# Включает: service isolation, resource limits, security options
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: systemd-hardening
+# X-Env-Layer-Category: base
+# X-Env-Layer-Desc: systemd hardening with service isolation and security controls
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: systemd-hardening
+
+# X-Env-VarPrefix: systemd
+
+# X-Env-Var-enable_service_isolation: y
+# X-Env-Var-enable_service_isolation-Desc: Enable systemd service isolation features
+# X-Env-Var-enable_service_isolation-Required: n
+# X-Env-Var-enable_service_isolation-Valid: keywords:y,n
+# X-Env-Var-enable_service_isolation-Set: y
+
+# X-Env-Var-enable_resource_limits: y
+# X-Env-Var-enable_resource_limits-Desc: Enable resource limits for services
+# X-Env-Var-enable_resource_limits-Required: n
+# X-Env-Var-enable_resource_limits-Valid: keywords:y,n
+# X-Env-Var-enable_resource_limits-Set: y
+
+# X-Env-Var-enable_dynamic_users: y
+# X-Env-Var-enable_dynamic_users-Desc: Enable dynamic user creation for services
+# X-Env-Var-enable_dynamic_users-Required: n
+# X-Env-Var-enable_dynamic_users-Valid: keywords:y,n
+# X-Env-Var-enable_dynamic_users-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages: []
+
+  customize-hooks:
+    # systemd hardening configuration
+    - |
+      set -eu
+
+      # Основная конфигурация systemd
+      cat << EOF > $1/etc/systemd/system.conf
+      # ==========================================
+      # SYSTEMD MANAGER CONFIGURATION
+      # ==========================================
+
+      [Manager]
+      # Default environment
+      DefaultEnvironment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+      # Default umask
+      DefaultUMask=0027
+
+      # Default limit for number of file descriptors
+      DefaultLimitNOFILE=1024:524288
+
+      # Default limit for number of processes
+      DefaultLimitNPROC=1024:4096
+
+      # Default timeout for start jobs
+      DefaultTimeoutStartSec=30s
+
+      # Default timeout for stop jobs
+      DefaultTimeoutStopSec=30s
+
+      # Default restart rate limit
+      DefaultRestartSec=100ms
+      DefaultStartLimitIntervalSec=10s
+      DefaultStartLimitBurst=5
+
+      # Log level and target
+      LogLevel=info
+      LogTarget=journal-or-kmsg
+
+      # CPU affinity and scheduling
+      CPUAffinity=0-3
+      CPUSchedulingPolicy=0
+      CPUSchedulingPriority=0
+
+      # Memory limits (if available)
+      DefaultMemoryAccounting=yes
+      DefaultTasksAccounting=yes
+
+      # Control group settings
+      DefaultControllers=cpu,memory,pids
+
+      # Runtime directory size
+      RuntimeDirectorySize=25%
+      StateDirectorySize=25%
+      CacheDirectorySize=25%
+      LogsDirectorySize=10%
+
+      # Security settings
+      CapabilityBoundingSet=~CAP_SYS_PTRACE ~CAP_SYS_ADMIN ~CAP_NET_ADMIN ~CAP_DAC_OVERRIDE ~CAP_DAC_READ_SEARCH ~CAP_FOWNER ~CAP_FSETID ~CAP_KILL ~CAP_SETGID ~CAP_SETUID ~CAP_SETPCAP ~CAP_LINUX_IMMUTABLE ~CAP_NET_BROADCAST ~CAP_NET_RAW ~CAP_IPC_LOCK ~CAP_IPC_OWNER ~CAP_SYS_MODULE ~CAP_SYS_RAWIO ~CAP_SYS_CHROOT ~CAP_SYS_NICE ~CAP_SYS_TIME ~CAP_WAKE_ALARM ~CAP_BLOCK_SUSPEND ~CAP_AUDIT_READ ~CAP_AUDIT_WRITE ~CAP_LEASE ~CAP_MKNOD ~CAP_ADD_ANY ~CAP_BPF ~CAP_PERFMON ~CAP_CHECKPOINT_RESTORE
+
+      # No new privileges by default
+      NoNewPrivileges=yes
+
+      # Protect system and home directories
+      ProtectSystem=strict
+      ProtectHome=yes
+
+      # Private tmp directory
+      PrivateTmp=yes
+
+      # Protect kernel tunables
+      ProtectKernelTunables=yes
+
+      # Protect kernel logs
+      ProtectKernelLogs=yes
+
+      # Protect control groups
+      ProtectControlGroups=yes
+
+      # Protect hostname
+      ProtectHostname=yes
+
+      # Protect clock
+      ProtectClock=yes
+
+      # Restrict address families
+      RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+
+      # Restrict namespaces
+      RestrictNamespaces=yes
+
+      # Restrict realtime
+      RestrictRealtime=yes
+
+      # Restrict SUID/SGID
+      RestrictSUIDSGID=yes
+
+      # Remove IPC
+      RemoveIPC=yes
+
+      # Lock personality
+      LockPersonality=yes
+
+      # Private devices
+      PrivateDevices=yes
+
+      # Private network
+      PrivateNetwork=yes
+
+      # Private users
+      PrivateUsers=yes
+
+      # ProtectProc
+      ProtectProc=invisible
+
+      # ProcSubset
+      ProcSubset=pid
+
+      # MemoryDenyWriteExecute
+      MemoryDenyWriteExecute=yes
+
+      # SystemCallFilter
+      SystemCallFilter=@system-service @network-io @signal
+
+      # SystemCallErrorNumber
+      SystemCallErrorNumber=EPERM
+
+      # SystemCallArchitectures
+      SystemCallArchitectures=native
+      EOF
+
+      # Конфигурация journald для безопасного логирования
+      cat << EOF > $1/etc/systemd/journald.conf
+      # ==========================================
+      # SYSTEMD JOURNALD CONFIGURATION
+      # ==========================================
+
+      [Journal]
+      # Storage type
+      Storage=persistent
+
+      # Compression
+      Compress=yes
+
+      # Seal (requires TPM)
+      Seal=yes
+
+      # Split mode
+      SplitMode=uid
+
+      # Rate limiting
+      RateLimitIntervalSec=30s
+      RateLimitBurst=1000
+
+      # System max use
+      SystemMaxUse=50M
+
+      # System keep free
+      SystemKeepFree=100M
+
+      # System max file size
+      SystemMaxFileSize=10M
+
+      # Runtime max use
+      RuntimeMaxUse=50M
+
+      # Runtime keep free
+      RuntimeKeepFree=50M
+
+      # Runtime max file size
+      RuntimeMaxFileSize=10M
+
+      # Max retention
+      MaxRetentionSec=30day
+
+      # Forward to syslog
+      ForwardToSyslog=no
+
+      # Forward to kmsg
+      ForwardToKmsg=no
+
+      # Forward to console
+      ForwardToConsole=no
+
+      # Max level syslog
+      MaxLevelSyslog=info
+
+      # Max level kmsg
+      MaxLevelKmsg=notice
+
+      # Max level console
+      MaxLevelConsole=info
+
+      # Max level store
+      MaxLevelStore=debug
+
+      # Max level wall
+      MaxLevelWall=emerg
+      EOF
+
+      # Настройка coredump для безопасности
+      cat << EOF > $1/etc/systemd/coredump.conf
+      # ==========================================
+      # COREDUMP CONFIGURATION
+      # ==========================================
+
+      [Coredump]
+      # Storage
+      Storage=none
+
+      # Process size limit
+      ProcessSizeMax=0
+
+      # External size limit
+      ExternalSizeMax=0
+
+      # Journal size limit
+      JournalSizeMax=0
+
+      # Max use
+      MaxUse=
+
+      # Keep free
+      KeepFree=
+      EOF
+
+      # Создание базового hardened service template
+      cat << 'EOF' > $1/etc/systemd/system/service-hardening.conf
+      # ==========================================
+      # SERVICE HARDENING TEMPLATE
+      # ==========================================
+
+      # This file contains default hardening options for all services
+      # Include this in service unit files with:
+      # .include /etc/systemd/system/service-hardening.conf
+
+      [Service]
+      # Security options
+      NoNewPrivileges=yes
+      ProtectSystem=strict
+      ProtectHome=yes
+      PrivateTmp=yes
+      ProtectKernelTunables=yes
+      ProtectKernelLogs=yes
+      ProtectControlGroups=yes
+      ProtectHostname=yes
+      ProtectClock=yes
+      RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+      RestrictNamespaces=yes
+      RestrictRealtime=yes
+      RestrictSUIDSGID=yes
+      RemoveIPC=yes
+      LockPersonality=yes
+      PrivateDevices=yes
+      ProtectProc=invisible
+      ProcSubset=pid
+      MemoryDenyWriteExecute=yes
+
+      # Resource limits
+      LimitNOFILE=1024
+      LimitNPROC=256
+      LimitCORE=0
+
+      # System call filtering
+      SystemCallFilter=@system-service @network-io @signal
+      SystemCallErrorNumber=EPERM
+      SystemCallArchitectures=native
+
+      # Memory accounting
+      MemoryAccounting=yes
+      MemoryHigh=100M
+      MemoryMax=200M
+
+      # CPU accounting
+      CPUAccounting=yes
+      CPUQuota=50%
+
+      # I/O accounting
+      IOAccounting=yes
+      IOWeight=50
+
+      # Tasks accounting
+      TasksAccounting=yes
+      TasksMax=256
+      EOF
+
+      # Создание скрипта для проверки systemd hardening
+      cat << 'EOF' > $1/usr/local/bin/systemd-hardening-check
+      #!/bin/bash
+      # systemd hardening checker
+
+      set -e
+
+      echo "========================================="
+      echo "SYSTEMD HARDENING CHECK"
+      echo "========================================="
+
+      # Check systemd version
+      echo "systemd version: $(systemctl --version | head -1)"
+
+      # Check security features
+      echo -e "\nSecurity features status:"
+      systemctl show --property=DefaultLimitNOFILE
+      systemctl show --property=DefaultLimitNPROC
+      systemctl show --property=NoNewPrivileges
+
+      # Check running services
+      echo -e "\nChecking running services for hardening..."
+      systemctl list-units --type=service --state=running --no-legend | head -5 | while read -r service _; do
+          if [[ -f "/etc/systemd/system/${service%.service}.service" ]]; then
+              echo "Service $service: $(systemctl show "$service" --property=NoNewPrivileges)"
+          fi
+      done
+
+      # Check journal configuration
+      echo -e "\nJournal configuration:"
+      journalctl --version | head -1
+      echo "Storage: $(journalctl --disk-usage 2>/dev/null | head -1 || echo 'unknown')"
+
+      echo -e "\nsystemd hardening check completed"
+      EOF
+
+      chmod +x $1/usr/local/bin/systemd-hardening-check
+
+      log_success "systemd hardening настроен"

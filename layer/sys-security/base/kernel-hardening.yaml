@@ -1,0 +1,109 @@
+# ==========================================
+# KERNEL SECURITY HARDENING LAYER
+# ==========================================
+# Hardening настроек ядра для безопасности
+# Включает: sysctl параметры, kptr_restrict, dmesg_restrict
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: kernel-hardening
+# X-Env-Layer-Category: base
+# X-Env-Layer-Desc: Kernel security hardening including sysctl settings and kernel restrictions
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: base
+# X-Env-Layer-Provides: kernel-hardening
+
+# X-Env-VarPrefix: kernel
+
+# X-Env-Var-enable_kptr_restrict: y
+# X-Env-Var-enable_kptr_restrict-Desc: Enable kernel pointer restriction
+# X-Env-Var-enable_kptr_restrict-Required: n
+# X-Env-Var-enable_kptr_restrict-Valid: keywords:y,n
+# X-Env-Var-enable_kptr_restrict-Set: y
+
+# X-Env-Var-enable_dmesg_restrict: y
+# X-Env-Var-enable_dmesg_restrict-Desc: Restrict dmesg access to privileged users
+# X-Env-Var-enable_dmesg_restrict-Required: n
+# X-Env-Var-enable_dmesg_restrict-Valid: keywords:y,n
+# X-Env-Var-enable_dmesg_restrict-Set: y
+
+# X-Env-Var-enable_randomize_va: y
+# X-Env-Var-enable_randomize_va-Desc: Enable virtual address space randomization
+# X-Env-Var-enable_randomize_va-Required: n
+# X-Env-Var-enable_randomize_va-Valid: keywords:y,n
+# X-Env-Var-enable_randomize_va-Set: y
+
+# METAEND
+# ==========================================
+
+---
+mmdebstrap:
+  packages: []
+
+  customize-hooks:
+    # Kernel hardening через sysctl
+    - |
+      set -eu
+      mkdir -p $1/etc/sysctl.d
+
+      # Создание sysctl конфигурации для kernel hardening
+      cat << EOF > $1/etc/sysctl.d/90-kernel-hardening.conf
+      # ==========================================
+      # KERNEL SECURITY HARDENING
+      # ==========================================
+EOF
+
+      # Добавление настроек в зависимости от переменных
+      if [[ "${kernel_enable_kptr_restrict:-y}" == "y" ]]; then
+        echo "# Kernel pointer restriction" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+        echo "kernel.kptr_restrict = 2" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+        echo "" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+      fi
+
+      if [[ "${kernel_enable_dmesg_restrict:-y}" == "y" ]]; then
+        echo "# Restrict dmesg to privileged users" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+        echo "kernel.dmesg_restrict = 1" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+        echo "" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+      fi
+
+      if [[ "${kernel_enable_randomize_va:-y}" == "y" ]]; then
+        echo "# Randomize virtual address space" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+        echo "kernel.randomize_va_space = 2" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+        echo "" >> $1/etc/sysctl.d/90-kernel-hardening.conf
+      fi
+
+      # Всегда применяемые настройки безопасности
+      cat << 'EOF' >> $1/etc/sysctl.d/90-kernel-hardening.conf
+      # Disable kexec for security
+      kernel.kexec_load_disabled = 1
+
+      # Restrict /dev/mem access
+      kernel.devmem_restrict = 1
+
+      # Disable unprivileged user namespaces
+      kernel.unprivileged_userns_clone = 0
+
+      # Restrict ptrace scope
+      kernel.yama.ptrace_scope = 1
+
+      # Protect /proc/<pid>/mem
+      kernel.pid_max = 65536
+
+      # Disable dangerous kernel modules loading
+      kernel.modules_disabled = 1
+
+      # Network security
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.default.rp_filter = 1
+      net.ipv4.tcp_syncookies = 1
+
+      # File system security
+      fs.protected_hardlinks = 1
+      fs.protected_symlinks = 1
+      fs.protected_fifos = 2
+      fs.protected_regular = 2
+      fs.suid_dumpable = 0
+      EOF
+
+      log_success "Kernel hardening настроен"

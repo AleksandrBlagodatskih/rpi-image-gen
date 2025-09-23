@@ -1,0 +1,162 @@
+# ==========================================
+# ПРИМЕР СЛОЯ RPI-IMAGE-GEN
+# ==========================================
+#
+# [НАЗВАНИЕ СЛОЯ]
+#
+# [ОПИСАНИЕ СЛОЯ]
+#
+# Особенности:
+# - [Особенность 1]
+# - [Особенность 2]
+# - [Особенность 3]
+#
+# Требования:
+# - [Требование 1]
+# - [Требование 2]
+# ==========================================
+
+# БЛОК МЕТАДАННЫХ (METADATA BLOCK)
+# ==========================================
+# METABEGIN
+# X-Env-Layer-Name: [layer-name]               # Имя слоя
+# X-Env-Layer-Category: [category]             # Категория: base, app, build, image, device
+# X-Env-Layer-Desc: [description]              # Описание слоя
+# X-Env-Layer-Version: 1.0.0                   # Версия слоя
+# X-Env-Layer-Requires: [dependencies]         # Зависимости (через запятую)
+# X-Env-Layer-Provides: [provides]             # Что предоставляет
+# X-Env-Layer-Conflicts: [conflicts]           # Конфликты (опционально)
+#
+# X-Env-VarPrefix: [prefix]                    # Префикс переменных (опционально)
+#
+# ПЕРЕМЕННЫЕ СЛОЯ (LAYER VARIABLES)
+# ==========================================
+# X-Env-Var-[variable]: [default]              # Переменная слоя
+# X-Env-Var-[variable]-Desc: [description]     # Описание переменной
+# X-Env-Var-[variable]-Required: y/n           # Обязательность: y/n
+# X-Env-Var-[variable]-Valid: [validation]     # Валидация: keywords, range, regex, string, integer
+# X-Env-Var-[variable]-Set: y/n                # Устанавливается: y/n
+#
+# X-Env-Var-example_var: "default_value"       # Пример пользовательской переменной
+# X-Env-Var-example_var-Desc: Example variable description
+# X-Env-Var-example_var-Required: n
+# X-Env-Var-example_var-Valid: string
+# X-Env-Var-example_var-Set: n
+#
+# METAEND
+# ==========================================
+
+# КОНФИГУРАЦИЯ MMDEBSTRAP (MMDEBSTRAP CONFIGURATION)
+# ==========================================
+---
+mmdebstrap:
+  # Пакеты для установки
+  packages:
+    - [package-name]                            # Основные пакеты
+    # - [optional-package]                       # Опциональные пакеты
+
+  # Ключевые кольца (опционально)
+  # keyrings:
+  #   - /usr/share/keyrings/custom-keyring.gpg
+
+  # Опции APT (опционально)
+  # aptopt:
+  #   - "APT::Install-Recommends false"          # Не устанавливать рекомендованные
+  #   - "APT::Install-Suggests false"            # Не устанавливать предлагаемые
+
+  # Хуки настройки (setup hooks)
+  # setup-hooks:
+  #   - layer-setup.sh                           # Скрипт настройки
+
+  # Хуки извлечения (extract hooks)
+  # extract-hooks:
+  #   - layer-extract.sh                         # Скрипт извлечения
+
+  # Основные хуки (essential hooks)
+  # essential-hooks:
+  #   - layer-essential.sh                       # Основные настройки
+
+  # Хуки кастомизации (customize hooks)
+  # customize-hooks:
+  #   - layer-customize.sh                       # Кастомные настройки
+
+  # Хуки очистки (cleanup hooks)
+  # cleanup-hooks:
+  #   - layer-cleanup.sh                         # Очистка
+
+# КОНФИГУРАЦИЯ GENIMAGE (GENIMAGE CONFIGURATION) - только для image слоев
+# ==========================================
+# genimage:
+#   images:
+#     - name: [image-name]
+#       format: [format]                        # Формат: ext4, btrfs, etc.
+#       size: [size]                           # Размер: 1G, 2G, etc.
+#       mountpoint: /
+#       partition:
+#         image: [partition-image]
+#         size: [partition-size]
+#         filesystem: [filesystem-type]         # Тип ФС: ext4, btrfs, etc.
+
+# ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ (ENVIRONMENT VARIABLES) - опционально
+# ==========================================
+# environment:
+#   [VAR_NAME]: [value]                          # Произвольные переменные окружения
+
+# ФАЙЛОВЫЕ СИСТЕМЫ (FILESYSTEMS) - опционально
+# ==========================================
+# filesystems:
+#   - name: [fs-name]
+#     type: [fs-type]                           # Тип: ext4, btrfs, etc.
+#     device: [device]                          # Устройство: /dev/sda1, etc.
+#     mount: [mount-point]                      # Точка монтирования: /
+#     options: [mount-options]                  # Опции монтирования: defaults,noatime
+
+# СЕРВИСЫ (SERVICES) - опционально
+# ==========================================
+# services:
+#   - name: [service-name]                       # Имя сервиса
+#     enable: true                              # Включить: true/false
+#     start: true                               # Запустить: true/false
+#     # config: [config-file]                    # Конфигурационный файл (опционально)
+
+# ПОЛЬЗОВАТЕЛИ (USERS) - опционально
+# ==========================================
+# users:
+#   - name: [username]                           # Имя пользователя
+#     groups: [group1,group2]                    # Группы
+#     shell: /bin/bash                           # Оболочка
+#     home: /home/[username]                     # Домашний каталог
+#     create_home: true                          # Создать домашний каталог
+#     system: false                             # Системный пользователь
+#     password: [password]                       # Пароль (опционально)
+#     ssh_key: [ssh-key]                         # SSH ключ (опционально)
+
+# ==========================================
+# ПРИМЕР ПРИКЛАДНОГО СЛОЯ (OPENSSH-SERVER)
+# ==========================================
+
+# METABEGIN
+# X-Env-Layer-Name: example-openssh-server     # Имя слоя
+# X-Env-Layer-Category: app                    # Категория: app
+# X-Env-Layer-Desc: Example OpenSSH Server layer # Описание слоя
+# X-Env-Layer-Version: 1.0.0                   # Версия слоя
+# X-Env-Layer-Requires: base                   # Зависимости
+# X-Env-Layer-Provides: ssh-server             # Что предоставляет
+#
+# X-Env-VarPrefix: ssh                         # Префикс переменных
+#
+# X-Env-Var-port: 22                           # SSH порт
+# X-Env-Var-port-Desc: SSH server port         # Описание
+# X-Env-Var-port-Required: n                   # Обязательность
+# X-Env-Var-port-Valid: range:1,65535          # Валидация
+# X-Env-Var-port-Set: y                        # Устанавливается
+#
+# METAEND
+# ---
+# mmdebstrap:
+#   packages:
+#     - openssh-server
+#     - openssh-client
+#
+#   customize-hooks:
+#     - ssh-server-setup.sh

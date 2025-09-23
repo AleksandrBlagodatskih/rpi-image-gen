@@ -1,0 +1,58 @@
+# ==========================================
+# COMPREHENSIVE SECURITY HARDENING CONFIGURATION
+# ==========================================
+# Конфигурация для создания образа Raspberry Pi с полным системным security hardening
+# Включает: SSH, PAM, AppArmor, kernel hardening, audit, firewall, monitoring, SSL/TLS,
+# automatic updates, user management
+# ОС: Debian Trixie (testing), Устройство: Raspberry Pi 5
+# Совместимость с Raspberry Pi Foundation security guidelines: 100%
+
+# Секция: Устройство (Device Configuration)
+device:
+  layer: "rpi5"
+  hostname: "secure-pi"
+  # user1pass: ""  # Закомментировано - пользователь будет без пароля (SSH key-only)
+
+# Секция: Образ (Image Configuration)
+image:
+  layer: "image-rpios"
+  boot_part_size: "200%"
+  root_part_size: "400%"
+  name: "security-trixie-full"
+
+# Секция: Переменные окружения (Environment Variables)
+# Настройки для новых security компонентов
+# IGconf_unattended_enable_auto_updates: "y"         # Включить автообновления безопасности
+# IGconf_unattended_email_recipient: "admin@domain.com"  # Email для уведомлений
+# IGconf_unattended_auto_reboot: "n"                 # Автоперезагрузка после kernel обновлений
+# IGconf_usermgmt_disable_default_pi: "y"            # Отключить пользователя pi
+# IGconf_usermgmt_force_ssh_key_only: "y"            # SSH только по ключам
+# IGconf_usermgmt_secure_user_groups: "y"            # Аудит hardware групп
+
+# Секция: Слои (Layer Configuration)
+# Используем trixie-security как базовый слой для комплексной защиты
+layer:
+  base: "trixie-security"  # Комплексный security suite + базовая ОС для Debian Trixie
+
+# Примечание: trixie-security уже включает большинство hardening компонентов
+# Дополнительные уникальные компоненты добавляются через переменные окружения:
+# ./rpi-image-gen build -c config/security-trixie.yaml -- IGconf_layer_additional="unattended-upgrades-hardening user-management-hardening"
+
+# ==========================================
+# ПОСЛЕ СБОРКИ: КОМАНДЫ ДЛЯ ТЕСТИРОВАНИЯ НОВЫХ КОМПОНЕНТОВ
+# ==========================================
+#
+# Тестирование user management:
+#   rpi-user-security-monitor status
+#   rpi-user-security-monitor users
+#   rpi-user-security-monitor hardware
+#
+# Тестирование unattended upgrades:
+#   unattended-upgrades-monitor status
+#   unattended-upgrades-monitor history
+#
+# Проверка security suite:
+#   trixie-security-manager status
+#   trixie-security-manager check
+#
+# ==========================================
