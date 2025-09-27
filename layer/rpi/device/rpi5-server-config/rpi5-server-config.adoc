@@ -1,0 +1,130 @@
+= rpi5-server-config
+
+Raspberry Pi 5 оптимизированная конфигурация для серверного использования.
+
+== Описание
+
+Этот слой настраивает `config.txt` для Raspberry Pi 5 в серверном сценарии использования.
+Оптимизации включают:
+
+* Отключение HDMI для экономии энергии в headless операциях
+* Максимальная производительность PCIe Gen 3.0 для NVMe SSD
+* USB 3.0 high-performance режим
+* Отключение ненужных интерфейсов (WiFi, Bluetooth, Audio, SPI/I2C/I2S)
+* Оптимизации производительности и энергосбережения
+
+== Зависимости
+
+* `rpi5` - Базовый слой Raspberry Pi 5
+* `rpi-boot-firmware` - Boot firmware для Raspberry Pi
+
+== Переменные конфигурации
+
+|===
+|Переменная |По умолчанию |Описание
+
+|`rpi5_server_disable_hdmi`
+|`y`
+|Отключить HDMI вывод для экономии энергии в headless операциях
+
+|`rpi5_server_disable_wifi`
+|`y`
+|Отключить WiFi интерфейс для безопасности и экономии энергии
+
+|`rpi5_server_disable_bluetooth`
+|`y`
+|Отключить Bluetooth интерфейс для безопасности и экономии энергии
+
+|`rpi5_server_disable_audio`
+|`y`
+|Отключить аудио интерфейсы для серверной операции
+
+|`rpi5_server_pcie_max_speed`
+|`y`
+|Включить PCIe Gen 3.0 для максимальной производительности NVMe SSD
+
+|`rpi5_server_usb_max_performance`
+|`y`
+|Включить USB 3.0 high-performance режим
+
+|`rpi5_server_disable_unused_interfaces`
+|`y`
+|Отключить SPI, I2C, I2S интерфейсы, обычно не нужные на серверах
+|===
+
+== Пример использования
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: rpi5-server
+  storage_type: nvme
+
+image:
+  layer: image-rpios
+  name: rpi5-server-optimized
+
+layer:
+  server: rpi5-server-config
+  base: bookworm-minbase
+
+# Кастомные настройки (опционально)
+rpi5_server:
+  disable_hdmi: y
+  pcie_max_speed: y
+----
+
+== Настройки config.txt
+
+Слой добавляет следующие оптимизации в `/boot/firmware/config.txt`:
+
+[source,ini]
+----
+# Raspberry Pi 5 Server Optimized Configuration
+# Disable HDMI for power savings in headless operation
+hdmi_blanking=1
+hdmi_ignore_hotplug=1
+hdmi_ignore_composite=1
+hdmi_ignore_cec=1
+
+# Enable PCIe Gen 3.0 for maximum NVMe SSD performance
+dtparam=pciex1_gen=3
+
+# Enable USB 3.0 high-performance mode
+usb_max_current_enable=1
+
+# Disable unused interfaces for server operation
+#dtparam=i2c_arm=off
+#dtparam=i2s=off
+#dtparam=spi=off
+
+# Disable WiFi interface
+dtoverlay=disable-wifi
+
+# Disable Bluetooth interface
+dtoverlay=disable-bt
+
+# Disable audio interfaces
+dtparam=audio=off
+
+# Server performance optimizations
+arm_boost=1
+gpu_mem=16
+
+# Disable unnecessary services for memory savings
+disable_camera_led=1
+disable_splash=1
+----
+
+== Совместимость
+
+* Raspberry Pi 5
+* Debian Bookworm или новее
+* NVMe SSD рекомендуется для максимальной производительности
+
+== Ссылки
+
+* https://www.raspberrypi.com/documentation/computers/config_txt.html[Raspberry Pi config.txt documentation]
+* https://www.raspberrypi.com/documentation/computers/raspberry-pi-5.html[Raspberry Pi 5 documentation]
+* https://www.raspberrypi.com/documentation/computers/linux_kernel.html[Raspberry Pi Linux kernel documentation]

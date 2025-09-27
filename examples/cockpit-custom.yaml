@@ -1,0 +1,23 @@
+# Custom Cockpit configuration
+# Demonstrates customization options for Cockpit layer
+
+device:
+  class: pi5
+  hostname: pi-management
+
+image:
+  layer: image-rpios
+  name: cockpit-custom
+  compression: zstd
+
+# Cockpit-specific configuration
+cockpit:
+  port: 8443
+  allow_unprivileged: y
+  max_startup_time: 180
+  login_banner: "Raspberry Pi Management Console - $(hostname)"
+
+layer:
+  base: bookworm-minbase
+  network: systemd-net-min
+  cockpit: net-misc/cockpit

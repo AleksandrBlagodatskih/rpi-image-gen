@@ -1,0 +1,53 @@
+# Пример конфигурации для использования Distrobox
+# Этот пример показывает как использовать слой distrobox с различными container managers
+
+# Для Debian Bookworm с Docker
+device:
+  layer: rpi5
+
+image:
+  layer: image-rpios
+  name: distrobox-bookworm-demo
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  docker: docker-debian-bookworm  # Docker engine (опционально)
+  distrobox: distrobox            # Distrobox
+
+# Настройки Docker (опционально)
+docker:
+  trust_user1: y  # Разрешить пользователю запускать Docker без sudo
+
+# Настройки Distrobox
+distrobox:
+  container_manager: docker       # Использовать Docker backend
+  default_image: debian:bookworm  # Образ по умолчанию
+  generate_entry: y              # Создавать записи в меню приложений
+  non_interactive: n             # Интерактивный режим
+
+---
+# Для Debian Trixie с Docker
+device:
+  layer: rpi5
+
+image:
+  layer: image-rpios
+  name: distrobox-trixie-demo
+  compression: zstd
+
+layer:
+  base: trixie-minbase
+  docker: docker-debian-trixie    # Docker engine (опционально)
+  distrobox: distrobox            # Distrobox
+
+# Настройки Docker (опционально)
+docker:
+  trust_user1: y  # Разрешить пользователю запускать Docker без sudo
+
+# Настройки Distrobox
+distrobox:
+  container_manager: docker       # Использовать Docker backend
+  default_image: debian:trixie    # Образ по умолчанию для Trixie
+  generate_entry: y              # Создавать записи в меню приложений
+  non_interactive: n             # Интерактивный режим

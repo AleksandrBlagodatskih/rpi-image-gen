@@ -1,0 +1,37 @@
+# Пример конфигурации UFW firewall layer для Raspberry Pi
+# Этот файл демонстрирует типичные настройки firewall для IoT устройства
+
+device:
+  layer: rpi5  # или rpi4, pi-cm4 и т.д.
+
+image:
+  layer: image-rpios
+  name: iot-device-with-firewall
+
+layer:
+  base: bookworm-minbase
+  security: ufw  # Включение UFW firewall слоя
+  network: systemd-net-min  # Базовая сетевая конфигурация
+
+# Настройки UFW firewall
+ufw:
+  enable: y  # Включить firewall
+
+  # Политики по умолчанию
+  default_incoming: deny   # Запрещать все входящие по умолчанию
+  default_outgoing: allow  # Разрешать все исходящие по умолчанию
+
+  # Разрешенные сервисы (используют стандартные порты)
+  allow_services: ssh,http,https,dns
+
+  # Дополнительные разрешенные порты
+  allow_ports: "1883/tcp,8883/tcp"  # MQTT порты для IoT
+
+  # Разрешенные IP адреса/сети (например, для удаленного управления)
+  allow_ips: "192.168.1.0/24,10.0.0.0/8"
+
+  # Заблокированные IP (нежелательные сети)
+  block_ips: ""  # Пусто - ничего не блокировать дополнительно
+
+  # Уровень логирования
+  logging: low  # off, low, medium, high, full

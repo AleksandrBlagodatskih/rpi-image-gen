@@ -1,0 +1,16 @@
+# Basic Cockpit configuration for Raspberry Pi
+# This creates a minimal Debian Bookworm image with Cockpit web interface
+
+device:
+  class: pi5
+  hostname: cockpit-server
+
+image:
+  layer: image-rpios
+  name: cockpit-basic
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  network: systemd-net-min
+  cockpit: net-misc/cockpit

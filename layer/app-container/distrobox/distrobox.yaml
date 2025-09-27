@@ -1,0 +1,271 @@
+# METABEGIN
+# X-Env-Layer-Name: distrobox
+# X-Env-Layer-Category: container
+# X-Env-Layer-Desc: Distrobox - use any Linux distribution inside your terminal with container backend
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Provides: distrobox
+# X-Env-Layer-RequiresProvider: docker
+# X-Env-Layer-Requires: rpi-user-credentials,sys-build-base
+#
+# X-Env-VarPrefix: distrobox
+#
+# X-Env-Var-container_manager: docker
+# X-Env-Var-container_manager-Desc: Container manager to use (auto, docker, podman, lilipod)
+# X-Env-Var-container_manager-Required: n
+# X-Env-Var-container_manager-Valid: keywords:auto,docker,podman,lilipod
+# X-Env-Var-container_manager-Set: immediate
+#
+# X-Env-Var-default_image: debian:bookworm
+# X-Env-Var-default_image-Desc: Default container image for new distroboxes
+# X-Env-Var-default_image-Required: n
+# X-Env-Var-default_image-Valid: string
+# X-Env-Var-default_image-Set: immediate
+#
+# X-Env-Var-generate_entry: y
+# X-Env-Var-generate_entry-Desc: Generate desktop entries for distrobox applications
+# X-Env-Var-generate_entry-Required: n
+# X-Env-Var-generate_entry-Valid: bool
+# X-Env-Var-generate_entry-Set: immediate
+#
+# X-Env-Var-non_interactive: n
+# X-Env-Var-non_interactive-Desc: Skip interactive prompts during distrobox operations
+# X-Env-Var-non_interactive-Required: n
+# X-Env-Var-non_interactive-Valid: bool
+# X-Env-Var-non_interactive-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - curl
+    - wget
+    - bash
+  customize-hooks:
+    # Установка Distrobox
+    - |
+      echo "Installing Distrobox..."
+      chroot $1 sh -c "
+        curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | \
+        sh -s -- --prefix /usr/local
+      "
+
+    # Настройка Distrobox для использования container backend
+    - mkdir -p $1/etc/distrobox
+    - |
+      cat > $1/etc/distrobox/distrobox.conf << 'EOF'
+      # Distrobox configuration for container backend
+
+      # Container manager (auto-detect if not specified)
+      container_manager="${IGconf_distrobox_container_manager}"
+
+      # Default image for new containers
+      container_image_default="${IGconf_distrobox_default_image}"
+
+      # Generate desktop entries
+      container_generate_entry=${IGconf_distrobox_generate_entry}
+
+      # Non-interactive mode
+      non_interactive=${IGconf_distrobox_non_interactive}
+
+      # Additional flags for container manager
+      container_manager_additional_flags="--dns 8.8.8.8 --dns 8.8.4.4"
+
+      # Mount additional volumes if needed
+      # container_additional_volumes="/host/path:/container/path"
+      EOF
+
+    # Создание пользовательской конфигурации Distrobox
+    - mkdir -p $1/etc/skel/.config/distrobox
+    - |
+      cat > $1/etc/skel/.config/distrobox/distrobox.conf << 'EOF'
+      # User-specific Distrobox configuration
+
+      # Container manager preference
+      container_manager="${IGconf_distrobox_container_manager}"
+
+      # Default image
+      container_image_default="${IGconf_distrobox_default_image}"
+
+      # Desktop integration
+      container_generate_entry=${IGconf_distrobox_generate_entry}
+
+      # Skip interactive prompts
+      non_interactive=${IGconf_distrobox_non_interactive}
+
+      # Performance optimizations
+      container_always_pull="0"
+
+      # Custom init hooks can be added here
+      # container_init_hook="~/.config/distrobox/init-hooks/my-hook.sh"
+      EOF
+
+    # Создание скрипта для автоматического определения container manager
+    - |
+      cat > $1/usr/local/bin/distrobox-auto-setup << 'EOF'
+      #!/bin/bash
+      # Auto-detect and setup container manager for Distrobox
+
+      detect_container_manager() {
+          # Check for available container managers in order of preference
+          if command -v docker >/dev/null 2>&1; then
+              echo "docker"
+          elif command -v podman >/dev/null 2>&1; then
+              echo "podman"
+          elif command -v lilipod >/dev/null 2>&1; then
+              echo "lilipod"
+          else
+              echo "none"
+          fi
+      }
+
+      setup_container_manager() {
+          local manager=$(detect_container_manager)
+          local config_file="$HOME/.config/distrobox/distrobox.conf"
+
+          if [ "$manager" = "none" ]; then
+              echo "Warning: No container manager found. Please install docker, podman, or lilipod."
+              return 1
+          fi
+
+          # Update user config if container_manager is set to "auto" or empty
+          if grep -q '^container_manager="auto"' "$config_file" 2>/dev/null || ! grep -q '^container_manager=' "$config_file" 2>/dev/null; then
+              sed -i "s/container_manager=.*/container_manager=\"$manager\"/" "$config_file"
+              echo "Auto-detected container manager: $manager"
+          fi
+      }
+
+      # Run setup if called directly
+      if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+          setup_container_manager
+      fi
+      EOF
+
+    - chmod +x $1/usr/local/bin/distrobox-auto-setup
+
+    # Настройка автодополнения bash для Distrobox
+    - |
+      if [ -f $1/usr/local/share/bash-completion/completions/distrobox ]; then
+        mkdir -p $1/etc/bash_completion.d
+        cp $1/usr/local/share/bash-completion/completions/distrobox \
+           $1/etc/bash_completion.d/
+      fi
+
+    # Создание примера конфигурации для быстрого старта
+    - mkdir -p $1/usr/local/share/doc/distrobox/examples
+    - |
+      cat > $1/usr/local/share/doc/distrobox/examples/debian-dev.ini << 'EOF'
+      [debian-dev]
+      image=debian:bookworm
+      additional_packages=build-essential git vim curl wget
+      init_hooks=~/.config/distrobox/init-hooks/debian-dev.sh
+      nvidia=false
+      EOF
+
+    - |
+      cat > $1/usr/local/share/doc/distrobox/examples/ubuntu-dev.ini << 'EOF'
+      [ubuntu-dev]
+      image=ubuntu:22.04
+      additional_packages=build-essential git vim curl wget software-properties-common
+      init_hooks=~/.config/distrobox/init-hooks/ubuntu-dev.sh
+      nvidia=false
+      EOF
+
+    # Создание init hook примера
+    - mkdir -p $1/usr/local/share/doc/distrobox/init-hooks
+    - |
+      cat > $1/usr/local/share/doc/distrobox/init-hooks/debian-dev.sh << 'EOF'
+      #!/bin/bash
+      # Debian development environment setup
+
+      echo "Setting up Debian development environment..."
+
+      # Install development tools
+      apt update && apt install -y \
+        build-essential \
+        git \
+        vim \
+        curl \
+        wget \
+        python3 \
+        python3-pip \
+        nodejs \
+        npm
+
+      # Setup Python virtual environment
+      python3 -m pip install --user virtualenv
+
+      echo "Debian development environment setup complete!"
+      EOF
+
+    - chmod +x $1/usr/local/share/doc/distrobox/init-hooks/debian-dev.sh
+
+    # Настройка документации
+    - mkdir -p $1/usr/local/share/doc/distrobox
+    - |
+      cat > $1/usr/local/share/doc/distrobox/README.rpi-image-gen << 'EOF'
+      Distrobox Integration for rpi-image-gen
+      =====================================
+
+      This layer installs Distrobox with Docker backend integration.
+
+      Quick Start:
+      -----------
+      1. Create a new distrobox:
+         distrobox create --name my-dev --image debian:bookworm
+
+      2. Enter the distrobox:
+         distrobox enter my-dev
+
+      3. Install development tools inside:
+         sudo apt update && sudo apt install -y build-essential git
+
+      4. Export applications to host (optional):
+         distrobox-export --app code
+
+      Configuration:
+      -------------
+      - Container manager: ${IGconf_distrobox_container_manager}
+      - Default image: ${IGconf_distrobox_default_image}
+      - Generate entries: ${IGconf_distrobox_generate_entry}
+      - Non-interactive: ${IGconf_distrobox_non_interactive}
+
+      Examples are available in /usr/local/share/doc/distrobox/examples/
+      EOF
+
+    # Добавление Distrobox в PATH для всех пользователей
+    - |
+      cat > $1/etc/profile.d/distrobox.sh << 'EOF'
+      # Add Distrobox to PATH if not already present
+      if ! echo "$PATH" | grep -q "/usr/local/bin"; then
+        export PATH="$PATH:/usr/local/bin"
+      fi
+      EOF
+
+    # Настройка sudo для работы с Distrobox (без пароля для docker группы)
+    - |
+      if [ -f $1/etc/sudoers.d/docker ]; then
+        echo "# Allow docker group to run docker commands without password" >> $1/etc/sudoers.d/docker
+        echo "%docker ALL=(ALL) NOPASSWD: /usr/bin/docker" >> $1/etc/sudoers.d/docker
+      fi
+
+    # Настройка профиля пользователя для автоматической настройки
+    - |
+      cat > $1/etc/profile.d/distrobox-setup.sh << 'EOF'
+      # Auto-setup Distrobox container manager on first login
+      if [ -x /usr/local/bin/distrobox-auto-setup ] && [ ! -f ~/.config/distrobox/.setup-done ]; then
+          echo "Setting up Distrobox container manager..."
+          /usr/local/bin/distrobox-auto-setup
+          touch ~/.config/distrobox/.setup-done
+      fi
+      EOF
+
+    # Финальная проверка установки
+    - |
+      echo "Verifying Distrobox installation..."
+      if [ -x $1/usr/local/bin/distrobox ]; then
+        echo "Distrobox installed successfully at /usr/local/bin/distrobox"
+        echo "Auto-setup script available at /usr/local/bin/distrobox-auto-setup"
+        chroot $1 distrobox version || echo "Note: distrobox version check requires running container manager"
+      else
+        echo "Warning: Distrobox installation may have failed"
+        exit 1
+      fi

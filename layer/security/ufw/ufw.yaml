@@ -1,0 +1,147 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Uncomplicated Firewall (ufw) - frontend for iptables with Raspberry Pi optimizations
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+#
+# X-Env-VarPrefix: ufw
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable UFW firewall
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: y
+#
+# X-Env-Var-default_incoming: deny
+# X-Env-Var-default_incoming-Desc: Default policy for incoming connections
+# X-Env-Var-default_incoming-Required: n
+# X-Env-Var-default_incoming-Valid: keywords:allow,deny,reject
+# X-Env-Var-default_incoming-Set: lazy
+#
+# X-Env-Var-default_outgoing: allow
+# X-Env-Var-default_outgoing-Desc: Default policy for outgoing connections
+# X-Env-Var-default_outgoing-Required: n
+# X-Env-Var-default_outgoing-Valid: keywords:allow,deny,reject
+# X-Env-Var-default_outgoing-Set: lazy
+#
+# X-Env-Var-allow_services: ssh
+# X-Env-Var-allow_services-Desc: Comma-separated list of services to allow (ssh,http,https,etc)
+# X-Env-Var-allow_services-Required: n
+# X-Env-Var-allow_services-Valid: string
+# X-Env-Var-allow_services-Set: lazy
+#
+# X-Env-Var-allow_ports: ""
+# X-Env-Var-allow_ports-Desc: Comma-separated list of ports to allow (80/tcp,443/tcp,53/udp,etc)
+# X-Env-Var-allow_ports-Required: n
+# X-Env-Var-allow_ports-Valid: string
+# X-Env-Var-allow_ports-Set: lazy
+#
+# X-Env-Var-allow_ips: ""
+# X-Env-Var-allow_ips-Desc: Comma-separated list of IPs/networks to allow access from
+# X-Env-Var-allow_ips-Required: n
+# X-Env-Var-allow_ips-Valid: string
+# X-Env-Var-allow_ips-Set: lazy
+#
+# X-Env-Var-block_ips: ""
+# X-Env-Var-block_ips-Desc: Comma-separated list of IPs/networks to block
+# X-Env-Var-block_ips-Required: n
+# X-Env-Var-block_ips-Valid: string
+# X-Env-Var-block_ips-Set: lazy
+#
+# X-Env-Var-logging: low
+# X-Env-Var-logging-Desc: UFW logging level
+# X-Env-Var-logging-Required: n
+# X-Env-Var-logging-Valid: keywords:off,low,medium,high,full
+# X-Env-Var-logging-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - ufw
+  customize-hooks:
+    # Основная настройка UFW firewall
+    - |
+      igconf isy IGconf_ufw_enable || exit 0
+
+      echo "Configuring UFW firewall..."
+
+      # Отключение UFW если он был включен (для чистой настройки)
+      chroot "$1" ufw --force disable || true
+
+      # Установка политик по умолчанию
+      DEFAULT_INCOMING=$(igconf getval IGconf_ufw_default_incoming)
+      DEFAULT_OUTGOING=$(igconf getval IGconf_ufw_default_outgoing)
+
+      echo "Setting default policies: incoming=$DEFAULT_INCOMING, outgoing=$DEFAULT_OUTGOING"
+      chroot "$1" ufw default $DEFAULT_INCOMING incoming
+      chroot "$1" ufw default $DEFAULT_OUTGOING outgoing
+
+      # Разрешение сервисов
+      ALLOW_SERVICES=$(igconf getval IGconf_ufw_allow_services)
+      if [ -n "$ALLOW_SERVICES" ]; then
+        echo "Allowing services: $ALLOW_SERVICES"
+        IFS=',' read -ra SERVICE_ARRAY <<< "$ALLOW_SERVICES"
+        for service in "${SERVICE_ARRAY[@]}"; do
+          service=$(echo "$service" | xargs)  # trim whitespace
+          if [ -n "$service" ]; then
+            echo "Allowing service: $service"
+            chroot "$1" ufw allow "$service"
+          fi
+        done
+      fi
+
+      # Разрешение портов
+      ALLOW_PORTS=$(igconf getval IGconf_ufw_allow_ports)
+      if [ -n "$ALLOW_PORTS" ]; then
+        echo "Allowing ports: $ALLOW_PORTS"
+        IFS=',' read -ra PORT_ARRAY <<< "$ALLOW_PORTS"
+        for port in "${PORT_ARRAY[@]}"; do
+          port=$(echo "$port" | xargs)  # trim whitespace
+          if [ -n "$port" ]; then
+            echo "Allowing port: $port"
+            chroot "$1" ufw allow "$port"
+          fi
+        done
+      fi
+
+      # Разрешение IP адресов/сетей
+      ALLOW_IPS=$(igconf getval IGconf_ufw_allow_ips)
+      if [ -n "$ALLOW_IPS" ]; then
+        echo "Allowing IPs/networks: $ALLOW_IPS"
+        IFS=',' read -ra IP_ARRAY <<< "$ALLOW_IPS"
+        for ip in "${IP_ARRAY[@]}"; do
+          ip=$(echo "$ip" | xargs)  # trim whitespace
+          if [ -n "$ip" ]; then
+            echo "Allowing from IP/network: $ip"
+            chroot "$1" ufw allow from "$ip"
+          fi
+        done
+      fi
+
+      # Блокировка IP адресов/сетей
+      BLOCK_IPS=$(igconf getval IGconf_ufw_block_ips)
+      if [ -n "$BLOCK_IPS" ]; then
+        echo "Blocking IPs/networks: $BLOCK_IPS"
+        IFS=',' read -ra IP_ARRAY <<< "$BLOCK_IPS"
+        for ip in "${IP_ARRAY[@]}"; do
+          ip=$(echo "$ip" | xargs)  # trim whitespace
+          if [ -n "$ip" ]; then
+            echo "Blocking IP/network: $ip"
+            chroot "$1" ufw deny from "$ip"
+          fi
+        done
+      fi
+
+      # Настройка логирования
+      LOGGING_LEVEL=$(igconf getval IGconf_ufw_logging)
+      echo "Setting logging level: $LOGGING_LEVEL"
+      chroot "$1" ufw logging "$LOGGING_LEVEL"
+
+      # Включение UFW
+      echo "Enabling UFW firewall..."
+      chroot "$1" ufw --force enable
+
+      # Проверка статуса
+      echo "UFW status:"
+      chroot "$1" ufw status verbose

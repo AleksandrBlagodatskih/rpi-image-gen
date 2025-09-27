@@ -1,0 +1,27 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-test-basic
+# X-Env-Layer-Desc: Basic UFW firewall layer test
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: security
+# X-Env-Layer-Requires: locale-base
+#
+# X-Env-VarPrefix: ufw
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable UFW firewall
+# X-Env-Var-enable-Valid: bool
+#
+# X-Env-Var-default_incoming: deny
+# X-Env-Var-default_incoming-Desc: Default incoming policy
+# X-Env-Var-default_incoming-Valid: keywords:allow,deny,reject
+#
+# X-Env-Var-allow_services: ssh,http
+# X-Env-Var-allow_services-Desc: Allowed services
+# X-Env-Var-allow_services-Valid: string
+# METAEND
+
+# Test configuration for UFW layer
+test:
+  firewall_enabled: "${IGconf_ufw_enable}"
+  default_policy: "${IGconf_ufw_default_incoming}"
+  services: "${IGconf_ufw_allow_services}"

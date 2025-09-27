@@ -1,0 +1,21 @@
+# Cockpit configuration for Debian Trixie
+# Shows compatibility with newer Debian releases
+
+device:
+  class: pi5
+  hostname: cockpit-trixie
+
+image:
+  layer: image-rpios
+  name: cockpit-trixie
+  compression: zstd
+
+# Cockpit configuration
+cockpit:
+  port: 9090
+  login_banner: "Debian Trixie - $(hostname)"
+
+layer:
+  base: trixie-minbase
+  network: systemd-net-min
+  cockpit: net-misc/cockpit

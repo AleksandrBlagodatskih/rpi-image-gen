@@ -1,0 +1,155 @@
+# UFW Firewall Layer
+
+## Описание
+
+Слой `ufw` предоставляет настройку Uncomplicated Firewall (UFW) для Raspberry Pi. UFW - это удобный frontend для iptables, который значительно упрощает управление правилами firewall.
+
+## Особенности
+
+* **Простая настройка**: Декларативная конфигурация через переменные
+* **Raspberry Pi оптимизация**: Специфические настройки для RPi сетевых интерфейсов
+* **Безопасность по умолчанию**: Политика deny для входящих соединений
+* **Гибкость**: Поддержка сервисов, портов, IP адресов и сетей
+* **Мониторинг**: Настраиваемый уровень логирования
+
+## Переменные конфигурации
+
+### Основные настройки
+
+* `ufw_enable` (bool, default: y): Включить UFW firewall
+### Политики по умолчанию
+
+* `ufw_default_incoming` (allow/deny/reject, default: deny): Политика для входящих соединений
+* `ufw_default_outgoing` (allow/deny/reject, default: allow): Политика для исходящих соединений
+
+### Правила доступа
+
+* `ufw_allow_services` (string, default: ssh): Список разрешенных сервисов через запятую
+* `ufw_allow_ports` (string, default: ""): Список разрешенных портов (формат: 80/tcp,443/tcp)
+* `ufw_allow_ips` (string, default: ""): Список разрешенных IP/сетей
+* `ufw_block_ips` (string, default: ""): Список блокируемых IP/сетей
+
+### Логирование
+
+* `ufw_logging` (off/low/medium/high/full, default: low): Уровень логирования UFW
+
+## Примеры использования
+
+### Базовая настройка IoT устройства
+
+```yaml
+device:
+  layer: rpi4
+
+image:
+  layer: image-rpios
+  name: iot-device-firewall
+
+layer:
+  base: bookworm-minbase
+  security: ufw
+
+ufw:
+  enable: y
+  default_incoming: deny
+  default_outgoing: allow
+  allow_services: ssh,http,https
+  allow_ports: "1883/tcp,8883/tcp"  # MQTT
+  allow_ips: "192.168.1.0/24"
+  logging: low
+```
+
+### Серверная конфигурация
+
+```yaml
+ufw:
+  enable: y
+  default_incoming: deny
+  default_outgoing: allow
+  allow_services: ssh,http,https,ftp,smtp,imap
+  allow_ports: "3306/tcp,5432/tcp"  # MySQL, PostgreSQL
+  allow_ips: "203.0.113.0/24"       # Административная сеть
+  block_ips: "198.51.100.0/24"      # Заблокированная сеть
+  logging: medium
+```
+
+### Минимальная конфигурация
+
+```yaml
+ufw:
+  enable: y
+  allow_services: ssh
+  logging: off
+```
+
+## Установленные пакеты
+
+* `ufw` - основной пакет firewall
+
+## Файлы конфигурации
+
+После применения слоя создаются/изменяются следующие файлы:
+
+* `/etc/ufw/ufw.conf` - Основная конфигурация UFW
+* `/etc/systemd/system/ufw-restore.service` - Сервис восстановления правил
+* `/etc/ufw/rpi-image-gen-config` - Информация о примененной конфигурации
+
+## Команды управления
+
+После загрузки системы можно управлять firewall:
+
+```bash
+# Проверка статуса
+sudo ufw status
+sudo ufw status verbose
+sudo ufw status numbered
+
+# Временное отключение
+sudo ufw disable
+
+# Включение с текущими правилами
+sudo ufw enable
+
+# Добавление правила
+sudo ufw allow 8080/tcp
+sudo ufw allow from 192.168.1.100
+
+# Удаление правила
+sudo ufw delete allow 8080/tcp
+sudo ufw delete 2  # по номеру
+```
+
+## Raspberry Pi особенности
+
+* Автоматически настраивается IPv6 поддержка
+* Создается systemd сервис для восстановления правил после перезагрузки
+* Оптимизировано для работы с RPi сетевыми интерфейсами
+
+## Безопасность
+
+* **Важно**: Всегда разрешайте SSH перед включением firewall при настройке по SSH
+* Рекомендуется политика `default deny incoming` для большинства устройств
+* Используйте `allow_ips` для ограничения доступа к административным интерфейсам
+* Регулярно проверяйте логи: `sudo ufw status`
+
+## Диагностика
+
+```bash
+# Проверка статуса
+sudo ufw status verbose
+
+# Просмотр логов
+sudo tail -f /var/log/ufw.log
+
+# Проверка конфигурации rpi-image-gen
+cat /etc/ufw/rpi-image-gen-config
+
+# Тестирование правил
+sudo ufw reload
+```
+
+## Ссылки
+
+* https://wiki.debian.org/Uncomplicated%20Firewall%20%28ufw%29[Debian UFW Wiki]
+* https://help.ubuntu.com/community/UFW[Ubuntu UFW Documentation]
+* https://launchpad.net/ufw[UFW в Launchpad]

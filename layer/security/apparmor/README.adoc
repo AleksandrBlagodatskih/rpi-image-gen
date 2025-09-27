@@ -1,0 +1,204 @@
+= apparmor
+
+Mandatory Access Control (MAC) с AppArmor для систем на базе Debian, оптимизированный для Raspberry Pi.
+
+== Описание
+
+Этот слой предоставляет полную интеграцию AppArmor - системы Mandatory Access Control (MAC) для Linux. AppArmor ограничивает возможности программ согласно набору правил, указывающих, какие файлы данная программа может использовать.
+
+Особенности для Raspberry Pi:
+* Автоматическая настройка параметров ядра для Raspberry Pi bootloader
+* Поддержка initramfs с AppArmor
+* Гарантированное монтирование securityfs
+
+* Оптимизированные профили для VideoCore GPU
+* Поддержка GPIO/I2C/SPI интерфейсов
+* Совместимость с Raspberry Pi OS и ядром
+* Автоматическая настройка для EFI и initramfs
+
+== Использование
+
+[source,yaml]
+----
+device:
+  layer: rpi5  # или rpi4, rpi-cm4 и т.д.
+
+image:
+  layer: image-rpios
+  name: secure-rpi-system
+
+layer:
+  base: bookworm-minbase
+  security: apparmor  # Добавление AppArmor
+
+# Настройки AppArmor
+apparmor:
+  enable: y           # Включить AppArmor (по умолчанию y)
+  mode: enforce       # Режим: enforce (блокировать) или complain (только логировать)
+  rpi_optimized: y    # Raspberry Pi оптимизации (по умолчанию y)
+----
+
+== Переменные конфигурации
+
+|===
+| Переменная | Описание | Значения | По умолчанию
+
+| `enable`
+| Включить AppArmor
+| `y` / `n`
+| `y`
+
+| `mode`
+| Режим работы AppArmor
+| `enforce` (блокировать нарушения) / `complain` (только логировать)
+| `enforce`
+
+
+| `rpi_optimized`
+| Raspberry Pi специфические оптимизации
+| `y` / `n`
+| `y`
+|===
+
+== Что делает слой
+
+=== Установка пакетов
+
+* `apparmor` - основная система AppArmor
+* `apparmor-utils` - утилиты для управления профилями
+* `apparmor-profiles-extra` - дополнительные профили безопасности
+
+=== Системная конфигурация
+
+* Настройка initramfs для Raspberry Pi bootloader
+* Добавление параметров ядра в cmdline.txt
+* Настройка securityfs через fstab
+* Установка режима работы (enforce/complain)
+
+=== Raspberry Pi оптимизации
+
+При включенной опции `rpi_optimized`:
+
+* **Профиль для VideoCore GPU** (`/etc/apparmor.d/opt.vc`):
+  - Доступ к `/opt/vc/` директории
+  - Доступ к устройствам `/dev/vchiq`, `/dev/vcsm`, `/dev/vc-mem`
+  - Framebuffer и DRM устройства
+  - GPIO для видео приложений
+
+* **Профиль для GPIO** (`/etc/apparmor.d/usr.bin.python3-gpio`):
+  - Доступ к GPIO через Python
+  - I2C и SPI интерфейсы
+  - Device tree информация
+
+* **Специфические tunables** (`/etc/apparmor.d/tunables/rpi`):
+  - Пути VideoCore
+  - Firmware и boot директории
+  - GPIO, I2C, SPI устройства
+
+== Совместимость
+
+=== Поддерживаемые устройства
+
+* Raspberry Pi 5
+* Raspberry Pi 4
+* Raspberry Pi Compute Module 4
+* Raspberry Pi 3 (с ограниченной поддержкой GPU)
+* Raspberry Pi Zero (без GPU оптимизаций)
+
+=== Требования
+
+* Debian Bookworm или Trixie
+* Ядро Linux с поддержкой AppArmor (включено в Raspberry Pi OS)
+* Минимум 256MB RAM для комфортной работы
+
+=== Зависимости
+
+* `debian-base` - любой слой на базе Debian
+* Рекомендуется использовать с `sbom-base` для аудита
+
+== Диагностика
+
+=== Проверка статуса
+
+[source,bash]
+----
+# После загрузки системы
+sudo apparmor_status
+
+# Просмотр загруженных профилей
+sudo aa-status
+
+# Просмотр нарушений (в complain режиме)
+sudo cat /var/log/kern.log | grep apparmor
+----
+
+=== Управление профилями
+
+[source,bash]
+----
+# Переключение в complain режим для отладки
+sudo aa-complain /etc/apparmor.d/profile
+
+# Переключение в enforce режим
+sudo aa-enforce /etc/apparmor.d/profile
+
+# Перезагрузка профилей
+sudo systemctl reload apparmor
+----
+
+=== Устранение проблем
+
+. **AppArmor не загружается**: Проверьте параметры ядра в `/boot/firmware/cmdline.txt` (должны содержать `apparmor=1 security=apparmor`)
+. **Securityfs не смонтирован**: Проверьте `mount | grep securityfs` и `/etc/fstab`
+. **Профили не применяются**: Проверьте синтаксис `sudo apparmor_parser -d /etc/apparmor.d/profile`
+. **Нарушения в логах**: Используйте `aa-logprof` для генерации профилей на основе логов
+
+== Примеры использования
+
+=== Базовая настройка безопасности
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: apparmor
+
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: y
+----
+
+=== Разработка с логированием
+
+[source,yaml]
+----
+apparmor:
+  enable: y
+  mode: complain  # Только логировать, не блокировать
+  rpi_optimized: y
+----
+
+=== Минимальная установка
+
+[source,yaml]
+----
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: n   # Без RPi оптимизаций
+----
+
+== Безопасность и лучшие практики
+
+* **Начинайте с complain режима** для тестирования приложений
+* **Регулярно проверяйте логи** на нарушения AppArmor
+* **Используйте aa-logprof** для создания профилей на основе реального использования
+* **Тестируйте профили** перед переводом в enforce режим
+* **Мониторьте производительность** - AppArmor добавляет небольшую нагрузку
+
+== Ссылки
+
+* https://wiki.debian.org/AppArmor[Debian AppArmor Wiki]
+* https://apparmor.net/[Официальный сайт AppArmor]
+* https://ubuntu.com/server/docs/security-apparmor[Ubuntu документация по AppArmor]

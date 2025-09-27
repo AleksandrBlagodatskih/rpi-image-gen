@@ -1,0 +1,38 @@
+# Пример конфигурации для Raspberry Pi 5 серверной оптимизации
+device:
+  layer: rpi5
+  hostname: rpi5-server
+  storage_type: nvme  # Для максимальной производительности с NVMe SSD
+  user1: admin
+  user1pass: SecurePass123!
+
+image:
+  layer: image-rpios
+  name: rpi5-server-optimized
+  compression: zstd
+
+layer:
+  server: rpi5-server-config
+  base: bookworm-minbase
+  security: security-hardening
+  sbom: sbom-base
+
+# Настройки серверной оптимизации (все по умолчанию включены)
+rpi5_server:
+  disable_hdmi: y
+  disable_wifi: y
+  disable_bluetooth: y
+  disable_audio: y
+  pcie_max_speed: y
+  usb_max_performance: y
+  disable_unused_interfaces: y
+
+# Дополнительные настройки безопасности
+security:
+  enable_encryption: y
+  secure_boot: y
+
+# SBOM генерация для compliance
+sbom:
+  enable: y
+  provider: syft

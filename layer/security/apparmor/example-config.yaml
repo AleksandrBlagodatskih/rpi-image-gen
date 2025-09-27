@@ -1,0 +1,34 @@
+# Пример конфигурации с AppArmor для Raspberry Pi
+# Mandatory Access Control для повышения безопасности системы
+
+device:
+  layer: rpi5
+  hostname: secure-rpi
+  user1: admin
+  user1pass: SecurePass123!
+
+image:
+  layer: image-rpios
+  name: rpi-apparmor-secure
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: apparmor
+  sbom: sbom-base
+
+# AppArmor настройки
+apparmor:
+  enable: y              # Включить AppArmor
+  mode: enforce          # Режим блокировки нарушений
+  rpi_optimized: y       # Raspberry Pi оптимизации
+
+# SBOM для аудита и compliance
+sbom:
+  enable: y
+  provider: syft
+
+# Дополнительные меры безопасности (опционально)
+# security:
+#   enable_encryption: y
+#   secure_boot: y
