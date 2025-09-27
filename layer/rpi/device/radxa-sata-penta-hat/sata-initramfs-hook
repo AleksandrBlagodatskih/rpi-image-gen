@@ -1,0 +1,37 @@
+#!/bin/sh
+# Initramfs hook for Radxa SATA Penta HAT SATA drivers
+
+PREREQ=""
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# Force copy SATA/PATA modules for early detection
+force_load ahci
+force_load libahci
+force_load sata_mv
+force_load ata_piix
+force_load ata_generic
+force_load sd_mod
+force_load scsi_mod
+force_load scsi_transport_sas
+force_load libsas
+
+# JMB585 specific modules
+manual_add_modules ahci_platform
+manual_add_modules libata
+manual_add_modules scsi_transport_sata
+
+# GPIO and PCIe modules for power management
+manual_add_modules gpio_raspberrypi_exp
+manual_add_modules pcie-brcmstb

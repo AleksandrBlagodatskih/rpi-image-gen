@@ -1,2 +1,5 @@
 work/*
 site/__pycache__
+
+# Cursor IDE rules
+.cursor/

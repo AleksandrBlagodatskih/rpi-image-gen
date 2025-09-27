@@ -1,0 +1,58 @@
+# Example configuration using disk UUIDs (recommended for production)
+# This creates a Raspberry Pi image with:
+# - MBR boot partition on SD card
+# - MD RAID1 on two SATA SSDs (using UUIDs)
+# - LUKS2 encryption on the RAID
+# - Btrfs root filesystem
+
+device:
+  layer: rpi5
+  hostname: raid-server-uuid
+
+image:
+  layer: image-mbr-mdraid-luks-btrfs
+  name: raid-encrypted-system-uuid
+  boot_part_size: 200M
+  # Using disk UUIDs instead of device names (more reliable)
+  mdraid_uuids: 12345678-1234-1234-1234-123456789012,87654321-4321-4321-4321-210987654321
+  luks_keyfile: /boot/luks-key
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  device: radxa-sata-penta-hat
+  sys-apps: cryptsetup
+  sys-apps: btrfs
+  mdadm: mdadm
+  security: security-hardening
+  sbom: sbom-base
+
+# Radxa SATA Penta HAT configuration
+radxa_sata:
+  pcie_gen3: y        # Enable PCIe Gen 3.0 for maximum performance
+  initramfs_sata: y   # Enable initramfs SATA initialization
+
+# Security hardening for encrypted system
+security:
+  enable_encryption: y
+  secure_boot: y
+
+# LUKS encryption
+cryptsetup:
+  enable: y
+
+# Btrfs filesystem
+btrfs:
+  enable: y
+
+# RAID management (supports degraded mode for reliability)
+mdadm:
+  enable: y
+
+# SBOM generation
+sbom:
+  enable: y
+  provider: syft
+
+# Note: Replace the UUIDs above with actual disk UUIDs from your SSDs
+# Get disk UUIDs with: blkid /dev/sda /dev/sdb

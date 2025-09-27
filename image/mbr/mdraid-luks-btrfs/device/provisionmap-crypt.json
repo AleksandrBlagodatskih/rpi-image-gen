@@ -1,0 +1,44 @@
+[
+   {
+      "attributes": {
+         "PMAPversion": "1.2.0",
+         "system_type": "mdraid_luks_btrfs"
+      }
+   },
+   {
+      "partitions": [
+         {
+            "image": "boot"
+         },
+         {
+            "image": "mdraid.empty",
+            "filesystem": "mdraid",
+            "label": "MDRAID",
+            "table": "gpt",
+            "partitions": [
+               {
+                  "encrypted": {
+                     "luks2": {
+                        "key_size": 512,
+                        "cipher": "aes-xts-plain64",
+                        "hash": "sha256",
+                        "label": "cryptroot",
+                        "uuid": "<CRYPT_UUID>",
+                        "mname": "cryptroot",
+                        "etype": "raw"
+                     },
+                     "partitions": [
+                        {
+                           "image": "root.btrfs",
+                           "filesystem": "btrfs",
+                           "label": "CRYPTROOT",
+                           "uuid": "<BTRFS_UUID>"
+                        }
+                     ]
+                  }
+               }
+            ]
+         }
+      ]
+   }
+]

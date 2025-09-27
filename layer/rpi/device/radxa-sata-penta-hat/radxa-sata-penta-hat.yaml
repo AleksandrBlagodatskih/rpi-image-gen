@@ -1,0 +1,47 @@
+# METABEGIN
+# X-Env-Layer-Name: radxa-sata-penta-hat
+# X-Env-Layer-Category: device
+# X-Env-Layer-Desc: Radxa SATA Penta HAT support for Raspberry Pi 5 with PCIe Gen 3.0 and initramfs SATA initialization
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: rpi5,rpi-linux-v8
+#
+# X-Env-VarPrefix: radxa_sata
+#
+# X-Env-Var-pcie_gen3: y
+# X-Env-Var-pcie_gen3-Set: immediate
+# X-Env-Var-pcie_gen3-Valid: bool
+#
+# X-Env-Var-initramfs_sata: y
+# X-Env-Var-initramfs_sata-Set: immediate
+# X-Env-Var-initramfs_sata-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - initramfs-tools
+    - linux-modules-extra-rpi-v8
+  customize-hooks:
+    # Настройка PCIe Gen 3.0 для SATA контроллера JMB585
+    - |
+      if [ "${IGconf_radxa_sata_pcie_gen3}" = "y" ]; then
+        echo "# Radxa SATA Penta HAT: Enable PCIe Gen 3.0 for JMB585 controller" >> $1/boot/firmware/config.txt
+        echo "dtparam=pciex1_gen=3" >> $1/boot/firmware/config.txt
+      fi
+
+    # Настройка initramfs для ранней загрузки SATA драйверов
+    - |
+      if [ "${IGconf_radxa_sata_initramfs_sata}" = "y" ]; then
+        # Создание initramfs hooks для SATA
+        mkdir -p $1/etc/initramfs-tools/hooks
+        install -m 755 sata-initramfs-hook $1/etc/initramfs-tools/hooks/sata_penta
+
+        # Настройка initramfs modules
+        mkdir -p $1/etc/initramfs-tools/modules
+        cat initramfs-modules >> $1/etc/initramfs-tools/modules
+
+        # Настройка initramfs.conf для SATA поддержки
+        sed -i 's/MODULES=most/MODULES=list/' $1/etc/initramfs-tools/initramfs.conf
+      fi
+
+    # Перегенерация initramfs после всех настроек
+    - chroot $1 update-initramfs -u -k all

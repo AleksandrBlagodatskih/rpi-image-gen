@@ -1,0 +1,150 @@
+= Radxa SATA Penta HAT Support
+
+== Описание
+
+Radxa SATA Penta HAT - это расширение для Raspberry Pi 5, предоставляющее высокопроизводительный SATA интерфейс с пятью портами. HAT включает:
+
+* SATA контроллер JMB585 PCIe Gen 3x2
+* 4 стандартных SATA коннектора
+* 1 дополнительный SATA порт (edge connector)
+* 12V питание через Molex или barrel jack коннекторы
+* FFC кабель для подключения к Raspberry Pi 5
+
+== Технические характеристики
+
+* **Контроллер**: JMicron JMB585 PCIe Gen 3.0 x2 SATA
+* **Интерфейс**: PCIe Gen 3.0 (рекомендуется включить `dtparam=pciex1_gen=3`)
+* **Питание**: 12V DC (Molex или barrel jack)
+* **SATA порты**: 4x SATA + 1x edge connector
+* **Совместимость**: Только Raspberry Pi 5
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: sata-server
+
+layer:
+  device: radxa-sata-penta-hat
+----
+
+=== Расширенная конфигурация
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: sata-server
+
+layer:
+  device: radxa-sata-penta-hat
+
+# Настройки Radxa SATA Penta HAT
+radxa_sata:
+  pcie_gen3: y        # Включить PCIe Gen 3.0 (рекомендуется)
+  initramfs_sata: y   # Включить initramfs SATA инициализацию
+----
+
+== Initramfs инициализация
+
+Данный слой автоматически настраивает initramfs для ранней загрузки SATA драйверов, что обеспечивает:
+
+* Раннее обнаружение SATA дисков
+* Поддержку загрузки с SATA устройств
+* Стабильную работу с JMB585 контроллером
+
+=== Включаемые модули
+
+* `ahci` - Advanced Host Controller Interface
+* `libahci` - AHCI библиотека
+* `libata` - ATA библиотека
+* `sd_mod` - SCSI disk module
+* `scsi_mod` - SCSI core
+* `gpio_raspberrypi_exp` - GPIO expander
+* `pcie-brcmstb` - PCIe Broadcom driver
+
+== Аппаратная настройка
+
+=== Подключение HAT
+
+1. Подключите FFC кабель к Raspberry Pi 5 (J6 разъем)
+2. Подключите FFC кабель к HAT
+3. Подключите SATA диски к портам HAT
+4. Подключите 12V питание (Molex или barrel jack)
+5. Включите Raspberry Pi 5
+
+=== Питание
+
+HAT требует внешнего 12V питания для:
+
+* Питания SATA дисков
+* Питания Raspberry Pi 5 через GPIO (опционально)
+* Стабильной работы высокопроизводных дисков
+
+== Производительность
+
+=== PCIe Gen 3.0
+
+Для достижения максимальной производительности включите PCIe Gen 3.0:
+
+[source,yaml]
+----
+radxa_sata:
+  pcie_gen3: y
+----
+
+Это добавляет `dtparam=pciex1_gen=3` в `/boot/firmware/config.txt`.
+
+=== Тестирование производительности
+
+[source,bash]
+----
+# Проверка скорости SATA портов
+hdparm -tT /dev/sda
+
+# Информация о PCIe шине
+lspci -vvv | grep -A 20 JMB585
+
+# Проверка температуры и статуса дисков
+smartctl -a /dev/sda
+----
+
+== Устранение неисправностей
+
+=== Диски не обнаруживаются
+
+1. Проверьте питание HAT (12V)
+2. Проверьте подключение FFC кабеля
+3. Убедитесь, что включена PCIe Gen 3.0 настройка
+4. Проверьте логи: `dmesg | grep -i sata`
+
+=== Низкая производительность
+
+1. Включите PCIe Gen 3.0: `radxa_sata_pcie_gen3: y`
+2. Проверьте питание дисков
+3. Используйте качественные SATA кабели
+4. Рассмотрите активное охлаждение
+
+=== Initramfs проблемы
+
+1. Проверьте, что initramfs обновлен: `ls -la /boot/firmware/ | grep initrd`
+2. Проверьте логи загрузки: `dmesg | grep initrd`
+3. Перегенерируйте initramfs: `update-initramfs -u -k all`
+
+== Совместимость
+
+* **Raspberry Pi**: Только Raspberry Pi 5
+* **Ядро**: rpi-linux-v8 (64-bit)
+* **Дистрибутивы**: Debian Bookworm и производные
+* **Файловые системы**: ext4, btrfs, zfs (с соответствующими пакетами)
+
+== Ссылки
+
+* https://github.com/geerlingguy/raspberry-pi-pcie-devices/issues/615[Radxa Penta SATA HAT discussion,window=_blank]
+* https://www.raspberrypi.com/documentation/computers/raspberry-pi.html[Raspberry Pi 5 hardware documentation,window=_blank]
+* https://www.raspberrypi.com/documentation/computers/linux_kernel.html[Raspberry Pi linux kernel documentation,window=_blank]
+* https://github.com/raspberrypi/firmware[Raspberry Pi firmware repository,window=_blank]

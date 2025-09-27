@@ -1,0 +1,40 @@
+# Пример конфигурации для Radxa SATA Penta HAT
+# Полная настройка с initramfs SATA инициализацией
+
+device:
+  layer: rpi5
+  hostname: sata-storage-server
+  user1: admin
+  user1pass: changeme123
+  timezone: Europe/Moscow
+
+image:
+  layer: image-rpios
+  name: radxa-sata-penta-image
+  compression: zstd
+
+layer:
+  device: radxa-sata-penta-hat
+
+# Настройки Radxa SATA Penta HAT
+radxa_sata:
+  pcie_gen3: y        # Включить PCIe Gen 3.0 для максимальной производительности
+  initramfs_sata: y   # Включить initramfs SATA инициализацию
+
+# Дополнительные слои для NAS/Storage сервера
+layer:
+  base: bookworm-minbase
+  network: systemd-net-min
+  monitoring: system-monitoring
+  security: security-hardening
+  sbom: sbom-base
+
+# Настройки безопасности
+security:
+  enable_encryption: y
+  secure_boot: y
+
+# SBOM генерация
+sbom:
+  enable: y
+  provider: syft

@@ -1,0 +1,56 @@
+# METABEGIN
+# X-Env-Layer-Name: mdadm
+# X-Env-Layer-Category: sys-apps
+# X-Env-Layer-Desc: Linux Software RAID management utilities (mdadm)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+#
+# X-Env-VarPrefix: mdadm
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Set: immediate
+# X-Env-Var-enable-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - mdadm
+  customize-hooks:
+    # Настройка mdadm если включено
+    - |
+      if [ "${IGconf_mdadm_enable}" = "y" ]; then
+        # Включение mdadm в initramfs для RAID поддержки при загрузке
+        echo "# mdadm: Enable RAID support in initramfs" >> $1/etc/initramfs-tools/modules
+        echo "md_mod" >> $1/etc/initramfs-tools/modules
+        echo "raid0" >> $1/etc/initramfs-tools/modules
+        echo "raid1" >> $1/etc/initramfs-tools/modules
+        echo "raid10" >> $1/etc/initramfs-tools/modules
+        echo "raid456" >> $1/etc/initramfs-tools/modules
+
+        # Создание базового mdadm.conf если не существует
+        if [ ! -f $1/etc/mdadm/mdadm.conf ]; then
+          mkdir -p $1/etc/mdadm
+          cat > $1/etc/mdadm/mdadm.conf << 'EOF'
+# mdadm.conf
+#
+# Please refer to mdadm.conf(5) for information about this file.
+#
+
+# by default (built-in), scan all partitions (/proc/partitions) and all
+# containers for MD superblocks. alternatively, specify devices to scan, using
+# wildcards if desired.
+DEVICE partitions
+
+# automatically tag new arrays as belonging to the local system
+HOMEHOST <system>
+
+# instruct the monitoring daemon where to send mail alerts
+MAILADDR root
+
+# definitions of existing MD arrays
+EOF
+        fi
+
+        # Перегенерация initramfs с RAID поддержкой
+        chroot $1 update-initramfs -u -k all
+      fi

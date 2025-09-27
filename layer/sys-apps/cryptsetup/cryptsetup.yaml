@@ -1,0 +1,36 @@
+# METABEGIN
+# X-Env-Layer-Name: cryptsetup
+# X-Env-Layer-Category: sys-apps
+# X-Env-Layer-Desc: Linux Unified Key Setup (cryptsetup) with initramfs support for LUKS
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+#
+# X-Env-VarPrefix: cryptsetup
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Set: immediate
+# X-Env-Var-enable-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - cryptsetup
+    - cryptsetup-initramfs
+  customize-hooks:
+    # Настройка cryptsetup если включено
+    - |
+      if [ "${IGconf_cryptsetup_enable}" = "y" ]; then
+        # Включение cryptsetup в initramfs для LUKS поддержки при загрузке
+        echo "# cryptsetup: Enable LUKS support in initramfs" >> $1/etc/initramfs-tools/modules
+        echo "dm_crypt" >> $1/etc/initramfs-tools/modules
+        echo "dm_mod" >> $1/etc/initramfs-tools/modules
+
+        # Настройка cryptsetup-initramfs
+        if [ -f $1/etc/cryptsetup-initramfs/conf-hook ]; then
+          # Включение cryptsetup в initramfs hooks
+          sed -i 's|^#CRYPTSETUP=|CRYPTSETUP=y|' $1/etc/cryptsetup-initramfs/conf-hook
+        fi
+
+        # Перегенерация initramfs с LUKS поддержкой
+        chroot $1 update-initramfs -u -k all
+      fi

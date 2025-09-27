@@ -1,0 +1,168 @@
+= Cryptsetup - Linux Unified Key Setup
+
+== Описание
+
+Cryptsetup - это утилита для настройки прозрачного шифрования дисковых устройств с использованием dm-crypt ядра Linux. Поддерживает формат LUKS (Linux Unified Key Setup) для безопасного хранения ключей шифрования.
+
+== Основные возможности
+
+* Создание и управление LUKS контейнерами
+* Поддержка различных алгоритмов шифрования (AES, Twofish, Serpent)
+* Управление ключами и passphrase
+* Интеграция с initramfs для загрузки с зашифрованных дисков
+* Поддержка TRIM для SSD дисков
+
+== Поддерживаемые алгоритмы
+
+* **AES** - Advanced Encryption Standard (рекомендуемый)
+* **Twofish** - Feistel network cipher
+* **Serpent** - Block cipher
+* **CAST5/6** - Carlisle Adams and Stafford Tavares ciphers
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+layer:
+  sys-apps: cryptsetup
+----
+
+=== Расширенная конфигурация
+
+[source,yaml]
+----
+layer:
+  sys-apps: cryptsetup
+
+# Настройки cryptsetup
+cryptsetup:
+  enable: y    # Включить cryptsetup с полной настройкой
+----
+
+== Initramfs интеграция
+
+При включении `cryptsetup_enable`, слой автоматически:
+
+* Добавляет необходимые модули ядра в initramfs (`dm_crypt`, `dm_mod`)
+* Настраивает cryptsetup-initramfs hooks
+* Перегенерирует initramfs для поддержки загрузки с LUKS
+
+== Использование
+
+=== Создание LUKS контейнера
+
+[source,bash]
+----
+# Создание LUKS контейнера на устройстве
+cryptsetup luksFormat /dev/sdX
+
+# Открытие LUKS контейнера
+cryptsetup luksOpen /dev/sdX cryptroot
+
+# Форматирование открытого контейнера
+mkfs.btrfs /dev/mapper/cryptroot
+----
+
+=== Автоматическое монтирование
+
+[source,bash]
+----
+# /etc/crypttab
+cryptroot UUID=12345678-1234-1234-1234-123456789012 none luks,discard
+
+# /etc/fstab
+/dev/mapper/cryptroot /               btrfs defaults 0 0
+----
+
+== Совместимость
+
+* **ОС**: Debian Bookworm, Trixie
+* **Архитектуры**: amd64, arm64
+* **Ядро**: Linux 4.4+ (рекомендуется 5.0+)
+* **Файловые системы**: ext4, btrfs, xfs (с соответствующими пакетами)
+
+== Зависимости
+
+* `essential` - Базовые системные компоненты
+* `initramfs-tools` - Для интеграции с initramfs (рекомендуется)
+
+== Примеры использования
+
+=== Зашифрованная корневая файловая система
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: secure-server
+
+layer:
+  base: bookworm-minbase
+  sys-apps: cryptsetup
+  # другие слои
+
+cryptsetup:
+  enable: y
+----
+
+=== Enterprise шифрование с RAID
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  sys-apps: cryptsetup
+  sys-apps: mdadm
+  device: radxa-sata-penta-hat
+
+cryptsetup:
+  enable: y
+
+mdadm:
+  enable: y
+----
+
+== Диагностика
+
+=== Проверка статуса LUKS
+
+[source,bash]
+----
+# Информация о LUKS контейнере
+cryptsetup luksDump /dev/sdX
+
+# Проверка открытого контейнера
+dmsetup info cryptroot
+
+# Логи cryptsetup
+journalctl -u cryptsetup
+----
+
+=== Проблемы с загрузкой
+
+[source,bash]
+----
+# Проверка initramfs
+lsinitramfs /boot/initrd.img | grep crypt
+
+# Регенерация initramfs
+update-initramfs -u -k all
+
+# Проверка crypttab
+cryptsetup isLuks /dev/sdX
+----
+
+== Безопасность
+
+* Используйте сильные passphrase или keyfiles
+* Храните keyfiles на защищенных разделах
+* Регулярно делайте backup LUKS headers
+* Рассмотрите использование TPM для хранения ключей
+
+== Ссылки
+
+* https://gitlab.com/cryptsetup/cryptsetup[Официальный репозиторий cryptsetup]
+* https://www.kernel.org/doc/html/latest/admin-guide/device-mapper/dm-crypt.html[DM-Crypt documentation]
+* https://github.com/tmkerr/cryptsetup-initramfs[Debian cryptsetup-initramfs]

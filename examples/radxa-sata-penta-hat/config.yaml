@@ -1,0 +1,68 @@
+# Пример конфигурации для Radxa SATA Penta HAT
+# Создает полнофункциональный NAS/storage сервер
+
+device:
+  layer: rpi5
+  hostname: radxa-sata-nas
+  user1: nasadmin
+  user1pass: securepassword123
+  timezone: Europe/Moscow
+  keyboard: gb
+
+image:
+  layer: image-rpios
+  name: radxa-sata-nas-image
+  compression: zstd
+
+# Основные слои
+layer:
+  base: bookworm-minbase
+  device: radxa-sata-penta-hat
+  network: systemd-net-min
+  security: security-hardening
+  monitoring: system-monitoring
+  sbom: sbom-base
+
+# Настройки Radxa SATA Penta HAT
+radxa_sata:
+  pcie_gen3: y        # PCIe Gen 3.0 для максимальной производительности JMB585
+  initramfs_sata: y   # Initramfs SATA hooks для раннего обнаружения дисков
+
+# Настройки безопасности
+security:
+  enable_encryption: y
+  secure_boot: y
+  audit_enabled: y
+
+# Настройки сети
+network:
+  interface: eth0
+  dhcp: y
+  ipv6: y
+
+# Настройки мониторинга
+monitoring:
+  enable_prometheus: y
+  enable_node_exporter: y
+  enable_smartmontools: y
+
+# SBOM для compliance
+sbom:
+  enable: y
+  provider: syft
+  detailed_scan: y
+
+# Дополнительные пакеты для NAS
+mmdebstrap:
+  packages:
+    - samba
+    - nfs-kernel-server
+    - smartmontools
+    - hdparm
+    - iotop
+    - ncdu
+    - zfsutils-linux
+    - mergerfs
+    - snapraid
+    - rsync
+    - openssh-server

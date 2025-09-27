@@ -1,0 +1,8 @@
+# Radxa SATA Penta HAT modules
+ahci
+libahci
+libata
+sd_mod
+scsi_mod
+gpio_raspberrypi_exp
+pcie-brcmstb

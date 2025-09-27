@@ -1,0 +1,75 @@
+# SD Card Image with MBR boot partition (for Raspberry Pi)
+image <IMAGE_NAME>.<IMAGE_SUFFIX>.sparse {
+   android-sparse {
+      image = <IMAGE_NAME>.<IMAGE_SUFFIX>
+   }
+}
+
+image boot.vfat.sparse {
+   android-sparse {
+      image = boot.vfat
+   }
+}
+
+# Empty MD RAID1 container
+image mdraid.empty.sparse {
+   android-sparse {
+      image = mdraid.empty
+   }
+}
+
+# Main SD card image with MBR (boot only)
+image <IMAGE_NAME>.<IMAGE_SUFFIX> {
+   hdimage {
+      align = 8M
+      partition-table-type = "mbr"
+      fill = true
+   }
+
+   partition boot {
+      in-partition-table = true
+      partition-type = 0xC
+      image = boot.vfat
+      bootable = true
+   }
+}
+
+# Boot partition (VFAT) - contains LUKS key and bootloader
+image boot.vfat {
+   vfat {
+      label = "BOOT"
+      extraargs = "-S <SECTOR_SIZE> -i <BOOT_LABEL>"
+   }
+   size = <BOOT_SIZE>
+   mountpoint = "/boot/firmware"
+   exec-pre = "<SETUP> BOOT <BOOT_UUID> <CRYPT_UUID>"
+}
+
+# Empty MD RAID1 container (will be filled during provisioning)
+image mdraid.empty {
+   mdraid {
+      level = 1
+      devices = 2
+      raid-uuid = "<MD_UUID>"
+      # No image = empty RAID container
+   }
+   size = <ROOT_SIZE>
+}
+
+# Root filesystem (Btrfs) - will be placed inside LUKS container on the RAID
+image root.btrfs {
+   btrfs {
+      label = "CRYPTROOT"
+      extraargs = "-U <BTRFS_UUID>"
+   }
+   size = <ROOT_SIZE>
+   mountpoint = "/"
+}
+
+# Note: During provisioning:
+# 1. Boot partition is written to SD card (MBR)
+# 2. GPT partition table is created on mdraid.empty
+# 3. Partition 1 is created in GPT on the RAID
+# 4. LUKS2 is applied to partition 1
+# 5. root.btrfs is placed inside the LUKS container
+# Final structure: SD(MBR) + RAID(GPT) -> Partition -> LUKS2 -> Btrfs

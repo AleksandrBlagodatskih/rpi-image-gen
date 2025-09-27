@@ -1,0 +1,31 @@
+# METABEGIN
+# X-Env-Layer-Name: btrfs
+# X-Env-Layer-Category: sys-apps
+# X-Env-Layer-Desc: Btrfs filesystem with tools and initramfs support
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+#
+# X-Env-VarPrefix: btrfs
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Set: immediate
+# X-Env-Var-enable-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - btrfs-progs
+  customize-hooks:
+    # Настройка btrfs если включено
+    - |
+      if [ "${IGconf_btrfs_enable}" = "y" ]; then
+        # Включение btrfs в initramfs для поддержки загрузки с Btrfs
+        echo "# btrfs: Enable Btrfs support in initramfs" >> $1/etc/initramfs-tools/modules
+        echo "btrfs" >> $1/etc/initramfs-tools/modules
+
+        # Создание базовой конфигурации для Btrfs (опционально)
+        # Можно добавить специфичные настройки для производительности или надежности
+
+        # Перегенерация initramfs с Btrfs поддержкой
+        chroot $1 update-initramfs -u -k all
+      fi

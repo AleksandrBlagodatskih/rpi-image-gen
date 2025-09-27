@@ -1,0 +1,253 @@
+= Btrfs - B-tree Filesystem
+
+== Описание
+
+Btrfs (B-tree Filesystem) - это современная файловая система для Linux с продвинутыми возможностями, включая snapshots, subvolumes, compression, deduplication и встроенное RAID. Btrfs разработан как преемник ext4 с фокусом на надежность, масштабируемость и современные возможности хранения.
+
+== Основные возможности
+
+* **Copy-on-Write (CoW)**: Защита от повреждения данных при неожиданном выключении
+* **Snapshots**: Мгновенные снимки файловой системы для backup и rollback
+* **Subvolumes**: Независимые подразделы в одной файловой системе
+* **Compression**: Прозрачное сжатие данных (zlib, lzo, zstd)
+* **Deduplication**: Автоматическое удаление дублированных блоков
+* **Built-in RAID**: RAID 0, 1, 10 на уровне файловой системы
+* **Online defragmentation**: Дефрагментация без отключения
+* **Online resizing**: Изменение размера без перемонтирования
+
+== Архитектура
+
+Btrfs использует B-tree структуры для хранения метаданных и данных, что обеспечивает:
+
+* **Высокую производительность** при операциях с метаданными
+* **Эффективное использование дискового пространства**
+* **Быстрый поиск и сортировку** файлов
+* **Поддержку огромных объемов** (до 16 EiB)
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+layer:
+  sys-apps: btrfs
+----
+
+=== Расширенная конфигурация
+
+[source,yaml]
+----
+layer:
+  sys-apps: btrfs
+
+# Настройки btrfs
+btrfs:
+  enable: y    # Включить btrfs с полной настройкой
+----
+
+== Initramfs интеграция
+
+При включении `btrfs_enable`, слой автоматически:
+
+* Устанавливает пакет `btrfs-progs` с инструментами управления
+* Добавляет модуль ядра `btrfs` в initramfs
+* Перегенерирует initramfs для поддержки загрузки с Btrfs
+
+== Использование
+
+=== Создание Btrfs файловой системы
+
+[source,bash]
+----
+# Создание Btrfs на устройстве
+mkfs.btrfs /dev/sdX
+
+# Создание с compression
+mkfs.btrfs -O compress=zstd /dev/sdX
+
+# Создание с RAID1
+mkfs.btrfs -m raid1 -d raid1 /dev/sda /dev/sdb
+----
+
+=== Управление subvolumes
+
+[source,bash]
+----
+# Создание subvolume
+btrfs subvolume create /mnt/btrfs/@root
+
+# Список subvolumes
+btrfs subvolume list /mnt/btrfs
+
+# Snapshot subvolume
+btrfs subvolume snapshot /mnt/btrfs/@root /mnt/btrfs/@root-snap
+----
+
+=== Compression и оптимизация
+
+[source,bash]
+----
+# Включение compression для директории
+chattr +c /mnt/btrfs/data
+
+# Проверка compression
+btrfs filesystem df /mnt/btrfs
+
+# Дефрагментация
+btrfs filesystem defragment -r /mnt/btrfs
+----
+
+=== Snapshots и backup
+
+[source,bash]
+----
+# Создание snapshot
+btrfs subvolume snapshot -r /mnt/btrfs/@root /mnt/btrfs/@snapshots/root-$(date +%Y%m%d)
+
+# Отправка snapshot на другое устройство
+btrfs send /mnt/btrfs/@snapshots/root-20231201 | btrfs receive /mnt/backup
+
+# Удаление старых snapshots
+btrfs subvolume delete /mnt/btrfs/@snapshots/root-20231101
+----
+
+== Совместимость
+
+* **ОС**: Debian Bookworm, Trixie
+* **Архитектуры**: amd64, arm64
+* **Ядро**: Linux 4.4+ (рекомендуется 5.4+ для полной функциональности)
+* **RAID уровни**: single, RAID0, RAID1, RAID10
+
+== Зависимости
+
+* `essential` - Базовые системные компоненты
+* `initramfs-tools` - Для интеграции с initramfs (рекомендуется)
+
+== Производительность
+
+=== Рекомендации по настройкам
+
+[source,bash]
+----
+# Оптимальные mount options для SSD
+defaults,noatime,compress=zstd:3,ssd,discard=async
+
+# Для HDD
+defaults,noatime,compress=zstd:1,autodefrag
+
+# Для высоконагруженных систем
+defaults,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2
+----
+
+=== Мониторинг
+
+[source,bash]
+----
+# Проверка использования пространства
+btrfs filesystem usage /mnt/btrfs
+
+# Статистика compression
+btrfs filesystem df /mnt/btrfs
+
+# Проверка ошибок
+btrfs scrub start /mnt/btrfs
+btrfs scrub status /mnt/btrfs
+----
+
+== Примеры использования
+
+=== Корневая файловая система
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: btrfs-server
+
+layer:
+  base: bookworm-minbase
+  sys-apps: btrfs
+  # другие слои
+
+btrfs:
+  enable: y
+----
+
+=== Enterprise storage с compression
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  sys-apps: btrfs
+  sys-apps: cryptsetup
+  sys-apps: mdadm
+
+btrfs:
+  enable: y
+
+cryptsetup:
+  enable: y
+
+mdadm:
+  enable: y
+----
+
+== Диагностика
+
+=== Проверка файловой системы
+
+[source,bash]
+----
+# Проверка и ремонт
+btrfs check --repair /dev/sdX
+
+# Проверка без ремонта
+btrfs check /dev/sdX
+
+# Очистка cache
+btrfs balance start -dusage=0 /mnt/btrfs
+----
+
+=== Производительность
+
+[source,bash]
+----
+# Тест скорости
+dd if=/dev/zero of=/mnt/btrfs/testfile bs=1M count=1024
+
+# Проверка fragmentation
+filefrag /mnt/btrfs/large-file
+
+# Статистика I/O
+iostat -x 1
+----
+
+=== Проблемы с загрузкой
+
+[source,bash]
+----
+# Проверка initramfs
+lsinitramfs /boot/initrd.img | grep btrfs
+
+# Регенерация initramfs
+update-initramfs -u -k all
+
+# Проверка модуля ядра
+modinfo btrfs
+----
+
+== Безопасность
+
+* **Snapshots**: Регулярные snapshots для disaster recovery
+* **Compression**: Снижает attack surface за счет меньшего объема данных
+* **Integrity**: Btrfs имеет встроенные механизмы проверки целостности
+* **Encryption**: Хорошо работает с LUKS/dm-crypt
+
+== Ссылки
+
+* https://btrfs.readthedocs.io/[Официальная документация Btrfs]
+* https://btrfs.wiki.kernel.org/[Btrfs Wiki]
+* https://github.com/kdave/btrfs-progs[Btrfs-progs repository]
+* https://www.kernel.org/doc/html/latest/filesystems/btrfs.html[Btrfs in Linux kernel docs]
