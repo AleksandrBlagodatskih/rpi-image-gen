@@ -1,0 +1,163 @@
+# METABEGIN
+# X-Env-Layer-Name: fail2ban
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Fail2Ban - intrusion prevention system that scans log files and bans IPs with too many failed login attempts
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+#
+# X-Env-VarPrefix: fail2ban
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable Fail2Ban intrusion prevention system
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: y
+#
+# X-Env-Var-backend: systemd
+# X-Env-Var-backend-Desc: Backend for log parsing (systemd, auto, pyinotify, gamin, polling)
+# X-Env-Var-backend-Required: n
+# X-Env-Var-backend-Valid: keywords:systemd,auto,pyinotify,gamin,polling
+# X-Env-Var-backend-Set: lazy
+#
+# X-Env-Var-log_level: INFO
+# X-Env-Var-log_level-Desc: Logging level for fail2ban
+# X-Env-Var-log_level-Required: n
+# X-Env-Var-log_level-Valid: keywords:CRITICAL,ERROR,WARNING,NOTICE,INFO,DEBUG,TRACEDEBUG
+# X-Env-Var-log_level-Set: lazy
+#
+# X-Env-Var-db_purge_age: 1d
+# X-Env-Var-db_purge_age-Desc: Database purge age for old entries
+# X-Env-Var-db_purge_age-Required: n
+# X-Env-Var-db_purge_age-Valid: string
+# X-Env-Var-db_purge_age-Set: lazy
+#
+# X-Env-Var-default_ban_time: 10m
+# X-Env-Var-default_ban_time-Desc: Default ban time for all jails
+# X-Env-Var-default_ban_time-Required: n
+# X-Env-Var-default_ban_time-Valid: string
+# X-Env-Var-default_ban_time-Set: lazy
+#
+# X-Env-Var-default_find_time: 10m
+# X-Env-Var-default_find_time-Desc: Default find time window for all jails
+# X-Env-Var-default_find_time-Required: n
+# X-Env-Var-default_find_time-Valid: string
+# X-Env-Var-default_find_time-Set: lazy
+#
+# X-Env-Var-default_max_retry: 5
+# X-Env-Var-default_max_retry-Desc: Default maximum retry count before ban
+# X-Env-Var-default_max_retry-Required: n
+# X-Env-Var-default_max_retry-Valid: int
+# X-Env-Var-default_max_retry-Set: lazy
+#
+# X-Env-Var-enabled_jails: sshd,dropbear
+# X-Env-Var-enabled_jails-Desc: Comma-separated list of jails to enable (sshd,dropbear,nginx-http-auth,etc)
+# X-Env-Var-enabled_jails-Required: n
+# X-Env-Var-enabled_jails-Valid: string
+# X-Env-Var-enabled_jails-Set: lazy
+#
+# X-Env-Var-ignore_ips: ""
+# X-Env-Var-ignore_ips-Desc: Comma-separated list of IPs/networks to ignore (never ban)
+# X-Env-Var-ignore_ips-Required: n
+# X-Env-Var-ignore_ips-Valid: string
+# X-Env-Var-ignore_ips-Set: lazy
+#
+# X-Env-Var-ban_action: iptables-multiport
+# X-Env-Var-ban_action-Desc: Default ban action (iptables-multiport,iptables-allports,firewallcmd-ipset,etc)
+# X-Env-Var-ban_action-Required: n
+# X-Env-Var-ban_action-Valid: string
+# X-Env-Var-ban_action-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - fail2ban
+  customize-hooks:
+    # Основная настройка Fail2Ban
+    - |
+      igconf isy IGconf_fail2ban_enable || exit 0
+
+      echo "Configuring Fail2Ban intrusion prevention system..."
+
+      # Создание резервной копии оригинальной конфигурации
+      chroot "$1" cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
+      # Настройка основных параметров в jail.local
+      JAIL_LOCAL="/etc/fail2ban/jail.local"
+
+      # Backend для парсинга логов
+      BACKEND=$(igconf getval IGconf_fail2ban_backend)
+      echo "Setting backend: $BACKEND"
+      chroot "$1" sed -i "s|^backend = auto|backend = $BACKEND|" "$JAIL_LOCAL"
+
+      # Уровень логирования
+      LOG_LEVEL=$(igconf getval IGconf_fail2ban_log_level)
+      echo "Setting log level: $LOG_LEVEL"
+      chroot "$1" sed -i "s|^loglevel = INFO|loglevel = $LOG_LEVEL|" "$JAIL_LOCAL"
+
+      # Время хранения записей в БД
+      DB_PURGE_AGE=$(igconf getval IGconf_fail2ban_db_purge_age)
+      echo "Setting db purge age: $DB_PURGE_AGE"
+      chroot "$1" sed -i "s|^dbpurgeage = 1d|dbpurgeage = $DB_PURGE_AGE|" "$JAIL_LOCAL"
+
+      # Параметры по умолчанию для всех jail
+      BAN_TIME=$(igconf getval IGconf_fail2ban_default_ban_time)
+      FIND_TIME=$(igconf getval IGconf_fail2ban_default_find_time)
+      MAX_RETRY=$(igconf getval IGconf_fail2ban_default_max_retry)
+
+      echo "Setting default jail parameters: bantime=$BAN_TIME, findtime=$FIND_TIME, maxretry=$MAX_RETRY"
+      chroot "$1" sed -i "s|^bantime  = 10m|bantime  = $BAN_TIME|" "$JAIL_LOCAL"
+      chroot "$1" sed -i "s|^findtime  = 10m|findtime  = $FIND_TIME|" "$JAIL_LOCAL"
+      chroot "$1" sed -i "s|^maxretry = 5|maxretry = $MAX_RETRY|" "$JAIL_LOCAL"
+
+      # Игнорируемые IP адреса
+      IGNORE_IPS=$(igconf getval IGconf_fail2ban_ignore_ips)
+      if [ -n "$IGNORE_IPS" ]; then
+        echo "Setting ignore IPs: $IGNORE_IPS"
+        # Заменяем запятые на пробелы для fail2ban формата
+        IGNORE_IPS_FORMATTED=$(echo "$IGNORE_IPS" | sed 's/,/ /g')
+        chroot "$1" sed -i "s|^ignoreip = 127.0.0.1/8 ::1|ignoreip = 127.0.0.1/8 ::1 $IGNORE_IPS_FORMATTED|" "$JAIL_LOCAL"
+      fi
+
+      # Действие при бане
+      BAN_ACTION=$(igconf getval IGconf_fail2ban_ban_action)
+      echo "Setting ban action: $BAN_ACTION"
+      chroot "$1" sed -i "s|^banaction = iptables-multiport|banaction = $BAN_ACTION|" "$JAIL_LOCAL"
+
+      # Включение выбранных jail
+      ENABLED_JAILS=$(igconf getval IGconf_fail2ban_enabled_jails)
+      if [ -n "$ENABLED_JAILS" ]; then
+        echo "Enabling jails: $ENABLED_JAILS"
+
+        # Сначала отключим все jails
+        chroot "$1" sed -i 's|^enabled = true|enabled = false|g' "$JAIL_LOCAL"
+
+        # Затем включим только выбранные
+        IFS=',' read -ra JAIL_ARRAY <<< "$ENABLED_JAILS"
+        for jail in "${JAIL_ARRAY[@]}"; do
+          jail=$(echo "$jail" | xargs)  # trim whitespace
+          if [ -n "$jail" ]; then
+            echo "Enabling jail: $jail"
+            # Ищем секцию [jail] и заменяем enabled = false на enabled = true
+            chroot "$1" sed -i "/^\[$jail\]/,/^\[/ { s|^enabled = false|enabled = true|; }" "$JAIL_LOCAL"
+          fi
+        done
+      fi
+
+      # Создание символической ссылки для systemd (если используется systemd backend)
+      if [ "$BACKEND" = "systemd" ]; then
+        echo "Setting up systemd backend..."
+        chroot "$1" mkdir -p /var/log/journal
+        # Убеждаемся что journald доступен
+        chroot "$1" systemctl enable systemd-journald || true
+      fi
+
+      # Запуск fail2ban
+      echo "Starting Fail2Ban service..."
+      chroot "$1" systemctl enable fail2ban
+      chroot "$1" systemctl start fail2ban || echo "Warning: Could not start fail2ban during build"
+
+      # Проверка статуса
+      echo "Fail2Ban status:"
+      chroot "$1" fail2ban-client status || echo "Fail2Ban client not available during build"
+
+      echo "Fail2Ban configuration completed successfully"
