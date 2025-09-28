@@ -1,0 +1,14 @@
+# Пример конфигурации с chrony и systemd networking
+---
+device:
+  layer: rpi5
+
+image:
+  layer: image-base
+  name: chrony-network-example
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  system: chrony-min      # chrony вместо systemd-timesyncd
+  network: systemd-net-min # systemd networking

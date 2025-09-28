@@ -1,0 +1,29 @@
+# Пример конфигурации с MD RAID1 + LUKS2 + Btrfs + полными Docker оптимизациями
+# Использование: rpi-image-gen build -c examples/config-mdraid-luks-btrfs-docker.yaml
+#
+# Включает:
+# - Автоматическую настройку daemon.json для Btrfs
+# - Systemd оптимизации для RAID1 + LUKS2
+# - Sysctl оптимизации для контейнеров
+
+device:
+  layer: rpi5  # Raspberry Pi 5 с Radxa SATA Penta HAT
+  user1: docker-user
+
+image:
+  layer: image-mbr-mdraid-luks-btrfs
+  boot_part_size: 200M
+  mdraid_devices: /dev/sda,/dev/sdb  # SATA SSD диски для RAID1
+  luks_keyfile: /boot/luks-key
+
+layer:
+  base: bookworm-minbase
+  device: radxa-sata-penta-hat      # Обязателен для SATA SSD
+  sys-apps: cryptsetup              # Обязателен для LUKS шифрования
+  sys-apps: btrfs                   # Обязателен для Btrfs
+  mdadm: mdadm                      # Обязателен для RAID
+  docker: docker-debian-bookworm    # Docker с полными Btrfs оптимизациями
+
+# Дополнительные параметры Docker
+docker:
+  trust_user1: y                    # Разрешить пользователю запускать Docker без sudo

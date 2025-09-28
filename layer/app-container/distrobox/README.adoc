@@ -25,17 +25,20 @@
 
 Слой работает с любыми базовыми образами Debian:
 
-* `bookworm-minbase` - Debian Bookworm
-* `trixie-minbase` - Debian Trixie
+* `bookworm-minbase` - Debian Bookworm (стабильный)
+* `trixie-minbase` - Debian Trixie (тестируемый)
 * `rpi-debian-bookworm` - Raspberry Pi Debian Bookworm
 * `rpi-debian-trixie` - Raspberry Pi Debian Trixie
+
+По умолчанию используется Debian Bookworm. Для использования Trixie укажите переменную `distrobox_distro=trixie`.
 
 Container manager может быть установлен отдельно или автоматически определен:
 
 == Переменные конфигурации
 
 * `distrobox_container_manager`: Менеджер контейнеров (auto/docker/podman/lilipod) [по умолчанию: docker]
-* `distrobox_default_image`: Образ по умолчанию для новых контейнеров [по умолчанию: debian:bookworm]
+* `distrobox_distro`: Целевой дистрибутив Debian (bookworm/trixie) [по умолчанию: bookworm]
+* `distrobox_default_image`: Образ по умолчанию для новых контейнеров [по умолчанию: debian:bookworm или debian:trixie]
 * `distrobox_generate_entry`: Генерировать записи в меню приложений [по умолчанию: y]
 * `distrobox_non_interactive`: Пропускать интерактивные запросы [по умолчанию: n]
 
@@ -96,6 +99,38 @@ distrobox ephemeral --image ubuntu:22.04
 
 # Клонировать существующий контейнер
 distrobox create --name dev2 --clone dev1
+----
+
+=== Использование с Debian Trixie
+
+[source,bash]
+----
+# Создать контейнер с Debian Trixie (используйте переменную distrobox_distro=trixie)
+distrobox create --name trixie-dev --image debian:trixie
+
+# Войти в контейнер Trixie
+distrobox enter trixie-dev
+
+# Trixie содержит более новые версии ПО
+sudo apt update && sudo apt install -y python3.11 python3.11-venv
+----
+
+=== Использование assemble файлов
+
+[source,ini]
+----
+# ~/.config/distrobox/assemblies/trixie-dev.ini
+[trixie-dev]
+image=debian:trixie
+additional_packages=build-essential git vim curl wget python3 python3-pip python3-venv nodejs npm clang cmake ninja-build
+init_hooks=~/.config/distrobox/init-hooks/trixie-dev.sh
+nvidia=false
+----
+
+[source,bash]
+----
+# Создать контейнер из конфигурации
+distrobox assemble create --file ~/.config/distrobox/assemblies/trixie-dev.ini
 ----
 
 == Интеграция с хост-системой

@@ -1,0 +1,201 @@
+# METABEGIN
+# X-Env-Layer-Name: auditd
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Audit daemon for system logging and compliance monitoring
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+#
+# X-Env-VarPrefix: auditd
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable audit daemon for system monitoring
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: y
+#
+# X-Env-Var-max_log_file: 8
+# X-Env-Var-max_log_file-Desc: Maximum number of audit log files
+# X-Env-Var-max_log_file-Required: n
+# X-Env-Var-max_log_file-Valid: int
+# X-Env-Var-max_log_file-Set: lazy
+#
+# X-Env-Var-max_log_file_action: rotate
+# X-Env-Var-max_log_file_action-Desc: Action when max log files reached (rotate, keep_logs, syslog, suspend, single, halt)
+# X-Env-Var-max_log_file_action-Required: n
+# X-Env-Var-max_log_file_action-Valid: keywords:rotate,keep_logs,syslog,suspend,single,halt
+# X-Env-Var-max_log_file_action-Set: lazy
+#
+# X-Env-Var-space_left: 75
+# X-Env-Var-space_left-Desc: Space left threshold (MB) before action
+# X-Env-Var-space_left-Required: n
+# X-Env-Var-space_left-Valid: int
+# X-Env-Var-space_left-Set: lazy
+#
+# X-Env-Var-space_left_action: syslog
+# X-Env-Var-space_left_action-Desc: Action when space left threshold reached
+# X-Env-Var-space_left_action-Required: n
+# X-Env-Var-space_left_action-Valid: keywords:ignore,syslog,suspend,single,halt
+# X-Env-Var-space_left_action-Set: lazy
+#
+# X-Env-Var-admin_space_left: 50
+# X-Env-Var-admin_space_left-Desc: Admin space left threshold (MB)
+# X-Env-Var-admin_space_left-Required: n
+# X-Env-Var-admin_space_left-Valid: int
+# X-Env-Var-admin_space_left-Set: lazy
+#
+# X-Env-Var-admin_space_left_action: single
+# X-Env-Var-admin_space_left_action-Desc: Action when admin space left threshold reached
+# X-Env-Var-admin_space_left_action-Required: n
+# X-Env-Var-admin_space_left_action-Valid: keywords:ignore,syslog,suspend,single,halt
+# X-Env-Var-admin_space_left_action-Set: lazy
+#
+# X-Env-Var-disk_full_action: suspend
+# X-Env-Var-disk_full_action-Desc: Action when disk is full
+# X-Env-Var-disk_full_action-Required: n
+# X-Env-Var-disk_full_action-Valid: keywords:ignore,syslog,suspend,single,halt
+# X-Env-Var-disk_full_action-Set: lazy
+#
+# X-Env-Var-disk_error_action: syslog
+# X-Env-Var-disk_error_action-Desc: Action when disk error occurs
+# X-Env-Var-disk_error_action-Required: n
+# X-Env-Var-disk_error_action-Valid: keywords:ignore,syslog,suspend,single,halt
+# X-Env-Var-disk_error_action-Set: lazy
+#
+# X-Env-Var-flush: incremental_async
+# X-Env-Var-flush-Desc: Audit log flush behavior (none, incremental, data, sync)
+# X-Env-Var-flush-Required: n
+# X-Env-Var-flush-Valid: keywords:none,incremental,incremental_async,data,sync
+# X-Env-Var-flush-Set: lazy
+#
+# X-Env-Var-freq: 50
+# X-Env-Var-freq-Desc: Audit message frequency (records)
+# X-Env-Var-freq-Required: n
+# X-Env-Var-freq-Valid: int
+# X-Env-Var-freq-Set: lazy
+#
+# X-Env-Var-num_logs: 5
+# X-Env-Var-num_logs-Desc: Number of audit log files to keep
+# X-Env-Var-num_logs-Required: n
+# X-Env-Var-num_logs-Valid: int
+# X-Env-Var-num_logs-Set: lazy
+#
+# X-Env-Var-dispatcher: /sbin/audispd
+# X-Env-Var-dispatcher-Desc: Audit dispatcher program
+# X-Env-Var-dispatcher-Required: n
+# X-Env-Var-dispatcher-Valid: string
+# X-Env-Var-dispatcher-Set: lazy
+#
+# X-Env-Var-name_format: hostname
+# X-Env-Var-name_format-Desc: Audit log filename format (none, hostname, fqd, numeric, user)
+# X-Env-Var-name_format-Required: n
+# X-Env-Var-name_format-Valid: keywords:none,hostname,fqd,numeric,user
+# X-Env-Var-name_format-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - auditd
+  customize-hooks:
+    # Настройка auditd для системного мониторинга
+    - |
+      igconf isy IGconf_auditd_enable || exit 0
+
+      echo "Configuring audit daemon for system monitoring..."
+
+      # Создание конфигурационного файла auditd
+      AUDITD_CONF="/etc/audit/auditd.conf"
+      chroot "$1" cp /usr/share/doc/auditd/examples/auditd.conf "$AUDITD_CONF"
+
+      # Настройка основных параметров
+      MAX_LOG_FILE=$(igconf getval IGconf_auditd_max_log_file)
+      MAX_LOG_ACTION=$(igconf getval IGconf_auditd_max_log_file_action)
+      SPACE_LEFT=$(igconf getval IGconf_auditd_space_left)
+      SPACE_LEFT_ACTION=$(igconf getval IGconf_auditd_space_left_action)
+      ADMIN_SPACE_LEFT=$(igconf getval IGconf_auditd_admin_space_left)
+      ADMIN_SPACE_ACTION=$(igconf getval IGconf_auditd_admin_space_left_action)
+      DISK_FULL_ACTION=$(igconf getval IGconf_auditd_disk_full_action)
+      DISK_ERROR_ACTION=$(igconf getval IGconf_auditd_disk_error_action)
+      FLUSH=$(igconf getval IGconf_auditd_flush)
+      FREQ=$(igconf getval IGconf_auditd_freq)
+      NUM_LOGS=$(igconf getval IGconf_auditd_num_logs)
+      DISPATCHER=$(igconf getval IGconf_auditd_dispatcher)
+      NAME_FORMAT=$(igconf getval IGconf_auditd_name_format)
+
+      echo "Setting auditd parameters: max_log_file=$MAX_LOG_FILE, space_left=$SPACE_LEFT, flush=$FLUSH"
+
+      # Применение настроек
+      chroot "$1" sed -i "s|^max_log_file = 8|max_log_file = $MAX_LOG_FILE|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^max_log_file_action = rotate|max_log_file_action = $MAX_LOG_ACTION|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^space_left = 75|space_left = $SPACE_LEFT|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^space_left_action = syslog|space_left_action = $SPACE_LEFT_ACTION|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^admin_space_left = 50|admin_space_left = $ADMIN_SPACE_LEFT|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^admin_space_left_action = single|admin_space_left_action = $ADMIN_SPACE_ACTION|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^disk_full_action = suspend|disk_full_action = $DISK_FULL_ACTION|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^disk_error_action = syslog|disk_error_action = $DISK_ERROR_ACTION|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^flush = incremental_async|flush = $FLUSH|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^freq = 50|freq = $FREQ|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^num_logs = 5|num_logs = $NUM_LOGS|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^dispatcher = /sbin/audispd|dispatcher = $DISPATCHER|" "$AUDITD_CONF"
+      chroot "$1" sed -i "s|^name_format = hostname|name_format = $NAME_FORMAT|" "$AUDITD_CONF"
+
+      # Создание базовых правил аудита для системы
+      AUDIT_RULES="/etc/audit/audit.rules"
+      chroot "$1" cp /usr/share/doc/auditd/examples/audit.rules "$AUDIT_RULES"
+
+      # Добавление базовых правил для мониторинга
+      cat >> "$1$AUDIT_RULES" << 'EOF'
+
+# Basic system monitoring rules
+# Monitor authentication events
+-w /var/log/auth.log -p wa -k auth
+-w /var/log/sudo.log -p wa -k sudo
+
+# Monitor system calls that could be used for privilege escalation
+-a exit,always -F arch=b64 -S execve -k exec
+-a exit,always -F arch=b32 -S execve -k exec
+
+# Monitor changes to system configuration
+-w /etc/passwd -p wa -k passwd
+-w /etc/shadow -p wa -k shadow
+-w /etc/group -p wa -k group
+-w /etc/sudoers -p wa -k sudoers
+
+# Monitor network configuration changes
+-w /etc/network/ -p wa -k network
+-w /etc/hosts -p wa -k hosts
+
+# Monitor service management
+-w /etc/systemd/ -p wa -k systemd
+-w /var/log/systemd/ -p wa -k systemd
+
+# Monitor kernel module loading
+-w /sbin/insmod -p x -k modules
+-w /sbin/rmmod -p x -k modules
+-w /sbin/modprobe -p x -k modules
+
+# Monitor file system mounts
+-a exit,always -F arch=b64 -S mount -k mount
+-a exit,always -F arch=b32 -S mount -k mount
+
+# Monitor privilege escalation attempts
+-a exit,always -F arch=b64 -S setuid -k setuid
+-a exit,always -F arch=b32 -S setuid -k setuid
+-a exit,always -F arch=b64 -S setgid -k setgid
+-a exit,always -F arch=b32 -S setgid -k setgid
+
+# Monitor changes to critical files
+-w /etc/audit/ -p wa -k audit
+-w /etc/cron* -p wa -k cron
+-w /var/spool/cron/ -p wa -k cron
+EOF
+
+      # Включение и запуск auditd сервиса
+      echo "Enabling auditd service..."
+      chroot "$1" systemctl enable auditd
+      chroot "$1" systemctl start auditd || echo "Warning: Could not start auditd during build"
+
+      # Проверка статуса
+      echo "Audit daemon configuration completed"
+      chroot "$1" auditctl -s || echo "Audit daemon status check completed"
+
+      echo "Audit daemon setup completed successfully"

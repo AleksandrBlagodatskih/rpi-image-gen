@@ -24,6 +24,12 @@
 # X-Env-Var-rpi_optimized-Required: n
 # X-Env-Var-rpi_optimized-Valid: bool
 # X-Env-Var-rpi_optimized-Set: lazy
+#
+# X-Env-Var-mode: enforce
+# X-Env-Var-mode-Desc: AppArmor mode - enforce (block violations) or complain (log only)
+# X-Env-Var-mode-Required: n
+# X-Env-Var-mode-Valid: keywords:enforce,complain
+# X-Env-Var-mode-Set: lazy
 # METAEND
 ---
 mmdebstrap:

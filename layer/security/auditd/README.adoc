@@ -1,0 +1,206 @@
+= Auditd Layer
+
+== Описание
+
+Auditd (audit daemon) предоставляет комплексное системное логирование для мониторинга безопасности и compliance. Слой настраивает auditd в соответствии с CIS benchmarks для enterprise-grade аудита системных событий.
+
+== Основные возможности
+
+* **Системное логирование**: Мониторинг всех системных вызовов и событий
+* **Аутентификация**: Отслеживание попыток входа и аутентификации
+* **Файловые операции**: Мониторинг изменений критически важных файлов
+* **Привилегии**: Отслеживание эскалации привилегий и sudo команд
+* **Сеть**: Мониторинг сетевой конфигурации и событий
+* **Compliance**: Соответствие CIS и другим стандартам безопасности
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: auditd
+----
+
+=== Расширенная конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: auditd
+
+auditd:
+  enable: y                    # Включить auditd
+  max_log_file: 8             # Максимум лог файлов
+  max_log_file_action: rotate  # Действие при достижении лимита
+  space_left: 75              # Порог свободного места (MB)
+  space_left_action: syslog   # Действие при низком пространстве
+  admin_space_left: 50        # Админ порог (MB)
+  admin_space_left_action: single  # Действие для админа
+  disk_full_action: suspend   # Действие при полном диске
+  disk_error_action: syslog   # Действие при ошибках диска
+  flush: incremental_async     # Режим сброса логов
+  freq: 50                    # Частота сообщений аудита
+  num_logs: 5                 # Количество хранимых логов
+  dispatcher: /sbin/audispd   # Диспетчер аудита
+  name_format: hostname       # Формат именования логов
+----
+
+== Правила аудита
+
+Слой автоматически настраивает базовые правила мониторинга:
+
+* **Аутентификация**: `/var/log/auth.log`, `/var/log/sudo.log`
+* **Системные вызовы**: execve, setuid, setgid, mount
+* **Критические файлы**: `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`
+* **Сетевая конфигурация**: `/etc/network/`, `/etc/hosts`
+* **Службы**: `/etc/systemd/`, модули ядра
+* **Привилегии**: эскалация привилегий
+
+== Использование
+
+=== Проверка статуса
+
+[source,bash]
+----
+# Статус auditd сервиса
+sudo systemctl status auditd
+
+# Статистика аудита
+sudo auditctl -s
+
+# Просмотр активных правил
+sudo auditctl -l
+
+# Просмотр логов аудита
+sudo ausearch -k sudo
+sudo ausearch -k auth
+----
+
+=== Управление правилами
+
+[source,bash]
+----
+# Добавление пользовательского правила
+sudo auditctl -w /etc/important-file -p wa -k important
+
+# Удаление правила
+sudo auditctl -d /etc/important-file
+
+# Перезагрузка правил
+sudo service auditd reload
+----
+
+=== Анализ логов
+
+[source,bash]
+----
+# Поиск событий аутентификации
+sudo ausearch -m USER_AUTH
+
+# Поиск событий sudo
+sudo ausearch -m USER_ACCT
+
+# Поиск событий изменения файлов
+sudo ausearch -k passwd
+
+# Поиск событий за последний час
+sudo ausearch -ts recent
+----
+
+== Производительность
+
+* **Асинхронный режим**: `flush = incremental_async` для минимального влияния
+* **Оптимизированная частота**: 50 записей для баланса между производительностью и мониторингом
+* **Автоматическая ротация**: Предотвращает переполнение диска
+* **Сжатие логов**: Автоматическое сжатие старых логов
+
+== Безопасность
+
+* **Независимый аудит**: Работает независимо от syslog
+* **Защищенные логи**: Логи недоступны для изменения после записи
+* **Целостность**: Проверка целостности логов
+* **Compliance**: Соответствует требованиям CIS, PCI DSS, HIPAA
+
+== Устранение неисправностей
+
+=== Auditd не запускается
+
+[source,bash]
+----
+# Проверить конфигурацию
+sudo auditctl -s
+
+# Просмотреть системные логи
+sudo journalctl -u auditd
+
+# Перезапустить сервис
+sudo systemctl restart auditd
+----
+
+=== Логи не записываются
+
+[source,bash]
+----
+# Проверить правила
+sudo auditctl -l
+
+# Проверить пространство
+df /var/log/audit/
+
+# Проверить права доступа
+ls -la /var/log/audit/
+----
+
+=== Проблемы с производительностью
+
+[source,bash]
+----
+# Уменьшить частоту аудита
+sudo auditctl -e 0  # Отключить аудит
+# Затем постепенно включить нужные правила
+
+# Настроить буферизацию
+# В auditd.conf изменить flush = sync на flush = incremental
+----
+
+== Примеры конфигурации
+
+=== Минимальная настройка
+
+[source,yaml]
+----
+auditd:
+  enable: y
+  max_log_file: 5
+  space_left: 50
+----
+
+=== Максимальная безопасность
+
+[source,yaml]
+----
+auditd:
+  enable: y
+  max_log_file: 10
+  max_log_file_action: keep_logs
+  space_left: 100
+  space_left_action: syslog
+  admin_space_left: 75
+  admin_space_left_action: single
+  disk_full_action: halt
+  disk_error_action: syslog
+  flush: sync
+  freq: 20
+  num_logs: 10
+----
+
+== Ссылки
+
+* https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/configuring-auditd-for-security-audit-streams_security-hardening[Red Hat Auditd Documentation]
+* https://github.com/linux-audit/audit-userspace[Linux Audit Userspace]
+* https://www.kernel.org/doc/html/latest/admin-guide/audit/audit-rules.html[Linux Audit Rules Documentation]
+* https://www.cisecurity.org/benchmark/debian_linux[CIS Debian Benchmarks]

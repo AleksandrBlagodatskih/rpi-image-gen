@@ -1,0 +1,284 @@
+# METABEGIN
+# X-Env-Layer-Name: sudo-logging
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Sudo command logging and audit trail for privileged operations
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+#
+# X-Env-VarPrefix: sudo_logging
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable sudo command logging and audit
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: y
+#
+# X-Env-Var-log_file: /var/log/sudo.log
+# X-Env-Var-log_file-Desc: Sudo log file location
+# X-Env-Var-log_file-Required: n
+# X-Env-Var-log_file-Valid: string
+# X-Env-Var-log_file-Set: lazy
+#
+# X-Env-Var-log_format: "%h %e[%u] %t : %p ; %a : TTY=%t ; PWD=%d ; USER=%u ; TSID=%s ; COMMAND=%c"
+# X-Env-Var-log_format-Desc: Sudo log format with detailed information
+# X-Env-Var-log_format-Required: n
+# X-Env-Var-log_format-Valid: string
+# X-Env-Var-log_format-Set: lazy
+#
+# X-Env-Var-syslog_enable: y
+# X-Env-Var-syslog_enable-Desc: Also log sudo commands to syslog
+# X-Env-Var-syslog_enable-Required: n
+# X-Env-Var-syslog_enable-Valid: bool
+# X-Env-Var-syslog_enable-Set: lazy
+#
+# X-Env-Var-syslog_facility: authpriv
+# X-Env-Var-syslog_facility-Desc: Syslog facility for sudo logs
+# X-Env-Var-syslog_facility-Required: n
+# X-Env-Var-syslog_facility-Valid: keywords:auth,authpriv,daemon,user,local0,local1,local2,local3,local4,local5,local6,local7
+# X-Env-Var-syslog_facility-Set: lazy
+#
+# X-Env-Var-syslog_priority: notice
+# X-Env-Var-syslog_priority-Desc: Syslog priority level
+# X-Env-Var-syslog_priority-Required: n
+# X-Env-Var-syslog_priority-Valid: keywords:emerg,alert,crit,err,warning,notice,info,debug
+# X-Env-Var-syslog_priority-Set: lazy
+#
+# X-Env-Var-auth_timeout: 15
+# X-Env-Var-auth_timeout-Desc: Authentication timeout in minutes
+# X-Env-Var-auth_timeout-Required: n
+# X-Env-Var-auth_timeout-Valid: int
+# X-Env-Var-auth_timeout-Set: lazy
+#
+# X-Env-Var-timestamp_timeout: 15
+# X-Env-Var-timestamp_timeout-Desc: Timestamp timeout in minutes
+# X-Env-Var-timestamp_timeout-Required: n
+# X-Env-Var-timestamp_timeout-Valid: int
+# X-Env-Var-timestamp_timeout-Set: lazy
+#
+# X-Env-Var-passwd_timeout: 0
+# X-Env-Var-passwd_timeout-Desc: Password timeout (0 = never timeout)
+# X-Env-Var-passwd_timeout-Required: n
+# X-Env-Var-passwd_timeout-Valid: int
+# X-Env-Var-passwd_timeout-Set: lazy
+#
+# X-Env-Var-badpass_message: "Sorry, try again."
+# X-Env-Var-badpass_message-Desc: Message shown on bad password
+# X-Env-Var-badpass_message-Required: n
+# X-Env-Var-badpass_message-Valid: string
+# X-Env-Var-badpass_message-Set: lazy
+#
+# X-Env-Var-lecture: once
+# X-Env-Var-lecture-Desc: When to show sudo lecture (never, once, always)
+# X-Env-Var-lecture-Required: n
+# X-Env-Var-lecture-Valid: keywords:never,once,always
+# X-Env-Var-lecture-Set: lazy
+#
+# X-Env-Var-insults: n
+# X-Env-Var-insults-Desc: Enable sudo insults for bad passwords
+# X-Env-Var-insults-Required: n
+# X-Env-Var-insults-Valid: bool
+# X-Env-Var-insults-Set: lazy
+#
+# X-Env-Var-requiretty: n
+# X-Env-Var-requiretty-Desc: Require TTY for sudo commands
+# X-Env-Var-requiretty-Required: n
+# X-Env-Var-requiretty-Valid: bool
+# X-Env-Var-requiretty-Set: lazy
+#
+# X-Env-Var-visiblepw: n
+# X-Env-Var-visiblepw-Desc: Show password on screen (for accessibility)
+# X-Env-Var-visiblepw-Required: n
+# X-Env-Var-visiblepw-Valid: bool
+# X-Env-Var-visiblepw-Set: lazy
+#
+# X-Env-Var-loglinelen: 0
+# X-Env-Var-loglinelen-Desc: Maximum line length for sudo logs (0 = unlimited)
+# X-Env-Var-loglinelen-Required: n
+# X-Env-Var-loglinelen-Valid: int
+# X-Env-Var-loglinelen-Set: lazy
+#
+# X-Env-Var-compresslogs: y
+# X-Env-Var-compresslogs-Desc: Enable log compression
+# X-Env-Var-compresslogs-Required: n
+# X-Env-Var-compresslogs-Valid: bool
+# X-Env-Var-compresslogs-Set: lazy
+#
+# X-Env-Var-maxlogsize: 0
+# X-Env-Var-maxlogsize-Desc: Maximum log file size before rotation (0 = no limit)
+# X-Env-Var-maxlogsize-Required: n
+# X-Env-Var-maxlogsize-Valid: int
+# X-Env-Var-maxlogsize-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - sudo
+    - logrotate
+  customize-hooks:
+    # Настройка логирования sudo команд
+    - |
+      igconf isy IGconf_sudo_logging_enable || exit 0
+
+      echo "Configuring sudo command logging and audit trail..."
+
+      # Создание основного файла sudoers если не существует
+      if [ ! -f "$1/etc/sudoers" ]; then
+        echo "Warning: /etc/sudoers not found, skipping sudo configuration"
+        exit 0
+      fi
+
+      # Настройка логирования sudo
+      LOG_FILE=$(igconf getval IGconf_sudo_logging_log_file)
+      LOG_FORMAT=$(igconf getval IGconf_sudo_logging_log_format)
+
+      echo "Setting sudo log file: $LOG_FILE"
+      echo "Setting sudo log format with detailed information"
+
+      # Создание/обновление конфигурации sudoers
+      SUDOERS_FILE="/etc/sudoers"
+
+      # Проверяем есть ли уже Defaults logfile
+      if ! grep -q "^Defaults.*logfile" "$1$SUDOERS_FILE"; then
+        # Добавляем в начало файла после комментариев
+        chroot "$1" sed -i '1a Defaults logfile="'$LOG_FILE'"' "$SUDOERS_FILE"
+        chroot "$1" sed -i '1a Defaults loglinelen=0' "$SUDOERS_FILE"
+        echo "Added sudo log file configuration"
+      else
+        # Обновляем существующий logfile
+        chroot "$1" sed -i "s|^Defaults.*logfile=.*|Defaults logfile=\"$LOG_FILE\"|" "$SUDOERS_FILE"
+        echo "Updated existing sudo log file configuration"
+      fi
+
+      # Настройка syslog логирования если включено
+      if igconf isy IGconf_sudo_logging_syslog_enable; then
+        SYSLOG_FACILITY=$(igconf getval IGconf_sudo_logging_syslog_facility)
+        SYSLOG_PRIORITY=$(igconf getval IGconf_sudo_logging_syslog_priority)
+
+        if ! grep -q "^Defaults.*syslog" "$1$SUDOERS_FILE"; then
+          chroot "$1" sed -i '1a Defaults syslog='$SYSLOG_FACILITY' '$1$SUDOERS_FILE"
+          echo "Added sudo syslog configuration"
+        else
+          chroot "$1" sed -i "s|^Defaults.*syslog=.*|Defaults syslog=$SYSLOG_FACILITY|" "$SUDOERS_FILE"
+          echo "Updated existing sudo syslog configuration"
+        fi
+      fi
+
+      # Настройка таймаутов аутентификации
+      AUTH_TIMEOUT=$(igconf getval IGconf_sudo_logging_auth_timeout)
+      TIMESTAMP_TIMEOUT=$(igconf getval IGconf_sudo_logging_timestamp_timeout)
+      PASSWD_TIMEOUT=$(igconf getval IGconf_sudo_logging_passwd_timeout)
+
+      if [ "$AUTH_TIMEOUT" -gt 0 ] && ! grep -q "^Defaults.*timestamp_timeout" "$1$SUDOERS_FILE"; then
+        chroot "$1" sed -i '1a Defaults timestamp_timeout='$AUTH_TIMEOUT "$SUDOERS_FILE"
+        echo "Set sudo authentication timeout: $AUTH_TIMEOUT minutes"
+      fi
+
+      if [ "$TIMESTAMP_TIMEOUT" -gt 0 ] && ! grep -q "^Defaults.*auth_timeout" "$1$SUDOERS_FILE"; then
+        chroot "$1" sed -i '1a Defaults auth_timeout='$TIMESTAMP_TIMEOUT "$SUDOERS_FILE"
+        echo "Set sudo timestamp timeout: $TIMESTAMP_TIMEOUT minutes"
+      fi
+
+      if [ "$PASSWD_TIMEOUT" -gt 0 ] && ! grep -q "^Defaults.*passwd_timeout" "$1$SUDOERS_FILE"; then
+        chroot "$1" sed -i '1a Defaults passwd_timeout='$PASSWD_TIMEOUT "$SUDOERS_FILE"
+        echo "Set sudo password timeout: $PASSWD_TIMEOUT minutes"
+      fi
+
+      # Настройка сообщений и поведения
+      BADPASS_MESSAGE=$(igconf getval IGconf_sudo_logging_badpass_message)
+      LECTURE=$(igconf getval IGconf_sudo_logging_lecture)
+
+      if [ -n "$BADPASS_MESSAGE" ] && ! grep -q "^Defaults.*badpass_message" "$1$SUDOERS_FILE"; then
+        chroot "$1" sed -i '1a Defaults badpass_message="'$BADPASS_MESSAGE'"' "$SUDOERS_FILE"
+        echo "Set custom bad password message"
+      fi
+
+      if [ "$LECTURE" != "once" ] && ! grep -q "^Defaults.*lecture" "$1$SUDOERS_FILE"; then
+        chroot "$1" sed -i '1a Defaults lecture='$LECTURE "$SUDOERS_FILE"
+        echo "Set sudo lecture mode: $LECTURE"
+      fi
+
+      # Включение/выключение insults
+      if igconf isy IGconf_sudo_logging_insults; then
+        if ! grep -q "^Defaults.*insults" "$1$SUDOERS_FILE"; then
+          chroot "$1" sed -i '1a Defaults insults' "$SUDOERS_FILE"
+          echo "Enabled sudo insults"
+        fi
+      else
+        # Удаляем insults если они есть
+        chroot "$1" sed -i '/^Defaults.*insults/d' "$SUDOERS_FILE"
+        echo "Disabled sudo insults"
+      fi
+
+      # Настройка requiretty
+      if igconf isy IGconf_sudo_logging_requiretty; then
+        if ! grep -q "^Defaults.*requiretty" "$1$SUDOERS_FILE"; then
+          chroot "$1" sed -i '1a Defaults requiretty' "$SUDOERS_FILE"
+          echo "Enabled requiretty for sudo"
+        fi
+      else
+        chroot "$1" sed -i '/^Defaults.*requiretty/d' "$SUDOERS_FILE"
+        echo "Disabled requiretty for sudo"
+      fi
+
+      # Настройка visiblepw
+      if igconf isy IGconf_sudo_logging_visiblepw; then
+        if ! grep -q "^Defaults.*visiblepw" "$SUDOERS_FILE"; then
+          chroot "$1" sed -i '1a Defaults visiblepw' "$SUDOERS_FILE"
+          echo "Enabled visiblepw for sudo"
+        fi
+      else
+        chroot "$1" sed -i '/^Defaults.*visiblepw/d' "$SUDOERS_FILE"
+        echo "Disabled visiblepw for sudo"
+      fi
+
+      # Настройка loglinelen
+      LOGLINELEN=$(igconf getval IGconf_sudo_logging_loglinelen)
+      if [ "$LOGLINELEN" -gt 0 ]; then
+        chroot "$1" sed -i "s|^Defaults.*loglinelen=.*|Defaults loglinelen=$LOGLINELEN|" "$SUDOERS_FILE"
+        echo "Set sudo log line length: $LOGLINELEN"
+      fi
+
+      # Настройка ротации логов
+      if igconf isy IGconf_sudo_logging_compresslogs; then
+        LOGROTATE_FILE="/etc/logrotate.d/sudo"
+        cat > "$1$LOGROTATE_FILE" << EOF
+# Sudo log rotation
+# Generated by rpi-image-gen sudo-logging layer
+
+$LOG_FILE {
+    daily
+    missingok
+    rotate 52
+    compress
+    delaycompress
+    notifempty
+    create 640 root adm
+    postrotate
+        systemctl reload rsyslog >/dev/null 2>&1 || true
+    endscript
+}
+EOF
+        echo "Created sudo logrotate configuration"
+      fi
+
+      # Настройка размера логов
+      MAXLOGSIZE=$(igconf getval IGconf_sudo_logging_maxlogsize)
+      if [ "$MAXLOGSIZE" -gt 0 ]; then
+        # Обновляем logrotate если он создан
+        if [ -f "$1/etc/logrotate.d/sudo" ]; then
+          chroot "$1" sed -i "s|^    rotate 52|    size $MAXLOGSIZE\n    rotate 52|" "$1/etc/logrotate.d/sudo"
+          echo "Set sudo log max size: $MAXLOGSIZE"
+        fi
+      fi
+
+      # Создание директории для логов если она не существует
+      chroot "$1" mkdir -p "$(dirname "$LOG_FILE")"
+      chroot "$1" touch "$LOG_FILE"
+      chroot "$1" chmod 600 "$LOG_FILE"
+      chroot "$1" chown root:adm "$LOG_FILE"
+
+      # Тестирование конфигурации
+      echo "Testing sudo configuration..."
+      chroot "$1" visudo -c || echo "Warning: sudo configuration syntax check failed"
+
+      echo "Sudo logging and audit trail configured successfully"

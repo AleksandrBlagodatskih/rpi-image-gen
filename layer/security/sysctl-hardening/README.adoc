@@ -1,0 +1,251 @@
+= Sysctl Hardening Layer
+
+== Описание
+
+Sysctl-hardening слой применяет системные настройки безопасности через sysctl параметры в соответствии с CIS Level 2 benchmarks. Эти настройки защищают систему от различных типов атак и улучшают общую безопасность.
+
+== Настройки безопасности
+
+=== Ptrace Restriction
+[source,bash]
+----
+kernel.yama.ptrace_scope = 1
+----
+*Предотвращает отладку процессов другими пользователями*
+
+=== Address Space Layout Randomization (ASLR)
+[source,bash]
+----
+kernel.randomize_va_space = 2
+----
+*Защита от memory corruption атак через рандомизацию адресного пространства*
+
+=== TCP SYN Cookies
+[source,bash]
+----
+net.ipv4.tcp_syncookies = 1
+----
+*Защита от SYN flood атак*
+
+=== Source Route Validation
+[source,bash]
+----
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+----
+*Проверка обратного пути пакетов (RFC compliance)*
+
+=== Core Dump Restriction
+[source,bash]
+----
+fs.suid_dumpable = 0
+----
+*Предотвращает утечку памяти privileged процессов*
+
+=== ICMP Redirect Protection
+[source,bash]
+----
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.all.secure_redirects = 0
+----
+*Игнорирование ICMP redirects (защита от man-in-the-middle)*
+
+=== Source Routed Packets
+[source,bash]
+----
+net.ipv4.conf.all.accept_source_route = 0
+----
+*Игнорирование source routed пакетов*
+
+=== Broadcast Protection
+[source,bash]
+----
+net.ipv4.icmp_echo_ignore_broadcasts = 1
+----
+*Игнорирование ICMP echo запросов к broadcast адресам*
+
+=== Martian Packet Logging
+[source,bash]
+----
+net.ipv4.conf.all.log_martians = 1
+----
+*Логирование пакетов с невозможными адресами*
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: sysctl-hardening
+----
+
+=== Полная конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: sysctl-hardening
+
+sysctl_hardening:
+  enable: y                        # Включить hardening
+  ptrace_restrict: y              # Ограничить ptrace
+  aslr_enable: y                  # Включить ASLR
+  tcp_syn_cookies: y              # TCP SYN cookies
+  source_route_validation: y      # Source route validation
+  core_dump_restrict: y           # Ограничить core dumps
+  icmp_redirect_ignore: y         # Игнорировать ICMP redirects
+  source_routed_packets_ignore: y # Игнорировать source routed пакеты
+  broadcast_requests_ignore: y    # Игнорировать broadcast запросы
+  icmp_echo_ignore_broadcasts: y  # Игнорировать ICMP echo к broadcast
+  log_martian_packets: y          # Логировать martian пакеты
+----
+
+== Использование
+
+=== Проверка настроек
+
+[source,bash]
+----
+# Просмотр всех sysctl настроек
+sysctl -a | grep -E "(yama|randomize|syncookies|rp_filter|suid_dumpable|accept_redirects|accept_source_route|icmp_echo_ignore|log_martians)"
+
+# Проверка конкретного параметра
+sysctl kernel.yama.ptrace_scope
+sysctl net.ipv4.tcp_syncookies
+sysctl kernel.randomize_va_space
+----
+
+=== Применение настроек
+
+[source,bash]
+----
+# Применить все настройки из файла
+sysctl -p /etc/sysctl.d/99-security-hardening.conf
+
+# Применить конкретную настройку
+sysctl -w kernel.yama.ptrace_scope=1
+----
+
+=== Мониторинг
+
+[source,bash]
+----
+# Проверка martian пакетов в логах
+journalctl -k | grep martian
+
+# Мониторинг сетевой активности
+ss -tuln
+
+# Проверка iptables правил
+iptables -L -n -v
+----
+
+== Производительность
+
+* **Минимальное влияние**: Настройки оптимизированы для минимального влияния на производительность
+* **Асинхронная обработка**: TCP SYN cookies обрабатываются асинхронно
+* **Кеширование**: ASLR использует кеширование для быстродействия
+* **Оптимизация**: Настройки протестированы на Raspberry Pi
+
+== Безопасность
+
+=== Защита от атак
+
+* **SYN flood**: TCP SYN cookies предотвращают DoS атаки
+* **Memory corruption**: ASLR затрудняет exploitation уязвимостей
+* **Privilege escalation**: Ptrace restriction предотвращает отладку privileged процессов
+* **IP spoofing**: Source route validation и martian logging
+* **Man-in-the-middle**: ICMP redirect protection
+
+=== Compliance
+
+* **CIS Level 2**: Соответствует требованиям CIS benchmarks
+* **PCI DSS**: Удовлетворяет требованиям PCI DSS
+* **ISO 27001**: Поддержка стандартов информационной безопасности
+* **NIST**: Соответствует рекомендациям NIST
+
+== Устранение неисправностей
+
+=== Проблемы с производительностью
+
+[source,bash]
+----
+# Проверить использование CPU
+top -b -n1 | head -20
+
+# Мониторинг сетевой активности
+iftop -i eth0
+
+# Логи ядра
+dmesg | tail -50
+----
+
+=== Проблемы с подключением
+
+[source,bash]
+----
+# Проверить маршрутизацию
+ip route show
+
+# Тестирование сети
+ping -c 3 8.8.8.8
+
+# Проверка DNS
+nslookup google.com
+----
+
+=== Конфликты с Docker
+
+Некоторые настройки могут конфликтовать с Docker:
+
+[source,bash]
+----
+# Docker bridge может требовать настройки rp_filter
+# В случае проблем добавить в /etc/docker/daemon.json:
+# {
+#   "iptables": false,
+#   "bridge": "docker0"
+# }
+----
+
+== Примеры конфигурации
+
+=== Минимальная безопасность
+
+[source,yaml]
+----
+sysctl_hardening:
+  enable: y
+  ptrace_restrict: y
+  aslr_enable: y
+  tcp_syn_cookies: y
+----
+
+=== Максимальная безопасность
+
+[source,yaml]
+----
+sysctl_hardening:
+  enable: y
+  ptrace_restrict: y
+  aslr_enable: y
+  tcp_syn_cookies: y
+  source_route_validation: y
+  core_dump_restrict: y
+  icmp_redirect_ignore: y
+  source_routed_packets_ignore: y
+  broadcast_requests_ignore: y
+  icmp_echo_ignore_broadcasts: y
+  log_martian_packets: y
+----
+
+== Ссылки
+
+* https://www.kernel.org/doc/html/latest/admin-guide/sysctl/index.html[Linux Kernel Sysctl Documentation]
+* https://www.cisecurity.org/benchmark/debian_linux[CIS Debian Benchmarks]
+* https://wiki.archlinux.org/title/Sysctl[Arch Linux Sysctl Wiki]
+* https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/configuring-system-security-parameters-using-the-kernel-sysctl-command_security-hardening[Red Hat Sysctl Security]

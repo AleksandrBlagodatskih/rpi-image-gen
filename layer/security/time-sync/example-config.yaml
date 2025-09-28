@@ -1,0 +1,96 @@
+# Пример конфигурации time-sync для enterprise системы
+device:
+  layer: rpi5
+  hostname: enterprise-server
+
+image:
+  layer: image-rpios
+  name: enterprise-time-sync
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: time-sync
+
+# Полная настройка синхронизации времени для enterprise
+time_sync:
+  enable: y                             # Включить синхронизацию времени
+  provider: chrony                      # Использовать Chrony для максимальной точности
+  servers: "ntp1.company.com ntp2.company.com ntp3.company.com"
+  fallback_servers: "0.debian.pool.ntp.org 1.debian.pool.ntp.org"
+  chrony_pool: "ntp1.company.com ntp2.company.com ntp3.company.com"
+  chrony_makestep: "0.5 3"             # Быстрая корректировка времени
+  chrony_rtcsync: y                    # Синхронизировать аппаратные часы
+  chrony_options: ""                   # Дополнительные опции Chrony
+
+# Дополнительные security слои
+layer:
+  base: bookworm-minbase
+  security: apparmor
+  security: ufw
+  security: auditd
+  security: sysctl-hardening
+  security: pam-hardening
+  security: password-policies
+  security: sudo-logging
+
+# AppArmor для MAC
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: y
+
+# Firewall
+ufw:
+  enable: y
+  default_incoming: deny
+  default_outgoing: allow
+  allow_services: ssh,http,https,ntp
+  logging: medium
+
+# Audit daemon
+auditd:
+  enable: y
+  max_log_file: 8
+  space_left: 75
+
+# System hardening
+sysctl_hardening:
+  enable: y
+  ptrace_restrict: y
+  aslr_enable: y
+  tcp_syn_cookies: y
+
+# PAM hardening
+pam_hardening:
+  enable: y
+  pwquality_enable: y
+  pwquality_minlen: 16
+  pwquality_dcredit: -1
+  pwquality_ucredit: -1
+  pwquality_lcredit: -1
+  pwquality_ocredit: -1
+  pwquality_retry: 3
+  faillock_enable: y
+  faillock_deny: 5
+  faillock_unlock_time: 900
+  limits_enable: y
+
+# Password policies
+password_policies:
+  enable: y
+  pass_max_days: 60
+  pass_min_days: 7
+  pass_warn_age: 14
+  inactive: 15
+  account_expiry: 180
+  root_password_expiry: 30
+  lock_inactive_users: y
+  password_history_remember: 10
+
+# Sudo logging
+sudo_logging:
+  enable: y
+  log_file: /var/log/sudo.log
+  syslog_enable: y
+  auth_timeout: 30

@@ -1,0 +1,59 @@
+# /etc/fstab: Enterprise Btrfs Server Configuration
+#
+# This fstab is optimized for enterprise server workloads with:
+# - Btrfs subvolumes for data isolation and snapshots
+# - LUKS2 encrypted storage on MD RAID1
+# - SSD-optimized mount options
+# - Performance-tuned settings per workload type
+#
+# Use 'blkid' to print universally unique identifiers for devices.
+# See fstab(5) and systemd.mount(5) for details.
+
+# =============================================================================
+# BOOT PARTITION - External SD card (unencrypted)
+# Contains kernel, initramfs, and LUKS encryption keys
+# =============================================================================
+UUID=<BOOT_UUID>  /boot/firmware  vfat    defaults,noatime,nodiratime,flush,umask=0077  0  2
+
+# =============================================================================
+# ROOT FILESYSTEM - Encrypted Btrfs subvolumes on MD RAID1 + LUKS2
+# Enterprise-optimized with SSD tuning and subvolume isolation (no compression)
+# =============================================================================
+
+# Root subvolume - system binaries and configuration
+UUID=<CRYPT_UUID> /               btrfs   defaults,subvol=@,ssd,noatime,nodiratime,space_cache=v2,autodefrag  0  0
+
+# Home directories - user data, no compression for performance
+UUID=<CRYPT_UUID> /home           btrfs   defaults,subvol=@home,ssd,noatime,nodiratime,space_cache=v2  0  0
+
+# System logs and databases - high I/O performance priority
+UUID=<CRYPT_UUID> /var            btrfs   defaults,subvol=@var,ssd,noatime,nodiratime,space_cache=v2  0  0
+
+# Server data - enterprise storage, performance optimized
+UUID=<CRYPT_UUID> /srv            btrfs   defaults,subvol=@srv,ssd,noatime,nodiratime,space_cache=v2  0  0
+
+# Optional packages - software installations, performance priority
+UUID=<CRYPT_UUID> /opt            btrfs   defaults,subvol=@opt,ssd,noatime,nodiratime,space_cache=v2  0  0
+
+# Temporary files - frequent writes, performance critical
+UUID=<CRYPT_UUID> /tmp            btrfs   defaults,subvol=@tmp,ssd,noatime,nodiratime,space_cache=v2  0  0
+
+# =============================================================================
+# SWAP SUBSYSTEM - Encrypted Btrfs subvolume optimized for performance
+# Mounted by systemd service after LUKS unlock, COW disabled via inode-flags
+# =============================================================================
+UUID=<CRYPT_UUID> /swap           btrfs   defaults,subvol=@swap,nocompress,ssd,noatime,nodiratime,space_cache=v2  0  0
+
+# Swap file - created dynamically by systemd service
+# Priority 0 (default), no auto-check needed
+/swap/swapfile    none            swap    sw,pri=0,discard=once  0  0
+
+# =============================================================================
+# PERFORMANCE NOTES:
+# - No compression: Disabled for maximum I/O performance (can be enabled per-subvolume if needed)
+# - ssd: Optimizes block allocation for SSD storage
+# - noatime,nodiratime: Reduces metadata writes for performance
+# - space_cache=v2: Modern space tracking (free-space-tree)
+# - autodefrag: Automatic defragmentation for root subvolume
+# - nocompress: Swap subvolume - maximum I/O performance (COW disabled)
+# =============================================================================

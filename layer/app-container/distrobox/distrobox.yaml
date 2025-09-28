@@ -32,6 +32,12 @@
 # X-Env-Var-non_interactive-Required: n
 # X-Env-Var-non_interactive-Valid: bool
 # X-Env-Var-non_interactive-Set: immediate
+#
+# X-Env-Var-distro: bookworm
+# X-Env-Var-distro-Desc: Target Debian distribution (bookworm or trixie)
+# X-Env-Var-distro-Required: n
+# X-Env-Var-distro-Valid: keywords:bookworm,trixie
+# X-Env-Var-distro-Set: immediate
 # METAEND
 ---
 mmdebstrap:
@@ -146,7 +152,10 @@ mmdebstrap:
       if [ -f $1/usr/local/share/bash-completion/completions/distrobox ]; then
         mkdir -p $1/etc/bash_completion.d
         cp $1/usr/local/share/bash-completion/completions/distrobox \
-           $1/etc/bash_completion.d/
+           $1/etc/bash_completion.d/ && \
+        echo "Bash completion for Distrobox installed successfully"
+      else
+        echo "Warning: Distrobox bash completion not found, skipping..."
       fi
 
     # Создание примера конфигурации для быстрого старта
@@ -154,8 +163,8 @@ mmdebstrap:
     - |
       cat > $1/usr/local/share/doc/distrobox/examples/debian-dev.ini << 'EOF'
       [debian-dev]
-      image=debian:bookworm
-      additional_packages=build-essential git vim curl wget
+      image=${IGconf_distrobox_distro == "trixie" ? "debian:trixie" : "debian:bookworm"}
+      additional_packages=build-essential git vim curl wget python3 python3-pip
       init_hooks=~/.config/distrobox/init-hooks/debian-dev.sh
       nvidia=false
       EOF
@@ -164,8 +173,17 @@ mmdebstrap:
       cat > $1/usr/local/share/doc/distrobox/examples/ubuntu-dev.ini << 'EOF'
       [ubuntu-dev]
       image=ubuntu:22.04
-      additional_packages=build-essential git vim curl wget software-properties-common
+      additional_packages=build-essential git vim curl wget software-properties-common python3 python3-pip
       init_hooks=~/.config/distrobox/init-hooks/ubuntu-dev.sh
+      nvidia=false
+      EOF
+
+    - |
+      cat > $1/usr/local/share/doc/distrobox/examples/trixie-dev.ini << 'EOF'
+      [trixie-dev]
+      image=debian:trixie
+      additional_packages=build-essential git vim curl wget python3 python3-pip python3-venv nodejs npm clang cmake ninja-build
+      init_hooks=~/.config/distrobox/init-hooks/trixie-dev.sh
       nvidia=false
       EOF
 
@@ -198,6 +216,40 @@ mmdebstrap:
 
     - chmod +x $1/usr/local/share/doc/distrobox/init-hooks/debian-dev.sh
 
+    - |
+      cat > $1/usr/local/share/doc/distrobox/init-hooks/trixie-dev.sh << 'EOF'
+      #!/bin/bash
+      # Debian Trixie development environment setup
+
+      echo "Setting up Debian Trixie development environment..."
+
+      # Install development tools
+      apt update && apt install -y \
+        build-essential \
+        git \
+        vim \
+        curl \
+        wget \
+        python3 \
+        python3-pip \
+        python3-venv \
+        nodejs \
+        npm \
+        clang \
+        cmake \
+        ninja-build
+
+      # Setup Python virtual environment
+      python3 -m pip install --user virtualenv
+
+      # Install Node.js LTS
+      npm install -g yarn
+
+      echo "Debian Trixie development environment setup complete!"
+      EOF
+
+    - chmod +x $1/usr/local/share/doc/distrobox/init-hooks/trixie-dev.sh
+
     # Настройка документации
     - mkdir -p $1/usr/local/share/doc/distrobox
     - |
@@ -210,7 +262,7 @@ mmdebstrap:
       Quick Start:
       -----------
       1. Create a new distrobox:
-         distrobox create --name my-dev --image debian:bookworm
+         distrobox create --name my-dev --image ${IGconf_distrobox_distro == "trixie" ? "debian:trixie" : "debian:bookworm"}
 
       2. Enter the distrobox:
          distrobox enter my-dev
@@ -223,6 +275,7 @@ mmdebstrap:
 
       Configuration:
       -------------
+      - Target distribution: ${IGconf_distrobox_distro}
       - Container manager: ${IGconf_distrobox_container_manager}
       - Default image: ${IGconf_distrobox_default_image}
       - Generate entries: ${IGconf_distrobox_generate_entry}
@@ -264,8 +317,17 @@ mmdebstrap:
       if [ -x $1/usr/local/bin/distrobox ]; then
         echo "Distrobox installed successfully at /usr/local/bin/distrobox"
         echo "Auto-setup script available at /usr/local/bin/distrobox-auto-setup"
-        chroot $1 distrobox version || echo "Note: distrobox version check requires running container manager"
+        echo "Examples available at /usr/local/share/doc/distrobox/examples/"
+
+        # Try to check version, but don't fail if container manager is not available
+        if chroot $1 distrobox version >/dev/null 2>&1; then
+          echo "Distrobox version check: $(chroot $1 distrobox version)"
+        else
+          echo "Note: distrobox version check requires running container manager"
+          echo "Distrobox binary is available and ready to use"
+        fi
       else
-        echo "Warning: Distrobox installation may have failed"
+        echo "Error: Distrobox installation failed - binary not found at /usr/local/bin/distrobox"
+        echo "Please check the installation logs above for details"
         exit 1
       fi

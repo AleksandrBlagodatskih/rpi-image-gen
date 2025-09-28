@@ -1,0 +1,17 @@
+# METABEGIN
+# X-Env-Layer-Name: chrony-min
+# X-Env-Layer-Desc: Core systemd components for init, SysV compatibility
+#  and chrony NTP client instead of systemd-timesyncd.
+# X-Env-Layer-Version: 1.0.0
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - systemd
+    - systemd-sysv
+    - chrony
+  customize-hooks:
+    - $BDEBSTRAP_HOOKS/enable-units "$1" chrony
+    - $LAYER_HOOKS/systemd/chrony-setup "$1"
+    - mkdir -p $1/etc/systemd/system/getty@tty1.service.d
+    - $LAYER_HOOKS/systemd/ttyset noclear > $1/etc/systemd/system/getty@tty1.service.d/noclear.conf

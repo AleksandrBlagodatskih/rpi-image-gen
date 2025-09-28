@@ -1,0 +1,6 @@
+{
+  "storage-driver": "btrfs",
+  "exec-opts": [
+    "native.cgroupdriver=systemd"
+  ]
+}

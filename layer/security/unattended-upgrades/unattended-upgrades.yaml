@@ -1,5 +1,5 @@
 # METABEGIN
-# X-Env-Layer-Name: unattended-updates
+# X-Env-Layer-Name: unattended-upgrades
 # X-Env-Layer-Category: system
 # X-Env-Layer-Desc: Automatic package updates using unattended-upgrades with email notifications
 # X-Env-Layer-Version: 1.0.0
