@@ -1,0 +1,192 @@
+# METABEGIN
+# X-Env-Layer-Name: unattended-updates
+# X-Env-Layer-Category: system
+# X-Env-Layer-Desc: Automatic package updates using unattended-upgrades with email notifications
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+#
+# X-Env-VarPrefix: unattended
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable automatic package updates via unattended-upgrades
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: y
+#
+# X-Env-Var-origins_pattern: "origin=Debian,codename=${distro_codename},label=Debian-Security"
+# X-Env-Var-origins_pattern-Desc: Origins-Pattern for automatic updates (security updates by default)
+# X-Env-Var-origins_pattern-Required: n
+# X-Env-Var-origins_pattern-Valid: string
+# X-Env-Var-origins_pattern-Set: lazy
+#
+# X-Env-Var-mail: ""
+# X-Env-Var-mail-Desc: Email address for update notifications (leave empty to disable)
+# X-Env-Var-mail-Required: n
+# X-Env-Var-mail-Valid: string
+# X-Env-Var-mail-Set: lazy
+#
+# X-Env-Var-mail_only_on_error: y
+# X-Env-Var-mail_only_on_error-Desc: Send email notifications only on errors (not on successful updates)
+# X-Env-Var-mail_only_on_error-Required: n
+# X-Env-Var-mail_only_on_error-Valid: bool
+# X-Env-Var-mail_only_on_error-Set: lazy
+#
+# X-Env-Var-automatic_reboot: n
+# X-Env-Var-automatic_reboot-Desc: Automatically reboot after successful updates if needed
+# X-Env-Var-automatic_reboot-Required: n
+# X-Env-Var-automatic_reboot-Valid: bool
+# X-Env-Var-automatic_reboot-Set: lazy
+#
+# X-Env-Var-automatic_reboot_time: "02:00"
+# X-Env-Var-automatic_reboot_time-Desc: Time for automatic reboot (HH:MM format)
+# X-Env-Var-automatic_reboot_time-Required: n
+# X-Env-Var-automatic_reboot_time-Valid: string
+# X-Env-Var-automatic_reboot_time-Set: lazy
+#
+# X-Env-Var-remove_unused_dependencies: n
+# X-Env-Var-remove_unused_dependencies-Desc: Remove unused dependencies after updates
+# X-Env-Var-remove_unused_dependencies-Required: n
+# X-Env-Var-remove_unused_dependencies-Valid: bool
+# X-Env-Var-remove_unused_dependencies-Set: lazy
+#
+# X-Env-Var-remove_new_unused_dependencies: n
+# X-Env-Var-remove_new_unused_dependencies-Desc: Remove newly unused dependencies after updates
+# X-Env-Var-remove_new_unused_dependencies-Required: n
+# X-Env-Var-remove_new_unused_dependencies-Valid: bool
+# X-Env-Var-remove_new_unused_dependencies-Set: lazy
+#
+# X-Env-Var-verbose: n
+# X-Env-Var-verbose-Desc: Enable verbose logging for unattended-upgrades
+# X-Env-Var-verbose-Required: n
+# X-Env-Var-verbose-Valid: bool
+# X-Env-Var-verbose-Set: lazy
+#
+# X-Env-Var-debug: n
+# X-Env-Var-debug-Desc: Enable debug logging for unattended-upgrades
+# X-Env-Var-debug-Required: n
+# X-Env-Var-debug-Valid: bool
+# X-Env-Var-debug-Set: lazy
+#
+# X-Env-Var-apt_listchanges_email: ""
+# X-Env-Var-apt_listchanges_email-Desc: Email address for apt-listchanges notifications (leave empty to use same as mail)
+# X-Env-Var-apt_listchanges_email-Required: n
+# X-Env-Var-apt_listchanges_email-Valid: string
+# X-Env-Var-apt_listchanges_email-Set: lazy
+#
+# X-Env-Var-apt_listchanges_frontend: pager
+# X-Env-Var-apt_listchanges_frontend-Desc: Frontend for apt-listchanges (pager, mail, browser, xterm-pager, etc)
+# X-Env-Var-apt_listchanges_frontend-Required: n
+# X-Env-Var-apt_listchanges_frontend-Valid: keywords:pager,mail,browser,xterm-pager,text,none
+# X-Env-Var-apt_listchanges_frontend-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - unattended-upgrades
+    - apt-listchanges
+  customize-hooks:
+    # Настройка автоматических обновлений unattended-upgrades
+    - |
+      igconf isy IGconf_unattended_enable || exit 0
+
+      echo "Configuring unattended-upgrades for automatic package updates..."
+
+      # Создание локального конфигурационного файла
+      LOCAL_CONFIG="/etc/apt/apt.conf.d/52unattended-upgrades-local"
+      chroot "$1" cp /usr/share/unattended-upgrades/50unattended-upgrades.Debian "$LOCAL_CONFIG"
+
+      # Настройка Origins-Pattern для обновлений
+      ORIGINS_PATTERN=$(igconf getval IGconf_unattended_origins_pattern)
+      echo "Setting origins pattern: $ORIGINS_PATTERN"
+
+      # Раскомментируем и настроим security updates
+      chroot "$1" sed -i 's|^//.*origin=Debian.*label=Debian-Security|Unattended-Upgrade::Origins-Pattern {\n    "origin=Debian,codename=${distro_codename},label=Debian-Security";\n};|' "$LOCAL_CONFIG"
+
+      # Если указан кастомный паттерн, заменим дефолтный
+      if [ "$ORIGINS_PATTERN" != "origin=Debian,codename=\${distro_codename},label=Debian-Security" ]; then
+        chroot "$1" sed -i "s|origin=Debian,codename=\${distro_codename},label=Debian-Security|$ORIGINS_PATTERN|" "$LOCAL_CONFIG"
+      fi
+
+      # Настройка email уведомлений
+      MAIL=$(igconf getval IGconf_unattended_mail)
+      MAIL_ONLY_ERROR=$(igconf getval IGconf_unattended_mail_only_on_error)
+
+      if [ -n "$MAIL" ]; then
+        echo "Setting up email notifications to: $MAIL"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Mail .*|Unattended-Upgrade::Mail \"$MAIL\";|" "$LOCAL_CONFIG"
+
+        if igconf isy "$MAIL_ONLY_ERROR"; then
+          echo "Email notifications only on errors"
+          chroot "$1" sed -i "s|^//Unattended-Upgrade::MailOnlyOnError .*|Unattended-Upgrade::MailOnlyOnError \"true\";|" "$LOCAL_CONFIG"
+        fi
+      else
+        echo "Email notifications disabled"
+      fi
+
+      # Настройка автоматической перезагрузки
+      if igconf isy IGconf_unattended_automatic_reboot; then
+        REBOOT_TIME=$(igconf getval IGconf_unattended_automatic_reboot_time)
+        echo "Enabling automatic reboot at: $REBOOT_TIME"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Automatic-Reboot .*|Unattended-Upgrade::Automatic-Reboot \"true\";|" "$LOCAL_CONFIG"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Automatic-Reboot-Time .*|Unattended-Upgrade::Automatic-Reboot-Time \"$REBOOT_TIME\";|" "$LOCAL_CONFIG"
+      else
+        echo "Automatic reboot disabled"
+      fi
+
+      # Настройка удаления зависимостей
+      if igconf isy IGconf_unattended_remove_unused_dependencies; then
+        echo "Enabling removal of unused dependencies"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Remove-Unused-Dependencies .*|Unattended-Upgrade::Remove-Unused-Dependencies \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      if igconf isy IGconf_unattended_remove_new_unused_dependencies; then
+        echo "Enabling removal of new unused dependencies"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Remove-New-Unused-Dependencies .*|Unattended-Upgrade::Remove-New-Unused-Dependencies \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Настройка логирования
+      if igconf isy IGconf_unattended_verbose; then
+        echo "Enabling verbose logging"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Verbose .*|Unattended-Upgrade::Verbose \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      if igconf isy IGconf_unattended_debug; then
+        echo "Enabling debug logging"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Debug .*|Unattended-Upgrade::Debug \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Настройка apt-listchanges для уведомлений об изменениях
+      APT_LISTCHANGES_EMAIL=$(igconf getval IGconf_unattended_apt_listchanges_email)
+      APT_LISTCHANGES_FRONTEND=$(igconf getval IGconf_unattended_apt_listchanges_frontend)
+
+      if [ -z "$APT_LISTCHANGES_EMAIL" ] && [ -n "$MAIL" ]; then
+        APT_LISTCHANGES_EMAIL="$MAIL"
+      fi
+
+      if [ -n "$APT_LISTCHANGES_EMAIL" ]; then
+        echo "Configuring apt-listchanges for email notifications to: $APT_LISTCHANGES_EMAIL"
+
+        # Создание конфигурационного файла apt-listchanges
+        chroot "$1" cat > /etc/apt/listchanges.conf << EOF
+[apt]
+frontend=$APT_LISTCHANGES_FRONTEND
+email_address=$APT_LISTCHANGES_EMAIL
+confirm=0
+save_seen=/var/lib/apt/listchanges.db
+which=both
+EOF
+
+        # Убеждаемся что apt-listchanges установлен и настроен
+        chroot "$1" dpkg-reconfigure --frontend=noninteractive apt-listchanges
+      fi
+
+      # Включение и запуск systemd таймера для автоматических обновлений
+      echo "Enabling unattended-upgrades systemd timer..."
+      chroot "$1" systemctl enable apt-daily-upgrade.timer
+      chroot "$1" systemctl start apt-daily-upgrade.timer || echo "Warning: Could not start timer during build"
+
+      # Запуск начальной проверки обновлений
+      echo "Running initial unattended-upgrade dry-run..."
+      chroot "$1" unattended-upgrade --dry-run || echo "Dry-run completed with warnings"
+
+      echo "Unattended-upgrades configuration completed successfully"
