@@ -1,0 +1,169 @@
+# Multi-image configuration for RAID external layer
+# Generates: SD card image (boot) + External drive images (RAID partitions)
+
+# SD Card Image (Boot partition only)
+image sdcard.img {
+   hdimage {
+      align = 8M
+      partition-table-type = "mbr"
+      fill = true
+   }
+
+   partition boot {
+      in-partition-table = true
+      partition-type = 0xC
+      image = boot.vfat
+      bootable = true
+   }
+}
+
+# External Drive Images (one per RAID device)
+image external1.img {
+   hdimage {
+      align = 8M
+      partition-table-type = "mbr"
+      fill = true
+   }
+
+   partition raid1_part1 {
+      in-partition-table = true
+      partition-type = 0x83
+      image = raid1_part1.btrfs
+   }
+}
+
+image external2.img {
+   hdimage {
+      align = 8M
+      partition-table-type = "mbr"
+      fill = true
+   }
+
+   partition raid1_part2 {
+      in-partition-table = true
+      partition-type = 0x83
+      image = raid1_part2.btrfs
+   }
+}
+
+# Additional external drives for RAID0 (if needed)
+image external3.img {
+   hdimage {
+      align = 8M
+      partition-table-type = "mbr"
+      fill = true
+   }
+
+   partition raid1_part3 {
+      in-partition-table = true
+      partition-type = 0x83
+      image = raid1_part3.btrfs
+   }
+}
+
+image external4.img {
+   hdimage {
+      align = 8M
+      partition-table-type = "mbr"
+      fill = true
+   }
+
+   partition raid1_part4 {
+      in-partition-table = true
+      partition-type = 0x83
+      image = raid1_part4.btrfs
+   }
+}
+
+# Sparse versions for all images
+image sdcard.img.sparse {
+   android-sparse {
+      image = sdcard.img
+   }
+}
+
+image external1.img.sparse {
+   android-sparse {
+      image = external1.img
+   }
+}
+
+image external2.img.sparse {
+   android-sparse {
+      image = external2.img
+   }
+}
+
+image external3.img.sparse {
+   android-sparse {
+      image = external3.img
+   }
+}
+
+image external4.img.sparse {
+   android-sparse {
+      image = external4.img
+   }
+}
+
+image raid1.btrfs.sparse {
+   android-sparse {
+      image = raid1.btrfs
+   }
+}
+
+# Base partition definitions
+image boot.vfat {
+   vfat {
+      label = "BOOT"
+      extraargs = "-S <SECTOR_SIZE> -i <BOOT_LABEL>"
+   }
+   size = 200M  # Fixed SD card boot size
+   mountpoint = "/boot/firmware"
+   exec-pre = "<SETUP> BOOT <BOOT_UUID> <ROOT_UUID>"
+}
+
+# RAID partition images (base components)
+image raid1_part1.btrfs {
+   btrfs {
+      label = "RAID1P1"
+   }
+   size = <ROOT_SIZE>
+   exec-pre = "<SETUP> RAID1P1 <BOOT_UUID> <ROOT_UUID>"
+}
+
+image raid1_part2.btrfs {
+   btrfs {
+      label = "RAID1P2"
+   }
+   size = <ROOT_SIZE>
+   exec-pre = "<SETUP> RAID1P2 <BOOT_UUID> <ROOT_UUID>"
+}
+
+image raid1_part3.btrfs {
+   btrfs {
+      label = "RAID1P3"
+   }
+   size = <ROOT_SIZE>
+   exec-pre = "<SETUP> RAID1P3 <BOOT_UUID> <ROOT_UUID>"
+}
+
+image raid1_part4.btrfs {
+   btrfs {
+      label = "RAID1P4"
+   }
+   size = <ROOT_SIZE>
+   exec-pre = "<SETUP> RAID1P4 <BOOT_UUID> <ROOT_UUID>"
+}
+
+# RAID filesystem image (created from RAID array)
+image raid1.btrfs {
+   btrfs {
+      label = "RAID"
+      extraargs = "-U <ROOT_UUID>"
+   }
+   size = <ROOT_SIZE>
+   # Note: No mountpoint - this image contains the root filesystem
+   # that will be written to the RAID array
+   exec-pre = "<SETUP> ROOT <BOOT_UUID> <ROOT_UUID>"
+}

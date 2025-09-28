@@ -1,0 +1,35 @@
+[
+   {
+      "attributes": {
+         "PMAPversion": "2.0.0",
+         "system_type": "raid",
+         "raid_level": "<RAID_LEVEL>",
+         "raid_devices": "<RAID_DEVICES>"
+      }
+   },
+   {
+      "devices": {
+         "sdcard": {
+            "partitions": [
+               {
+                  "image": "boot"
+               }
+            ]
+         },
+         "external1": {
+            "partitions": [
+               {
+                  "image": "raid1_part1"
+               }
+            ]
+         },
+         "external2": {
+            "partitions": [
+               {
+                  "image": "raid1_part2"
+               }
+            ]
+         }
+      }
+   }
+]

@@ -1,0 +1,29 @@
+[
+   {
+      "attributes": {
+         "PMAPversion": "2.1.0",
+         "system_type": "raid",
+         "raid_level": "<RAID_LEVEL>",
+         "raid_devices": "<RAID_DEVICES>"
+      }
+   },
+   {
+      "devices": {
+         "sdcard": {"partitions": [{"image": "boot"}]}
+      }
+   },
+   {
+      "encrypted": {
+         "luks2": {
+            "key_size": 512,
+            "cipher": "aes-xts-plain64",
+            "label": "raid-root",
+            "uuid": "<CRYPT_UUID>",
+            "hash": "sha256",
+            "mname": "cryptroot",
+            "etype": "partitioned"
+         },
+         "partitions": []
+      }
+   }
+]

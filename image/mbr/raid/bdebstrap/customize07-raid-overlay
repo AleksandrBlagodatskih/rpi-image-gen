@@ -1,0 +1,208 @@
+#!/bin/bash
+#
+# RAID Overlay Customization Hook
+# This hook configures the system for RAID support including:
+# - mdadm package installation
+# - initramfs RAID modules
+# - mdadm configuration
+# - systemd services
+# - monitoring tools
+#
+
+set -eu
+
+TARGET_ROOT="$1"
+echo "Starting RAID overlay customization for: $TARGET_ROOT"
+
+# ============================================================================
+# Package Installation
+# ============================================================================
+
+echo "Checking mdadm package installation..."
+if ! chroot "$TARGET_ROOT" dpkg -l mdadm 2>/dev/null | grep -q "^ii"; then
+    echo "Installing mdadm package..."
+    chroot "$TARGET_ROOT" apt-get update
+    chroot "$TARGET_ROOT" apt-get install -y mdadm
+    echo "mdadm package installed successfully"
+else
+    echo "mdadm package already installed"
+fi
+
+# ============================================================================
+# Initramfs Configuration
+# ============================================================================
+
+echo "Configuring initramfs for RAID support..."
+
+# Add RAID modules to initramfs
+INITRAMFS_MODULES="$TARGET_ROOT/etc/initramfs-tools/modules"
+{
+    echo "# RAID support modules (added by RAID overlay)"
+    echo "md_mod"
+    echo "raid0"
+    echo "raid1"
+    echo "raid10"
+    echo "raid456"
+} >> "$INITRAMFS_MODULES"
+
+# ============================================================================
+# mdadm Configuration
+# ============================================================================
+
+echo "Configuring mdadm..."
+
+MDADM_CONF_DIR="$TARGET_ROOT/etc/mdadm"
+MDADM_CONF="$MDADM_CONF_DIR/mdadm.conf"
+
+# Create mdadm directory if it doesn't exist
+mkdir -p "$MDADM_CONF_DIR"
+
+# Create mdadm.conf if it doesn't exist
+if [[ ! -f "$MDADM_CONF" ]]; then
+    echo "Creating mdadm.conf..."
+    cat > "$MDADM_CONF" << 'EOF'
+# mdadm.conf
+#
+# Please refer to mdadm.conf(5) for information about this file.
+#
+
+# by default (built-in), scan all partitions (/proc/partitions) and all
+# containers for MD superblocks. alternatively, specify devices to scan, using
+# wildcards if desired.
+DEVICE partitions
+
+# automatically tag new arrays as belonging to the local system
+HOMEHOST <system>
+
+# instruct the monitoring daemon where to send mail alerts
+MAILADDR root
+
+# definitions of existing MD arrays
+EOF
+    echo "mdadm.conf created"
+else
+    echo "mdadm.conf already exists, skipping creation"
+fi
+
+# ============================================================================
+# Systemd Services
+# ============================================================================
+
+echo "Enabling RAID-related systemd services..."
+
+# Enable RAID monitoring and maintenance services
+SERVICES=(
+    "mdmonitor"
+    "mdcheck"
+    "mdadm-waitidle"
+)
+
+for service in "${SERVICES[@]}"; do
+    if chroot "$TARGET_ROOT" systemctl list-unit-files "${service}.service" &>/dev/null; then
+        echo "Enabling service: $service"
+        chroot "$TARGET_ROOT" systemctl enable "$service" 2>/dev/null || true
+    else
+        echo "Service $service not available, skipping"
+    fi
+done
+
+# ============================================================================
+# Initramfs Update (Optional)
+# ============================================================================
+#
+# NOTE: initramfs update is commented out for testing.
+# RAID modules (md_mod, raid0, raid1, raid10, raid456) have been added
+# to /etc/initramfs-tools/modules above.
+#
+# If you remove this comment and uncomment the commands below,
+# initramfs will be updated immediately after adding modules.
+#
+# echo "Updating initramfs with RAID support..."
+# chroot "$TARGET_ROOT" update-initramfs -u -k all
+
+# ============================================================================
+# RAID Monitoring Tools
+# ============================================================================
+
+echo "Installing RAID monitoring tools..."
+
+# Create RAID status script
+cat << 'EOF' > "$TARGET_ROOT/usr/local/bin/raid-status"
+#!/bin/bash
+echo "=== RAID Array Status ==="
+cat /proc/mdstat 2>/dev/null || echo "No RAID arrays found"
+echo ""
+echo "=== RAID Details ==="
+if [[ -e /dev/md0 ]]; then
+    mdadm --detail /dev/md0 2>/dev/null || echo "Unable to get RAID details"
+else
+    echo "No RAID devices found"
+fi
+echo ""
+echo "=== Disk Usage ==="
+df -h 2>/dev/null | grep -E "(Filesystem|/dev/md)" || echo "No RAID filesystems found"
+EOF
+
+chmod +x "$TARGET_ROOT/usr/local/bin/raid-status"
+
+# Create RAID recovery script
+cat << 'EOF' > "$TARGET_ROOT/usr/local/bin/raid-recovery"
+#!/bin/bash
+set -e
+
+echo "=== RAID Recovery Procedures ==="
+echo ""
+echo "1. Check current status:"
+echo "   raid-status"
+echo ""
+echo "2. To add a failed disk:"
+echo "   mdadm /dev/md0 --add /dev/sdX1"
+echo "   mdadm --detail /dev/md0"
+echo ""
+echo "3. To remove a disk:"
+echo "   mdadm /dev/md0 --remove /dev/sdX1"
+echo ""
+echo "4. To check disk health:"
+echo "   mdadm --detail /dev/md0 | grep -E '(State|Failed|Spare)'"
+echo ""
+echo "5. For complete array recovery:"
+echo "   mdadm --assemble --scan"
+echo "   mdadm --run /dev/md0"
+echo ""
+echo "6. Emergency stop:"
+echo "   mdadm --stop /dev/md0"
+echo ""
+echo "See also: man mdadm"
+EOF
+
+chmod +x "$TARGET_ROOT/usr/local/bin/raid-recovery"
+
+# ============================================================================
+# System Information
+# ============================================================================
+
+echo "Adding RAID information to system MOTD..."
+
+# Create RAID info script for MOTD
+MOTD_SCRIPT="$TARGET_ROOT/etc/update-motd.d/10-raid-info"
+cat << EOF > "$MOTD_SCRIPT"
+#!/bin/bash
+echo ""
+echo "=== RAID Configuration ==="
+echo "Level: RAID${IGconf_raid_level:-unknown}"
+echo "Devices: ${IGconf_raid_devices:-unknown}"
+echo "Array: /dev/md0"
+echo ""
+echo "Use 'raid-status' for current status"
+echo "Use 'raid-recovery' for recovery procedures"
+echo ""
+EOF
+
+chmod +x "$MOTD_SCRIPT"
+
+# ============================================================================
+# Finalization
+# ============================================================================
+
+echo "RAID overlay customization completed successfully"
+echo "System is now configured for RAID support"

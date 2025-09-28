@@ -1,0 +1,58 @@
+# METABEGIN
+# X-Env-Layer-Name: raid
+# X-Env-Layer-Category: image
+# X-Env-Layer-Desc: RAID overlay for image-rpios - supports RAID0 and RAID1 with
+#  multiple external drives for root filesystem. Creates hybrid storage:
+#  SD card for boot partition + external drives in RAID configuration.
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: image-rpios
+#
+# X-Env-VarPrefix: raid
+#
+# X-Env-Var-level: RAID1
+# X-Env-Var-level-Desc: RAID level for external drives
+# X-Env-Var-level-Required: n
+# X-Env-Var-level-Valid: RAID0,RAID1
+# X-Env-Var-level-Set: y
+#
+# X-Env-Var-devices: 2
+# X-Env-Var-devices-Desc: Number of external drives for RAID array
+# X-Env-Var-devices-Required: n
+# X-Env-Var-devices-Valid: 1,2,3,4
+# X-Env-Var-devices-Set: y
+#
+# X-Env-Var-sdcard_size: 200M
+# X-Env-Var-sdcard_size-Desc: Size of SD card boot partition
+# X-Env-Var-sdcard_size-Required: n
+# X-Env-Var-sdcard_size-Valid: size
+# X-Env-Var-sdcard_size-Set: y
+#
+# X-Env-Var-external_size: 100%
+# X-Env-Var-external_size-Desc: Size allocation for each external drive partition
+# X-Env-Var-external_size-Required: n
+# X-Env-Var-external_size-Valid: size
+# X-Env-Var-external_size-Set: y
+#
+# X-Env-Var-assetdir: /home/admin/rpi-image-gen/image/mbr/raid
+# X-Env-Var-assetdir-Desc: RAID overlay asset directory
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: string
+# X-Env-Var-assetdir-Set: y
+#
+# X-Env-Var-preimage: /home/admin/rpi-image-gen/image/mbr/raid/pre-image.sh
+# X-Env-Var-preimage-Desc: RAID overlay pre-image script
+# X-Env-Var-preimage-Required: n
+# X-Env-Var-preimage-Valid: string
+# X-Env-Var-preimage-Set: force
+#
+# X-Env-Var-setup: ${IGconf_raid_assetdir}/setup.sh
+# X-Env-Var-setup-Desc: RAID overlay setup script
+# X-Env-Var-setup-Required: n
+# X-Env-Var-setup-Valid: string
+# X-Env-Var-setup-Set: y
+# METAEND
+---
+# RAID overlay configuration inherits from image-rpios
+image:
+  output_mode: multi  # Generate multiple images: SD card + external drives
+  raid_support: y     # Enable RAID functionality
