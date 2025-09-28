@@ -17,9 +17,6 @@
 # METAEND
 ---
 mmdebstrap:
-  packages:
-    - initramfs-tools
-    - linux-modules-extra-rpi-v8
   customize-hooks:
     # Настройка PCIe Gen 3.0 для SATA контроллера JMB585
     - |
