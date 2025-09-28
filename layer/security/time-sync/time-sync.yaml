@@ -1,293 +1,82 @@
 # METABEGIN
 # X-Env-Layer-Name: time-sync
 # X-Env-Layer-Category: security
-# X-Env-Layer-Desc: Time synchronization service for accurate system time and log timestamps
+# X-Env-Layer-Desc: Time synchronization configuration (assumes packages are pre-installed)
 # X-Env-Layer-Version: 1.0.0
 # X-Env-Layer-Requires: locale-base
 #
 # X-Env-VarPrefix: time_sync
 #
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Desc: Enable time synchronization service
+# X-Env-Var-enable-Desc: Enable time synchronization
 # X-Env-Var-enable-Required: n
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-enable-Set: y
 #
 # X-Env-Var-provider: systemd-timesyncd
-# X-Env-Var-provider-Desc: Time sync provider (systemd-timesyncd, chrony, ntp)
+# X-Env-Var-provider-Desc: Time sync provider (systemd-timesyncd, chrony)
 # X-Env-Var-provider-Required: n
-# X-Env-Var-provider-Valid: keywords:systemd-timesyncd,chrony,ntp
+# X-Env-Var-provider-Valid: keywords:systemd-timesyncd,chrony
 # X-Env-Var-provider-Set: lazy
 #
 # X-Env-Var-servers: "0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
-# X-Env-Var-servers-Desc: NTP servers for time synchronization (space-separated)
+# X-Env-Var-servers-Desc: NTP servers (space-separated)
 # X-Env-Var-servers-Required: n
 # X-Env-Var-servers-Valid: string
 # X-Env-Var-servers-Set: lazy
-#
-# X-Env-Var-fallback_servers: "ntp.ubuntu.com"
-# X-Env-Var-fallback_servers-Desc: Fallback NTP servers
-# X-Env-Var-fallback_servers-Required: n
-# X-Env-Var-fallback_servers-Valid: string
-# X-Env-Var-fallback_servers-Set: lazy
-#
-# X-Env-Var-timezone: ""
-# X-Env-Var-timezone-Desc: System timezone (if not set, uses locale-base)
-# X-Env-Var-timezone-Required: n
-# X-Env-Var-timezone-Valid: string
-# X-Env-Var-timezone-Set: lazy
-#
-# X-Env-Var-ntp_restrict: "default kod nomodify notrap nopeer noquery"
-# X-Env-Var-ntp_restrict-Desc: NTP access restrictions for ntpd
-# X-Env-Var-ntp_restrict-Required: n
-# X-Env-Var-ntp_restrict-Valid: string
-# X-Env-Var-ntp_restrict-Set: lazy
-#
-# X-Env-Var-ntp_options: "-g"
-# X-Env-Var-ntp_options-Desc: Additional NTP daemon options
-# X-Env-Var-ntp_options-Required: n
-# X-Env-Var-ntp_options-Valid: string
-# X-Env-Var-ntp_options-Set: lazy
-#
-# X-Env-Var-chrony_pool: "0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
-# X-Env-Var-chrony_pool-Desc: Chrony NTP pool servers
-# X-Env-Var-chrony_pool-Required: n
-# X-Env-Var-chrony_pool-Valid: string
-# X-Env-Var-chrony_pool-Set: lazy
-#
-# X-Env-Var-chrony_makestep: "1 3"
-# X-Env-Var-chrony_makestep-Desc: Chrony makestep configuration (threshold count)
-# X-Env-Var-chrony_makestep-Required: n
-# X-Env-Var-chrony_makestep-Valid: string
-# X-Env-Var-chrony_makestep-Set: lazy
-#
-# X-Env-Var-chrony_rtcsync: y
-# X-Env-Var-chrony_rtcsync-Desc: Enable RTC synchronization in Chrony
-# X-Env-Var-chrony_rtcsync-Required: n
-# X-Env-Var-chrony_rtcsync-Valid: bool
-# X-Env-Var-chrony_rtcsync-Set: lazy
-#
-# X-Env-Var-chrony_options: ""
-# X-Env-Var-chrony_options-Desc: Additional Chrony daemon options
-# X-Env-Var-chrony_options-Required: n
-# X-Env-Var-chrony_options-Valid: string
-# X-Env-Var-chrony_options-Set: lazy
-#
-# X-Env-Var-timesyncd_fallback: "ntp.ubuntu.com"
-# X-Env-Var-timesyncd_fallback-Desc: systemd-timesyncd fallback NTP server
-# X-Env-Var-timesyncd_fallback-Required: n
-# X-Env-Var-timesyncd_fallback-Valid: string
-# X-Env-Var-timesyncd_fallback-Set: lazy
-#
-# X-Env-Var-timesyncd_root_distance_max: 5
-# X-Env-Var-timesyncd_root_distance_max-Desc: Maximum root distance for systemd-timesyncd
-# X-Env-Var-timesyncd_root_distance_max-Required: n
-# X-Env-Var-timesyncd_root_distance_max-Valid: int
-# X-Env-Var-timesyncd_root_distance_max-Set: lazy
-#
-# X-Env-Var-timesyncd_poll_interval_min: 32
-# X-Env-Var-timesyncd_poll_interval_min-Desc: Minimum poll interval for systemd-timesyncd (seconds)
-# X-Env-Var-timesyncd_poll_interval_min-Required: n
-# X-Env-Var-timesyncd_poll_interval_min-Valid: int
-# X-Env-Var-timesyncd_poll_interval_min-Set: lazy
-#
-# X-Env-Var-timesyncd_poll_interval_max: 2048
-# X-Env-Var-timesyncd_poll_interval_max-Desc: Maximum poll interval for systemd-timesyncd (seconds)
-# X-Env-Var-timesyncd_poll_interval_max-Required: n
-# X-Env-Var-timesyncd_poll_interval_max-Valid: int
-# X-Env-Var-timesyncd_poll_interval_max-Set: lazy
 # METAEND
 ---
 mmdebstrap:
-  includes:
-    - systemd-timesyncd
+  includes: []
   customize-hooks:
-    # Настройка синхронизации времени
+    # Simple time synchronization setup
     - |
       igconf isy IGconf_time_sync_enable || exit 0
 
-      echo "Configuring time synchronization service..."
+      echo "Setting up time synchronization..."
 
-      # Настройка systemd-timesyncd (по умолчанию)
-      TIMESYNCD_CONF="/etc/systemd/timesyncd.conf.d/security.conf"
-
-      # Создание конфигурационной директории
-      chroot "$1" mkdir -p /etc/systemd/timesyncd.conf.d
-
-      # Базовая конфигурация timesyncd
-      cat > "$1$TIMESYNCD_CONF" << 'EOF'
-# systemd-timesyncd configuration
-# Generated by rpi-image-gen time-sync layer
-
-[Time]
-NTP=
-FallbackNTP=
-RootDistanceMaxSec=5
-PollIntervalMinSec=32
-PollIntervalMaxSec=2048
-EOF
-
-      # Применение настроек NTP серверов
+      # Get configuration
+      PROVIDER=$(igconf getval IGconf_time_sync_provider)
       SERVERS=$(igconf getval IGconf_time_sync_servers)
-      if [ -n "$SERVERS" ]; then
-        echo "Setting NTP servers: $SERVERS"
-        chroot "$1" sed -i "s|^NTP=.*|NTP=$SERVERS|" "$TIMESYNCD_CONF"
-      fi
 
-      # Fallback серверы
-      FALLBACK=$(igconf getval IGconf_time_sync_fallback_servers)
-      if [ -n "$FALLBACK" ]; then
-        echo "Setting fallback NTP servers: $FALLBACK"
-        chroot "$1" sed -i "s|^FallbackNTP=.*|FallbackNTP=$FALLBACK|" "$TIMESYNCD_CONF"
-      fi
+      case "$PROVIDER" in
+        "systemd-timesyncd")
+          echo "Configuring systemd-timesyncd..."
+          mkdir -p "$1/etc/systemd/timesyncd.conf.d"
 
-      # Настройка параметров timesyncd
-      ROOT_DISTANCE=$(igconf getval IGconf_time_sync_timesyncd_root_distance_max)
-      POLL_MIN=$(igconf getval IGconf_time_sync_timesyncd_poll_interval_min)
-      POLL_MAX=$(igconf getval IGconf_time_sync_timesyncd_poll_interval_max)
+          # Create timesyncd config
+          printf '[Time]\nNTP=%s\n' "${SERVERS:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org}" > "$1/etc/systemd/timesyncd.conf.d/rpi-image-gen.conf"
 
-      chroot "$1" sed -i "s|^RootDistanceMaxSec=.*|RootDistanceMaxSec=$ROOT_DISTANCE|" "$TIMESYNCD_CONF"
-      chroot "$1" sed -i "s|^PollIntervalMinSec=.*|PollIntervalMinSec=$POLL_MIN|" "$TIMESYNCD_CONF"
-      chroot "$1" sed -i "s|^PollIntervalMaxSec=.*|PollIntervalMaxSec=$POLL_MAX|" "$TIMESYNCD_CONF"
+          chroot "$1" systemctl enable systemd-timesyncd
+          echo "systemd-timesyncd configured"
+          ;;
 
-      echo "systemd-timesyncd configured with servers: $SERVERS, fallback: $FALLBACK"
+        "chrony")
+          echo "Configuring Chrony..."
+          # Stop and disable systemd-timesyncd
+          chroot "$1" systemctl disable systemd-timesyncd
+          chroot "$1" systemctl stop systemd-timesyncd
 
-      # Настройка альтернативных провайдеров времени
+          # Backup original config
+          chroot "$1" cp /etc/chrony/chrony.conf /etc/chrony/chrony.conf.backup
 
-      # Chrony
-      if [ "$(igconf getval IGconf_time_sync_provider)" = "chrony" ]; then
-        echo "Configuring Chrony as time sync provider..."
+          # Create new config
+          printf '# Chrony configuration for rpi-image-gen\n\n# Security: Only allow localhost\nbindcmdaddress 127.0.0.1\nbindcmdaddress ::1\n\n# NTP servers\n' > "$1/etc/chrony/chrony.conf"
+          echo "pool ${SERVERS:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org} iburst" >> "$1/etc/chrony/chrony.conf"
+          echo "makestep 1 3" >> "$1/etc/chrony/chrony.conf"
+          echo "rtcsync" >> "$1/etc/chrony/chrony.conf"
 
-        # Установка chrony
-        chroot "$1" apt update
-        chroot "$1" apt install -y chrony
+          chroot "$1" systemctl enable chrony
+          echo "Chrony configured"
+          ;;
 
-        # Отключение systemd-timesyncd
-        chroot "$1" systemctl disable systemd-timesyncd
-        chroot "$1" systemctl stop systemd-timesyncd
+        *)
+          echo "Unknown time sync provider: $PROVIDER"
+          echo "Defaulting to systemd-timesyncd"
+          chroot "$1" systemctl enable systemd-timesyncd
+          ;;
+      esac
 
-        # Настройка chrony
-        CHRONY_CONF="/etc/chrony/chrony.conf"
-
-        # Резервное копирование оригинальной конфигурации
-        chroot "$1" cp "$CHRONY_CONF" "$CHRONY_CONF.backup"
-
-        # Создание новой конфигурации
-        cat > "$1$CHRONY_CONF" << 'EOF'
-# Chrony configuration
-# Generated by rpi-image-gen time-sync layer
-
-# Security: Only allow localhost
-bindcmdaddress 127.0.0.1
-bindcmdaddress ::1
-
-# NTP servers
-EOF
-
-        # Добавление NTP серверов
-        CHRONY_POOL=$(igconf getval IGconf_time_sync_chrony_pool)
-        if [ -n "$CHRONY_POOL" ]; then
-          echo "pool $CHRONY_POOL iburst" >> "$1$CHRONY_CONF"
-        else
-          echo "pool 0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org iburst" >> "$1$CHRONY_CONF"
-        fi
-
-        # Добавление makestep
-        MAKESTEP=$(igconf getval IGconf_time_sync_chrony_makestep)
-        echo "makestep $MAKESTEP" >> "$1$CHRONY_CONF"
-
-        # RTC sync
-        if igconf isy IGconf_time_sync_chrony_rtcsync; then
-          echo "rtcsync" >> "$1$CHRONY_CONF"
-        fi
-
-        # Дополнительные опции
-        CHRONY_OPTS=$(igconf getval IGconf_time_sync_chrony_options)
-        if [ -n "$CHRONY_OPTS" ]; then
-          echo "# Additional options: $CHRONY_OPTS" >> "$1$CHRONY_CONF"
-        fi
-
-        # Включение и запуск chrony
-        chroot "$1" systemctl enable chrony
-        chroot "$1" systemctl start chrony || echo "Warning: Could not start chrony during build"
-
-        echo "Chrony configured and enabled"
-      fi
-
-      # NTP (legacy)
-      if [ "$(igconf getval IGconf_time_sync_provider)" = "ntp" ]; then
-        echo "Configuring NTP as time sync provider..."
-
-        # Установка ntp
-        chroot "$1" apt update
-        chroot "$1" apt install -y ntp
-
-        # Отключение systemd-timesyncd
-        chroot "$1" systemctl disable systemd-timesyncd
-        chroot "$1" systemctl stop systemd-timesyncd
-
-        # Настройка NTP
-        NTP_CONF="/etc/ntp.conf"
-
-        # Резервное копирование
-        chroot "$1" cp "$NTP_CONF" "$NTP_CONF.backup"
-
-        # Создание новой конфигурации
-        cat > "$1$NTP_CONF" << 'EOF'
-# NTP configuration
-# Generated by rpi-image-gen time-sync layer
-
-# Security: Restrict access
-restrict default kod nomodify notrap nopeer noquery
-restrict -6 default kod nomodify notrap nopeer noquery
-restrict 127.0.0.1
-restrict ::1
-
-# NTP servers
-EOF
-
-        # Добавление серверов
-        NTP_SERVERS=$(igconf getval IGconf_time_sync_servers)
-        if [ -n "$NTP_SERVERS" ]; then
-          for server in $NTP_SERVERS; do
-            echo "server $server iburst" >> "$1$NTP_CONF"
-          done
-        else
-          echo "server 0.debian.pool.ntp.org iburst" >> "$1$NTP_CONF"
-          echo "server 1.debian.pool.ntp.org iburst" >> "$1$NTP_CONF"
-          echo "server 2.debian.pool.ntp.org iburst" >> "$1$NTP_CONF"
-          echo "server 3.debian.pool.ntp.org iburst" >> "$1$NTP_CONF"
-        fi
-
-        # Дополнительные опции NTP
-        NTP_OPTS=$(igconf getval IGconf_time_sync_ntp_options)
-        if [ -n "$NTP_OPTS" ]; then
-          echo "# Additional options: $NTP_OPTS" >> "$1$NTP_CONF"
-        fi
-
-        # Включение и запуск ntp
-        chroot "$1" systemctl enable ntp
-        chroot "$1" systemctl start ntp || echo "Warning: Could not start ntp during build"
-
-        echo "NTP configured and enabled"
-      fi
-
-      # Настройка часового пояса если указан
-      TIMEZONE=$(igconf getval IGconf_time_sync_timezone)
-      if [ -n "$TIMEZONE" ]; then
-        echo "Setting timezone: $TIMEZONE"
-        chroot "$1" timedatectl set-timezone "$TIMEZONE" || echo "Warning: Could not set timezone"
-      fi
-
-      # Включение systemd-timesyncd по умолчанию
-      if [ "$(igconf getval IGconf_time_sync_provider)" = "systemd-timesyncd" ]; then
-        chroot "$1" systemctl enable systemd-timesyncd
-        chroot "$1" systemctl start systemd-timesyncd || echo "Warning: Could not start systemd-timesyncd during build"
-        echo "systemd-timesyncd enabled as default time sync provider"
-      fi
-
-      # Проверка статуса синхронизации времени
-      echo "Checking time synchronization status..."
-      chroot "$1" timedatectl status || echo "timedatectl not available"
-
-      echo "Time synchronization configured successfully"
+      # Show status
+      echo "Time synchronization setup complete"
+      chroot "$1" timedatectl status | head -5 || echo "timedatectl not available"
