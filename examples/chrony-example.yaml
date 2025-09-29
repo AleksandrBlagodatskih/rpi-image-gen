@@ -1,4 +1,4 @@
-# Пример конфигурации с использованием chrony вместо systemd-timesyncd
+# Пример конфигурации с использованием systemd-chrony-min вместо systemd-timesyncd
 ---
 device:
   layer: rpi5  # или другой класс устройства
@@ -10,5 +10,5 @@ image:
 
 layer:
   base: bookworm-minbase
-  system: chrony-min  # Используем chrony вместо systemd-min
-  network: systemd-net-min  # Можно использовать вместе с chrony-min
+  system: systemd-chrony-min  # Используем chrony вместо systemd-min
+  network: systemd-net-min  # Можно использовать вместе с systemd-chrony-min
