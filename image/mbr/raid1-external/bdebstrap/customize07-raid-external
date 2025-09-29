@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# RAID Initramfs Configuration Hook
+# This hook adds RAID modules to initramfs for boot-time RAID support
+#
+
+set -eu
+
+TARGET_ROOT="$1"
+echo "Configuring initramfs for RAID support..."
+
+# Add RAID modules to initramfs
+INITRAMFS_MODULES="$TARGET_ROOT/etc/initramfs-tools/modules"
+{
+    echo "# RAID support modules (added by RAID overlay)"
+    echo "md_mod"
+    echo "raid0"
+    echo "raid1"
+    echo "raid10"
+    echo "raid456"
+} >> "$INITRAMFS_MODULES"
+
+echo "RAID modules added to initramfs"

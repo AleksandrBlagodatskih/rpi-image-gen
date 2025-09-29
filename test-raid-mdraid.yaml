@@ -1,0 +1,12 @@
+# Test configuration for RAID1 external layer using genimage mdraid
+device:
+  layer: rpi5
+
+image:
+  layer: raid1-external
+  name: test-raid-mdraid
+  raid1_external_raid_level: RAID1
+  raid1_external_raid_devices: 2
+
+layer:
+  base: bookworm-minbase

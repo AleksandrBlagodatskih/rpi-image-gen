@@ -1,0 +1,92 @@
+# Enterprise Infrastructure RAID Configuration
+# Optimized for network appliances with high availability
+
+device:
+  layer: rpi-cm5
+  class: cm5
+  variant: 8G
+
+image:
+  layer: raid1-external
+  name: infrastructure-network-appliance
+  raid1_external_rootfs_type: btrfs     # Btrfs for advanced features
+  raid1_external_boot_part_size: 1G     # Large boot for infrastructure software
+  raid1_external_root_part_size: 512G   # Massive storage for infrastructure data
+  raid1_external_raid_level: RAID1     # Maximum availability and performance
+  raid1_external_raid_devices: 2        # Full RAID1 for infrastructure reliability (2 devices for RAID1)
+  raid1_external_encryption_enabled: y  # Mandatory for infrastructure security
+  raid1_external_sector_size: 4096      # Advanced format infrastructure drives
+  raid1_external_compression: zstd      # Optimized for infrastructure workloads
+  raid1_external_pmap: crypt           # Secure encrypted deployment
+
+  # Performance optimizations for infrastructure use case
+  raid1_external_apt_cache: y              # Fast package installation
+  raid1_external_ccache: y                 # Cross-compilation optimization
+  raid1_external_ccache_size: 25G          # Very large cache for infrastructure builds
+  raid1_external_parallel_jobs: 12         # High parallel processing for large builds
+  raid1_external_image_size_optimization: y # Optimize for deployment
+
+layer:
+  base: bookworm-minbase
+  infrastructure: monitoring-stack
+  networking: advanced-networking
+  security: enterprise-security
+  monitoring: infrastructure-monitoring
+  deployment: automated-deployment
+  compliance: infrastructure-compliance
+
+infrastructure:
+  monitoring_enabled: y
+  logging_enabled: y
+  metrics_collection: y
+  alerting_configured: y
+  load_balancing: y
+  failover_support: y
+
+networking:
+  vlan_support: y
+  bonding_enabled: y
+  firewall_configured: y
+  dns_configured: y
+  vpn_server: y
+  network_monitoring: y
+
+security:
+  selinux_enabled: y
+  apparmor_enabled: y
+  auditd_enabled: y
+  fail2ban_enabled: y
+  intrusion_detection: y
+  secure_boot: y
+
+monitoring:
+  system_metrics: y
+  network_monitoring: y
+  application_monitoring: y
+  log_aggregation: y
+  alerting_rules: y
+  dashboard_integration: y
+
+deployment:
+  ansible_integration: y
+  terraform_ready: y
+  kubernetes_ready: y
+  monitoring_ready: y
+  configuration_backup: y
+
+compliance:
+  infrastructure_standards: y
+  security_baseline: y
+  audit_requirements: y
+  regulatory_compliance: y
+
+# Enterprise infrastructure integration
+enterprise:
+  monitoring_stack: prometheus_grafana_elk
+  configuration_management: ansible_terraform
+  deployment_pipeline: github_actions_jenkins
+  asset_management: infrastructure_itam
+  ticketing_system: jira_servicedesk
+  knowledge_base: confluence
+  collaboration: slack_teams
+  security_operations: siem_splunk

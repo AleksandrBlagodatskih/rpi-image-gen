@@ -1,0 +1,98 @@
+# Enterprise Industrial Automation RAID Configuration
+# Optimized for SCADA systems with high availability and reliability
+
+device:
+  layer: rpi4
+  class: pi4
+  variant: industrial
+
+image:
+  layer: raid1-external
+  name: industrial-scada-controller
+  raid1_external_rootfs_type: ext4      # ext4 for maximum compatibility
+  raid1_external_boot_part_size: 512M   # Large boot for industrial software
+  raid1_external_root_part_size: 128G   # Massive storage for industrial data
+  raid1_external_raid_level: RAID1     # Maximum performance and redundancy
+  raid1_external_raid_devices: 2        # Full RAID1 for enterprise reliability (2 devices for RAID1)
+  raid1_external_encryption_enabled: y  # Mandatory for industrial security
+  raid1_external_sector_size: 4096      # Advanced format industrial drives
+  raid1_external_compression: zstd      # Optimized for industrial workloads
+  raid1_external_pmap: crypt           # Secure encrypted deployment
+
+  # Performance optimizations for industrial use case
+  raid1_external_apt_cache: y              # Fast package installation
+  raid1_external_ccache: y                 # Cross-compilation optimization
+  raid1_external_ccache_size: 20G          # Very large cache for industrial builds
+  raid1_external_parallel_jobs: 8          # High parallel processing
+  raid1_external_image_size_optimization: y # Optimize for deployment
+
+layer:
+  base: bookworm-minbase
+  industrial: plc-integration
+  protocols: industrial-protocols
+  safety: industrial-safety
+  monitoring: industrial-monitoring
+  realtime: industrial-realtime
+  security: industrial-security
+  compliance: industrial-compliance
+
+industrial:
+  plc_communication: y
+  modbus_support: y
+  profibus_support: y
+  industrial_io: y
+  fieldbus_protocols: y
+  device_integration: y
+
+protocols:
+  modbus_tcp: y
+  modbus_rtu: y
+  dnp3: y
+  opc_ua: y
+  ethernet_ip: y
+  profinet: y
+
+safety:
+  emergency_stop: y
+  safety_interlocks: y
+  fault_detection: y
+  safety_monitoring: y
+  sil_certification: y
+
+monitoring:
+  plc_monitoring: y
+  system_health: y
+  predictive_maintenance: y
+  alarm_management: y
+  data_collection: y
+  reporting: y
+
+realtime:
+  hard_realtime: y
+  deterministic_timing: y
+  priority_scheduling: y
+  watchdog_timers: y
+  low_latency_networking: y
+
+security:
+  industrial_compliant: y
+  encryption_mandatory: y
+  secure_boot: y
+  audit_trails: y
+  access_control: y
+
+compliance:
+  industrial_standards: y
+  iec_61508: y
+  iso_13849: y
+  regulatory_compliance: y
+
+# Enterprise integration
+enterprise:
+  scada_system: ignition
+  historian_database: influxdb
+  monitoring_platform: prometheus_grafana
+  deployment_automation: ansible
+  configuration_management: chef
+  asset_management: itam
+  ticketing_system: jira

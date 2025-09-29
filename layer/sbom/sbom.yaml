@@ -60,4 +60,28 @@
 # X-Env-Var-syft_config-Valid: string
 # X-Env-Var-syft_config-Set: lazy
 #
+# X-Env-Var-security_scan: y
+# X-Env-Var-security_scan-Desc: Enable security vulnerability scanning with Grype
+# X-Env-Var-security_scan-Required: n
+# X-Env-Var-security_scan-Valid: y,n
+# X-Env-Var-security_scan-Set: y
+#
+# X-Env-Var-security_report: ${IGconf_sbom_filename}.security
+# X-Env-Var-security_report-Desc: Security vulnerability report filename
+# X-Env-Var-security_report-Required: n
+# X-Env-Var-security_report-Valid: string
+# X-Env-Var-security_report-Set: y
+#
+# X-Env-Var-compliance_check: y
+# X-Env-Var-compliance_check-Desc: Enable compliance checking (license, policy)
+# X-Env-Var-compliance_check-Required: n
+# X-Env-Var-compliance_check-Valid: y,n
+# X-Env-Var-compliance_check-Set: y
+#
+# X-Env-Var-compliance_report: ${IGconf_sbom_filename}.compliance
+# X-Env-Var-compliance_report-Desc: Compliance report filename
+# X-Env-Var-compliance_report-Required: n
+# X-Env-Var-compliance_report-Valid: string
+# X-Env-Var-compliance_report-Set: y
+#
 ---

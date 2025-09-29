@@ -1,0 +1,74 @@
+# Enterprise Automotive RAID Configuration
+# Optimized for vehicle data logging with redundancy and security
+
+device:
+  layer: rpi-cm4
+  class: cm4
+  variant: automotive
+
+image:
+  layer: raid1-external
+  name: automotive-data-logger
+  raid1_external_rootfs_type: btrfs     # Btrfs for snapshot capabilities
+  raid1_external_boot_part_size: 256M   # Larger boot for automotive software
+  raid1_external_root_part_size: 64G    # Large storage for vehicle data
+  raid1_external_raid_level: RAID1      # Data redundancy for critical logging
+  raid1_external_raid_devices: 2        # Two SSDs for automotive deployment (RAID1)
+  raid1_external_encryption_enabled: y  # Mandatory for vehicle data security
+  raid1_external_sector_size: 4096      # Advanced format drives
+  raid1_external_compression: zstd      # Optimized compression
+  raid1_external_pmap: crypt           # Secure encrypted deployment
+
+  # Performance optimizations for automotive use case
+  raid1_external_apt_cache: y              # Fast package installation
+  raid1_external_ccache: y                 # Cross-compilation optimization
+  raid1_external_ccache_size: 10G          # Large cache for automotive builds
+  raid1_external_parallel_jobs: 4          # Moderate parallel processing
+  raid1_external_image_size_optimization: y # Optimize for deployment
+
+layer:
+  base: bookworm-minbase
+  automotive: can-bus-integration
+  realtime: automotive-realtime
+  monitoring: vehicle-monitoring
+  security: automotive-security
+  compliance: automotive-compliance
+
+automotive:
+  can_interface: y
+  obd2_support: y
+  vehicle_protocols: y
+  diagnostic_tools: y
+  data_logging: y
+  realtime_data: y
+
+realtime:
+  low_latency_kernel: y
+  preempt_rt: y
+  deadline_scheduling: y
+  priority_inheritance: y
+
+monitoring:
+  vehicle_health: y
+  data_collection: y
+  remote_monitoring: y
+  alert_system: y
+
+security:
+  automotive_compliant: y
+  encryption_mandatory: y
+  secure_boot: y
+  audit_trails: y
+
+compliance:
+  automotive_standards: y
+  data_retention: y
+  privacy_protection: y
+  regulatory_compliance: y
+
+# Enterprise integration
+enterprise:
+  logging_system: elk_stack
+  monitoring_platform: prometheus_grafana
+  deployment_automation: ansible
+  configuration_management: puppet

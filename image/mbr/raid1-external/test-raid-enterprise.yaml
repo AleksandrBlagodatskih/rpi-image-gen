@@ -1,0 +1,16 @@
+# Enterprise configuration for RAID1 external layer
+device:
+  layer: rpi-cm5
+  variant: 8G
+
+image:
+  layer: raid-external
+  name: enterprise-raid1
+  raid_external_raid_level: RAID1
+  raid_external_raid_devices: 2
+  raid_external_sector_size: 4096
+  raid_external_encryption_enabled: y
+
+layer:
+  base: bookworm-minbase
+  security: maximum-security

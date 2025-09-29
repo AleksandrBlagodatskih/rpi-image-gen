@@ -1,0 +1,12 @@
+# Test configuration for RAID1 external layer
+device:
+  layer: rpi5
+
+image:
+  layer: raid-external
+  name: test-raid1
+  raid_external_raid_level: RAID1
+  raid_external_raid_devices: 2
+
+layer:
+  base: bookworm-minbase

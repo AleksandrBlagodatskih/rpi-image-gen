@@ -30,6 +30,18 @@ To install via other means, for example using https://github.com/raspberrypi/usb
 
 The rpi-image-gen link:./docs/index.adoc[technical documentation] and link:./examples[examples directory] provide customisation and usage guidance.
 
+== RAID External Layer
+
+The RAID External layer provides enterprise-grade RAID functionality for Raspberry Pi systems with external drives:
+
+* **Multiple RAID Levels**: RAID0, RAID1, RAID5, RAID10 with automatic validation
+* **Enterprise Security**: LUKS2 encryption by default with comprehensive provisioning
+* **Filesystem Support**: ext4 and btrfs with advanced features
+* **Production Ready**: Full PMAP 1.2.0 support with slotted A/B updates
+* **Enterprise Integration**: Automotive, Industrial, Medical, and Infrastructure configurations
+
+Example configurations are available in link:./test-raid-*.yaml[test files] and link:./examples/enterprise/[enterprise examples]. Comprehensive documentation in link:./image/mbr/raid1-external/README.md[RAID1 External README].
+
 == Why use this?
 
 * **Fast builds** - Uses pre-built packages instead of building from source

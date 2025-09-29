@@ -1,0 +1,94 @@
+# Enterprise Medical Device RAID Configuration
+# Optimized for patient monitoring systems with HIPAA compliance
+
+device:
+  layer: rpi-cm4
+  class: cm4
+  variant: medical
+
+image:
+  layer: raid1-external
+  name: medical-patient-monitor
+  raid1_external_rootfs_type: ext4      # ext4 for medical reliability
+  raid1_external_boot_part_size: 512M   # Large boot for medical software
+  raid1_external_root_part_size: 256G   # Massive storage for patient data
+  raid1_external_raid_level: RAID1     # Maximum reliability for patient data
+  raid1_external_raid_devices: 2        # Full redundancy for critical data (2 devices for RAID1)
+  raid1_external_encryption_enabled: y  # HIPAA mandatory encryption
+  raid1_external_sector_size: 4096      # Advanced format medical drives
+  raid1_external_compression: zstd      # Optimized for medical data
+  raid1_external_pmap: crypt           # Secure encrypted deployment
+
+  # Performance optimizations for medical use case
+  raid1_external_apt_cache: y              # Fast package installation
+  raid1_external_ccache: y                 # Cross-compilation optimization
+  raid1_external_ccache_size: 15G          # Large cache for medical builds
+  raid1_external_parallel_jobs: 6          # Balanced parallel processing
+  raid1_external_image_size_optimization: y # Optimize for deployment
+
+layer:
+  base: bookworm-minbase
+  medical: medical-protocols
+  security: medical-security
+  compliance: hipaa-compliance
+  monitoring: medical-monitoring
+  realtime: medical-realtime
+  audit: medical-audit
+
+medical:
+  hl7_support: y
+  dicom_support: y
+  medical_devices: y
+  patient_monitoring: y
+  emr_integration: y
+  medical_imaging: y
+
+security:
+  hipaa_compliant: y
+  encryption_at_rest: y
+  encryption_in_transit: y
+  access_logging: y
+  audit_trails: y
+  data_classification: y
+
+compliance:
+  hipaa_ready: y
+  fda_ready: y
+  medical_standards: y
+  certification_ready: y
+  data_retention: y
+  privacy_protection: y
+
+monitoring:
+  patient_vitals: y
+  device_health: y
+  alert_system: y
+  emergency_protocols: y
+  data_integrity: y
+  performance_monitoring: y
+
+realtime:
+  medical_realtime: y
+  deterministic_timing: y
+  priority_scheduling: y
+  low_latency: y
+  fault_tolerance: y
+
+audit:
+  comprehensive_logging: y
+  security_events: y
+  access_auditing: y
+  compliance_reporting: y
+  forensic_analysis: y
+
+# Enterprise medical integration
+enterprise:
+  emr_system: epic
+  pacs_system: orthanc
+  monitoring_platform: prometheus_grafana
+  alerting_system: pagerduty
+  deployment_automation: ansible
+  configuration_management: puppet
+  asset_management: medical_itam
+  ticketing_system: servicenow
+  compliance_management: compliance_tool

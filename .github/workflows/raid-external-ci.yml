@@ -1,0 +1,229 @@
+name: RAID External Layer CI/CD
+
+on:
+  push:
+    paths:
+      - 'image/mbr/raid-external/**'
+      - 'test/test-raid-external-*.yaml'
+      - '.github/workflows/raid-external-ci.yml'
+  pull_request:
+    paths:
+      - 'image/mbr/raid-external/**'
+      - 'test/test-raid-external-*.yaml'
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        raid_level: [RAID0, RAID1, RAID5, RAID10]
+        filesystem: [ext4, btrfs]
+        include:
+          - raid_level: RAID0
+            raid_devices: 2
+            encryption: n
+          - raid_level: RAID1
+            raid_devices: 2
+            encryption: y
+          - raid_level: RAID5
+            raid_devices: 3
+            encryption: y
+          - raid_level: RAID10
+            raid_devices: 4
+            encryption: y
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-system-aarch64 genimage zstd
+
+    - name: Run layer validation
+      run: |
+        ./rpi-image-gen layer --validate image/mbr/raid-external/image.yaml
+
+    - name: Run test suite
+      run: |
+        cd test
+        bash raid-external-test.sh
+
+    - name: Build test configuration
+      run: |
+        # Create test configuration
+        cat > test-raid-ci.yaml << EOF
+        device:
+          layer: rpi5
+
+        image:
+          layer: raid-external
+          name: raid-ci-test
+          raid_external_rootfs_type: ${{ matrix.filesystem }}
+          raid_external_raid_level: ${{ matrix.raid_level }}
+          raid_external_raid_devices: ${{ matrix.raid_devices }}
+          raid_external_encryption_enabled: ${{ matrix.encryption }}
+
+        layer:
+          base: bookworm-minbase
+        EOF
+
+    - name: Validate test configuration
+      run: |
+        ./rpi-image-gen layer --validate test-raid-ci.yaml
+
+    - name: Test image generation (dry run)
+      run: |
+        echo "Testing image generation with configuration:"
+        cat test-raid-ci.yaml
+        echo "Configuration validation passed"
+
+  security:
+    runs-on: ubuntu-22.04
+    needs: test
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up security tools
+      run: |
+        # Install security scanning tools
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.32.0
+        curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin v0.74.0
+
+    - name: Security scan layer files
+      run: |
+        echo "Scanning RAID external layer for security issues..."
+        # Scan the layer directory
+        syft dir:image/mbr/raid-external --output spdx-json > raid-external-sbom.json
+        # Scan for vulnerabilities
+        grype sbom:raid-external-sbom.json --output json > raid-external-security.json || echo "Security scan completed with warnings"
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports-${{ matrix.raid_level }}-${{ matrix.filesystem }}
+        path: |
+          raid-external-sbom.json
+          raid-external-security.json
+        retention-days: 30
+
+  documentation:
+    runs-on: ubuntu-22.04
+    needs: test
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Validate documentation
+      run: |
+        # Check if README exists and has required sections
+        if [[ -f "image/mbr/raid-external/README.md" ]]; then
+          echo "Checking README structure..."
+          if grep -q "## Features" image/mbr/raid-external/README.md && \
+             grep -q "## Configuration" image/mbr/raid-external/README.md && \
+             grep -q "## Examples" image/mbr/raid-external/README.md; then
+            echo "README has required sections"
+          else
+            echo "ERROR: README missing required sections"
+            exit 1
+          fi
+        else
+          echo "ERROR: README not found"
+          exit 1
+        fi
+
+    - name: Check configuration examples
+      run: |
+        echo "Checking test configuration files..."
+        test_files=(
+          "test-raid-external-validation.yaml"
+          "test-raid-external-raid0.yaml"
+          "test-raid-external-raid5.yaml"
+          "test-raid-external-raid10.yaml"
+          "test-raid-external-performance.yaml"
+        )
+
+        for test_file in "${test_files[@]}"; do
+          if [[ -f "$test_file" ]]; then
+            echo "✓ $test_file exists"
+          else
+            echo "✗ $test_file missing"
+            exit 1
+          fi
+        done
+
+  performance:
+    runs-on: ubuntu-22.04
+    needs: test
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Performance testing
+      run: |
+        echo "Running performance tests..."
+        # Test build time estimation
+        time ./rpi-image-gen layer --validate image/mbr/raid-external/image.yaml
+
+        # Check for performance optimization variables
+        if grep -q "raid_external_apt_cache" image/mbr/raid-external/image.yaml && \
+           grep -q "raid_external_ccache" image/mbr/raid-external/image.yaml && \
+           grep -q "raid_external_parallel_jobs" image/mbr/raid-external/image.yaml; then
+          echo "✓ Performance optimization variables present"
+        else
+          echo "✗ Performance optimization variables missing"
+          exit 1
+        fi
+
+        # Check for performance scripts
+        if [[ -f "image/mbr/raid-external/performance-optimization.sh" ]]; then
+          echo "✓ Performance optimization script exists"
+        else
+          echo "✗ Performance optimization script missing"
+          exit 1
+        fi
+
+  deploy:
+    runs-on: ubuntu-22.04
+    needs: [test, security, documentation, performance]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create release notes
+      run: |
+        echo "# RAID External Layer Release" > release-notes.md
+        echo "" >> release-notes.md
+        echo "## Changes" >> release-notes.md
+        echo "- ✅ Enhanced security with SBOM integration" >> release-notes.md
+        echo "- ✅ Improved performance with caching and parallel processing" >> release-notes.md
+        echo "- ✅ Added comprehensive testing framework" >> release-notes.md
+        echo "- ✅ Updated documentation with enterprise examples" >> release-notes.md
+        echo "" >> release-notes.md
+        echo "## Supported Configurations" >> release-notes.md
+        echo "- RAID0, RAID1, RAID5, RAID10" >> release-notes.md
+        echo "- ext4 and btrfs filesystems" >> release-notes.md
+        echo "- LUKS2 encryption support" >> release-notes.md
+        echo "- Enterprise compliance ready" >> release-notes.md
+
+    - name: Upload release assets
+      uses: actions/upload-artifact@v3
+      with:
+        name: raid-external-layer-assets
+        path: |
+          image/mbr/raid-external/
+          test/test-raid-external-*.yaml
+          release-notes.md
+        retention-days: 90

@@ -1,0 +1,42 @@
+[
+   {
+      "attributes": {
+         "PMAPversion": "1.2.0",
+         "system_type": "slotted",
+         "raid_level": "RAID1",
+         "raid_devices": "2"
+      }
+   },
+   {
+      "slots": {
+         "A": {
+            "partitions": [
+               {"image": "boot"},
+               {"image": "raid1-disk1"},
+               {"image": "raid1-disk2"}
+            ]
+         }
+      }
+   },
+   {
+      "encrypted": {
+         "luks2": {
+            "key_size": 512,
+            "cipher": "aes-xts-plain64",
+            "label": "root",
+            "uuid": "<CRYPT_UUID>",
+            "hash": "sha256",
+            "mname": "cryptroot",
+            "etype": "partitioned"
+         },
+         "slots": {
+            "A": {
+               "partitions": [
+                  {"image": "raid1-disk1"},
+                  {"image": "raid1-disk2"}
+               ]
+            }
+         }
+      }
+   }
+]

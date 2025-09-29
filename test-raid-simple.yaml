@@ -4,13 +4,13 @@ device:
   hostname: raid-simple-test
 
 image:
-  layer: raid-external  # Using new RAID external layer
+  layer: raid1-external  # Using new RAID external layer
   name: raid-simple-test
-  rootfs_type: ext4
-  boot_part_size: 100M
-  root_part_size: 2G
-  raid_level: RAID1      # RAID0 or RAID1
-  raid_devices: 2        # Number of external drives (1-4)
+  raid1_external_rootfs_type: ext4
+  raid1_external_boot_part_size: 100M
+  raid1_external_root_part_size: 2G
+  raid1_external_raid_level: RAID1      # RAID1 only
+  raid1_external_raid_devices: 2        # Number of external drives (2 for RAID1)
 
 layer:
   base: bookworm-minbase
