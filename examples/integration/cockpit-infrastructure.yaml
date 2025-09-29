@@ -1,0 +1,171 @@
+# Cockpit интеграция с инфраструктурой управления
+# Показывает интеграцию с Ansible, Kubernetes и enterprise инструментами
+
+device:
+  layer: rpi5
+  class: pi5
+  variant: 8G
+  hostname: infrastructure-cockpit
+
+image:
+  layer: image-base
+  name: infrastructure-cockpit
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  infrastructure: management-stack
+  networking: enterprise-networking
+  security: enterprise-security
+  monitoring: enterprise-monitoring
+  automation: infrastructure-automation
+  cockpit: net-misc/cockpit
+
+# Инфраструктура управления
+infrastructure:
+  ansible_integration: y
+  terraform_ready: y
+  kubernetes_ready: y
+  monitoring_stack: prometheus_grafana_elk
+  configuration_management: ansible_terraform
+  deployment_pipeline: github_actions_jenkins
+
+# Cockpit с интеграцией инфраструктуры
+cockpit:
+  port: 9090
+  allow_unprivileged: n
+  max_startup_time: 120
+  login_banner: "Infrastructure Management Console - $(hostname) - $(date)"
+
+# Enterprise сеть для инфраструктуры
+networking:
+  vlan_support: y
+  bonding_enabled: y
+  firewall_configured: y
+  vpn_server: y
+  network_monitoring: y
+  management_vlan: 100
+
+# Enterprise безопасность
+security:
+  selinux_enabled: y
+  apparmor_enabled: y
+  auditd_enabled: y
+  fail2ban_enabled: y
+  ufw_enabled: y
+  intrusion_detection: y
+
+# Enterprise мониторинг
+monitoring:
+  prometheus_enabled: y
+  grafana_enabled: y
+  node_exporter: y
+  cockpit_metrics: y
+  log_aggregation: y
+  audit_log_forwarding: y
+
+# Автоматизация инфраструктуры
+automation:
+  ansible_tower: y
+  rundeck_integration: y
+  jenkins_pipeline: y
+  gitlab_ci: y
+  configuration_backup: y
+
+# Интеграция с container orchestration
+kubernetes:
+  enable: y
+  role: worker
+  cni: flannel
+  ingress_controller: nginx
+  monitoring: prometheus_adapter
+  logging: fluentd
+
+# Интеграция с Ansible
+ansible:
+  enable: y
+  roles_path: /opt/ansible/roles
+  playbooks_path: /opt/ansible/playbooks
+  inventory_path: /opt/ansible/inventory
+  vault_password_file: /opt/ansible/.vault_password
+  cockpit_integration: y
+
+# Интеграция с Terraform
+terraform:
+  enable: y
+  backend: s3
+  state_bucket: infrastructure-terraform-state
+  workspaces: development,staging,production
+  cockpit_provisioning: y
+
+# Интеграция с monitoring stack
+monitoring_integration:
+  prometheus_cockpit_exporter: y
+  grafana_cockpit_dashboard: y
+  elk_cockpit_pipeline: y
+  alertmanager_cockpit_rules: y
+
+# Интеграция с CI/CD
+cicd_integration:
+  github_actions_cockpit_deploy: y
+  jenkins_cockpit_pipeline: y
+  gitlab_ci_cockpit_testing: y
+  artifact_repository: nexus
+
+# Интеграция с ITSM
+itsm_integration:
+  jira_integration: y
+  servicenow_integration: y
+  knowledge_base: confluence
+  asset_management: infrastructure_cmdb
+
+# Firewall с правилами инфраструктуры
+ufw:
+  enable: y
+  default_incoming: deny
+  default_outgoing: allow
+  allow_services: ssh,9090/tcp,6443/tcp,10250/tcp,3000/tcp,9090/udp
+  logging: high
+  rate_limiting: y
+
+# AppArmor для защиты инфраструктурных сервисов
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: y
+  container_support: y
+  logging_enable: y
+  infrastructure_profiles: y
+
+# Аудит инфраструктурных операций
+auditd:
+  enable: y
+  max_log_file: 20
+  space_left: 300
+  audit_infrastructure: y
+  audit_kubernetes: y
+  audit_ansible: y
+
+# Синхронизация времени для инфраструктуры
+time-sync:
+  enable: y
+  servers:
+    - ntp.ubuntu.com
+    - time.google.com
+    - pool.ntp.org
+    - ntp.company.local
+  timezone: UTC
+  max_drift: 50ms
+
+# Автоматические обновления инфраструктуры
+unattended-upgrades:
+  enable: y
+  auto_reboot: n
+  origins_patterns:
+    - origin=Debian,codename=${distro_codename},label=Debian-Security
+    - origin=Raspberry Pi Foundation,codename=${distro_codename}
+  package_blacklist:
+    - cockpit
+    - kubelet
+    - kubeadm
+    - kubectl

@@ -1,0 +1,115 @@
+# Производственная конфигурация мониторинга с аудитом
+# Оптимизирована для промышленного использования
+
+device:
+  layer: rpi-cm5
+  class: cm5
+  variant: 8G
+  hostname: prod-audit-monitor
+
+image:
+  layer: image-base
+  name: production-audit-monitor
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: production-security
+  audit: production-audit
+  monitoring: production-monitoring
+  performance: production-performance
+
+# Производственная безопасность
+security:
+  selinux_enabled: y
+  apparmor_enabled: y
+  auditd_enabled: y
+  fail2ban_enabled: y
+  ufw_enabled: y
+  secure_boot: y
+
+# Оптимизированный аудит для производства
+audit:
+  auditd_enable: y
+  auditd_max_log_file: 20
+  auditd_max_log_file_action: rotate
+  auditd_space_left: 500
+  auditd_space_left_action: syslog
+  auditd_admin_space_left: 300
+  auditd_admin_space_left_action: single
+  auditd_disk_full_action: suspend
+  auditd_disk_error_action: syslog
+  auditd_flush: incremental_async
+  auditd_freq: 100
+  auditd_num_logs: 10
+  auditd_dispatcher: /sbin/audispd
+  auditd_name_format: hostname
+
+# Производственный мониторинг
+monitoring:
+  prometheus_enabled: y
+  grafana_enabled: y
+  node_exporter: y
+  alertmanager: y
+  metrics_collection: y
+  log_aggregation: y
+  audit_log_forwarding: y
+
+# Производственная производительность
+performance:
+  kernel_optimization: y
+  memory_tuning: y
+  network_optimization: y
+  audit_performance: optimized
+
+# AppArmor с производственными профилями
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: y
+  container_support: y
+  logging_enable: y
+  production_profiles: y
+
+# Firewall для промышленного использования
+ufw:
+  enable: y
+  default_incoming: deny
+  default_outgoing: allow
+  allow_services: ssh,prometheus,grafana,syslog
+  logging: medium
+  rate_limiting: y
+  production_rules: y
+
+# Защита от промышленных угроз
+fail2ban:
+  enable: y
+  backend: systemd
+  log_level: WARNING
+  db_purge_age: 7d
+  default_ban_time: 1h
+  default_find_time: 1h
+  default_max_retry: 3
+  enabled_jails: sshd,dropbear,prometheus
+  ignore_ips: 10.0.0.0/8,192.168.0.0/16,172.16.0.0/12
+
+# Синхронизация времени для целостности логов
+time-sync:
+  enable: y
+  servers:
+    - ntp.ubuntu.com
+    - time.google.com
+    - pool.ntp.org
+  timezone: UTC
+  max_drift: 50ms
+
+# Автоматические обновления для безопасности
+unattended-upgrades:
+  enable: y
+  auto_reboot: n  # Не перезагружать production автоматически
+  origins_patterns:
+    - origin=Debian,codename=${distro_codename},label=Debian-Security
+    - origin=Raspberry Pi Foundation,codename=${distro_codename}
+  package_blacklist:
+    - vim
+    - nano

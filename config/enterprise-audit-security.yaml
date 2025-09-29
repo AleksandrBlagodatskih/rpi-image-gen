@@ -1,0 +1,108 @@
+# Enterprise аудит и безопасность для критической инфраструктуры
+device:
+  layer: rpi5
+  class: pi5
+  variant: 8G
+  hostname: secure-audit-server
+
+image:
+  layer: image-rpios
+  name: enterprise-audit-security
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: maximum-security
+  audit: comprehensive-audit
+  monitoring: enterprise-monitoring
+  compliance: regulatory-compliance
+
+# Максимальная безопасность для enterprise аудита
+security:
+  selinux_enabled: y
+  apparmor_enabled: y
+  auditd_enabled: y
+  fail2ban_enabled: y
+  ufw_enabled: y
+  intrusion_detection: y
+  secure_boot: y
+  encryption_required: y
+
+# Комплексный аудит для compliance
+audit:
+  auditd_comprehensive: y
+  auditd_max_log_file: 15
+  auditd_space_left: 200
+  auditd_admin_space_left: 150
+  auditd_disk_full_action: halt
+  auditd_flush: sync
+  auditd_freq: 20
+
+# Enterprise мониторинг и логирование
+monitoring:
+  prometheus_enabled: y
+  grafana_enabled: y
+  elk_stack: y
+  metrics_collection: y
+  log_aggregation: y
+  alerting_rules: y
+  dashboard_integration: y
+
+# Соответствие регуляторным требованиям
+compliance:
+  cis_benchmark: y
+  pci_dss: y
+  hipaa_ready: y
+  gdpr_compliant: y
+  sox_compliant: y
+  audit_trail_comprehensive: y
+
+# AppArmor для Mandatory Access Control
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: y
+  container_support: y
+  logging_enable: y
+
+# Firewall для защиты от внешних угроз
+ufw:
+  enable: y
+  default_incoming: deny
+  default_outgoing: allow
+  allow_services: ssh,http,https,prometheus
+  logging: high
+  rate_limiting: y
+
+# Защита от brute force атак
+fail2ban:
+  enable: y
+  backend: systemd
+  log_level: INFO
+  default_ban_time: 15m
+  default_find_time: 15m
+  default_max_retry: 3
+  enabled_jails: sshd,dropbear,nginx-http-auth
+  ignore_ips: 10.0.0.0/8,192.168.0.0/16
+
+# Мониторинг времени для целостности логов
+time-sync:
+  enable: y
+  servers:
+    - ntp.ubuntu.com
+    - time.google.com
+  timezone: UTC
+  max_drift: 100ms
+
+# Автоматические обновления безопасности
+unattended-upgrades:
+  enable: y
+  auto_reboot: y
+  auto_reboot_time: 03:00
+  origins_patterns:
+    - origin=Debian,codename=${distro_codename},label=Debian-Security
+    - origin=Raspberry Pi Foundation,codename=${distro_codename}
+  package_blacklist:
+    - vim
+    - nano
+    - htop

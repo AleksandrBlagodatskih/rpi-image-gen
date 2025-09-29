@@ -1,0 +1,737 @@
+= Интеграция Auditd с SIEM Системами
+
+== Обзор Интеграции
+
+Интеграция auditd с SIEM (Security Information and Event Management) системами обеспечивает централизованную агрегацию, анализ и хранение логов аудита в enterprise окружениях. Это критически важно для compliance, обнаружения угроз и forensic анализа.
+
+== Поддерживаемые SIEM Системы
+
+=== ELK Stack (Elasticsearch, Logstash, Kibana)
+
+==== Архитектура Интеграции
+
+[source,yaml]
+----
+# Logstash конфигурация для аудита
+input {
+  file {
+    path => "/var/log/audit/audit.log"
+    start_position => "beginning"
+    sincedb_path => "/var/lib/logstash/sincedb"
+    codec => "json"
+  }
+}
+
+filter {
+  # Парсинг auditd JSON формата
+  json {
+    source => "message"
+    target => "audit_event"
+  }
+
+  # Обогащение данными
+  mutate {
+    add_field => {
+      "event_type" => "audit"
+      "source_system" => "%{host}"
+      "environment" => "production"
+    }
+  }
+
+  # Геолокация по IP
+  geoip {
+    source => "audit_event[addr]"
+    target => "geo"
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["elasticsearch:9200"]
+    index => "audit-logs-%{+YYYY.MM.dd}"
+  }
+}
+----
+
+==== Kibana Дашборды
+
+[source,json]
+----
+{
+  "title": "Auditd Security Dashboard",
+  "panels": [
+    {
+      "type": "metric",
+      "title": "Failed Authentications (24h)",
+      "query": "event_type:audit AND result:failure"
+    },
+    {
+      "type": "pie",
+      "title": "Authentication Methods",
+      "query": "event_type:audit AND type:USER_AUTH",
+      "field": "audit_event.acct"
+    },
+    {
+      "type": "table",
+      "title": "Recent File Changes",
+      "query": "event_type:audit AND type:PATH",
+      "columns": ["@timestamp", "audit_event.name", "audit_event.mode"]
+    }
+  ]
+}
+----
+
+=== Splunk Enterprise
+
+==== Конфигурация Inputs
+
+[source,conf]
+----
+# inputs.conf для аудита
+[monitor:///var/log/audit/audit.log]
+sourcetype = auditd
+index = security
+
+# Мониторинг логов аутентификации
+[monitor:///var/log/auth.log]
+sourcetype = linux_secure
+index = security
+
+# Мониторинг sudo логов
+[monitor:///var/log/sudo.log]
+sourcetype = linux_sudo
+index = security
+----
+
+==== Поисковые Запросы
+
+[source,splunk]
+----
+// Поиск неудачных аутентификаций
+sourcetype=auditd result=failure type=USER_AUTH
+| stats count by acct, addr
+| sort - count
+
+// Поиск эскалации привилегий
+sourcetype=auditd syscall IN (setuid, setgid) success=yes
+| stats count by pid, auid, euid
+| where euid < auid
+
+// Мониторинг изменений файлов
+sourcetype=auditd type=PATH name IN (/etc/passwd, /etc/shadow, /etc/sudoers)
+| stats count by name, mode
+----
+
+=== Graylog
+
+==== GELF Input Конфигурация
+
+[source,yaml]
+----
+# Graylog input для аудита
+inputs:
+  - gelf_udp:
+      bind_address: 0.0.0.0
+      port: 12201
+
+# Системные input для аудита
+system_inputs:
+  - filebeat:
+      paths: ["/var/log/audit/audit.log"]
+      type: "auditd"
+----
+
+==== Content Pack для Аудита
+
+[source,json]
+----
+{
+  "title": "Auditd Content Pack",
+  "description": "Comprehensive auditd monitoring",
+  "streams": [
+    {
+      "title": "Audit Events",
+      "rules": [
+        {
+          "field": "facility",
+          "value": "audit",
+          "type": 1
+        }
+      ]
+    }
+  ],
+  "dashboards": [
+    {
+      "title": "Audit Overview",
+      "widgets": [
+        {
+          "type": "QUICKVALUES",
+          "field": "type",
+          "title": "Event Types"
+        }
+      ]
+    }
+  ]
+}
+----
+
+=== IBM QRadar
+
+==== DSM (Device Support Module)
+
+[source,properties]
+----
+# QRadar DSM для аудита
+name=LinuxAuditdDSM
+description=Linux audit daemon log parser
+log_format=auditd
+
+# Парсинг событий
+parse_pattern=^(\w+)\s+(\d+)\s+(\w+)\s+(\w+)\s+(.*)$
+event_type=$1
+timestamp=$2
+result=$3
+type=$4
+data=$5
+----
+
+==== Кастомные Свойства
+
+[source,properties]
+----
+# Обогащение событий аудита
+properties:
+  - name: audit_user
+    expression: /auid=(\d+)/
+    type: string
+
+  - name: audit_session
+    expression: /ses=(\d+)/
+    type: integer
+
+  - name: audit_command
+    expression: /comm="([^"]+)"/
+    type: string
+
+  - name: audit_file
+    expression: /name="([^"]+)"/
+    type: string
+----
+
+=== Microsoft Sentinel
+
+==== Kusto Запросы для Аудита
+
+[source,kusto]
+----
+// Аутентификация пользователей
+AuditLogs
+| where EventType == "USER_AUTH"
+| where Result == "failure"
+| summarize count() by bin(TimeGenerated, 1h), Account
+| order by count_ desc
+
+// Изменения файлов
+AuditLogs
+| where EventType == "PATH"
+| where FileName in ('passwd', 'shadow', 'sudoers')
+| project TimeGenerated, Account, FileName, Mode, Success
+
+// Сетевая активность
+AuditLogs
+| where EventType == "SYSCALL"
+| where Syscall in ('connect', 'accept', 'bind')
+| project TimeGenerated, Account, Syscall, Args, Success
+----
+
+==== Рабочие Книги (Workbooks)
+
+[source,json]
+----
+{
+  "name": "Audit Security Workbook",
+  "sections": [
+    {
+      "name": "Authentication Overview",
+      "queries": [
+        {
+          "name": "Failed Logins",
+          "query": "AuditLogs | where Result == 'failure' | summarize count() by bin(TimeGenerated, 1h)"
+        }
+      ]
+    }
+  ]
+}
+----
+
+== Интеграционные Паттерны
+
+=== Агент-Based Интеграция
+
+[source,mermaid]
+----
+graph TB
+    A[Auditd] --> B[rsyslog]
+    B --> C[SIEM Agent]
+    C --> D[SIEM Server]
+
+    A2[Auditd] --> E[Filebeat]
+    E --> F[Logstash]
+    F --> G[Elasticsearch]
+
+    A3[Auditd] --> H[Fluentd]
+    H --> I[SIEM Collector]
+----
+
+=== Direct Database Интеграция
+
+[source,mermaid]
+----
+graph TB
+    A[Auditd] --> B[PostgreSQL]
+    B --> C[SIEM ETL]
+    C --> D[SIEM Database]
+
+    A2[Auditd] --> E[SQLite]
+    E --> F[SIEM Agent]
+    F --> G[SIEM Server]
+----
+
+=== Real-time Streaming
+
+[source,mermaid]
+----
+graph TB
+    A[Auditd] --> B[Kafka]
+    B --> C[SIEM Stream Processor]
+    C --> D[SIEM Analytics Engine]
+
+    B --> E[Apache Flink]
+    E --> F[Real-time Alerts]
+
+    B --> G[Apache Storm]
+    G --> H[Complex Event Processing]
+----
+
+== Конфигурация Агентов
+
+=== Filebeat для ELK
+
+[source,yaml]
+----
+# filebeat.yml для аудита
+filebeat.inputs:
+- type: log
+  paths:
+    - /var/log/audit/audit.log
+  json.keys_under_root: true
+  json.overwrite_keys: true
+  fields:
+    log_type: auditd
+    environment: production
+    source_system: %{[beat.hostname]}
+
+- type: log
+  paths:
+    - /var/log/auth.log
+  fields:
+    log_type: auth
+    environment: production
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "audit-%{[fields.log_type]}-%{+yyyy.MM.dd}"
+----
+
+=== Fluentd для Multi-SIEM
+
+[source,conf]
+----
+# fluentd.conf для аудита
+<source>
+  @type tail
+  path /var/log/audit/audit.log
+  pos_file /var/lib/fluentd/audit.pos
+  tag audit.raw
+  format json
+  read_from_head true
+</source>
+
+<filter audit.raw>
+  @type record_transformer
+  enable_ruby true
+  <record>
+    event_type "audit"
+    source_system "#{Socket.gethostname}"
+    timestamp ${Time.now.strftime('%Y-%m-%dT%H:%M:%S.%L%z')}
+  </record>
+</filter>
+
+<match audit.raw>
+  @type copy
+  <store>
+    @type elasticsearch
+    host elasticsearch
+    index_name audit-logs-${Time.now.strftime('%Y.%m.%d')}
+  </store>
+  <store>
+    @type splunk_hec
+    host splunk.company.com
+    token YOUR_HEC_TOKEN
+    source auditd
+  </store>
+</match>
+----
+
+=== rsyslog для Традиционных SIEM
+
+[source,conf]
+----
+# rsyslog.conf для аудита
+module(load="imfile")
+
+# Мониторинг аудита
+input(type="imfile"
+      File="/var/log/audit/audit.log"
+      Tag="audit"
+      Severity="info"
+      Facility="local6")
+
+# Мониторинг аутентификации
+input(type="imfile"
+      File="/var/log/auth.log"
+      Tag="auth"
+      Severity="info"
+      Facility="auth")
+
+# Форматирование для SIEM
+template(name="AuditFormat" type="string"
+         string="%timestamp:::date-rfc3339% %hostname% %syslogtag% %msg%\n")
+
+# Отправка в SIEM
+*.* @siem-server.company.com:514
+
+# Локальное хранение
+*.* /var/log/siem-forwarded.log
+----
+
+== Мониторинг и Алертинг
+
+=== Правила Обнаружения
+
+==== Неудачные Аутентификации
+
+[source,yaml]
+----
+# ELK Alert для неудачных аутентификаций
+{
+  "trigger": {
+    "schedule": {
+      "interval": "5m"
+    }
+  },
+  "input": {
+    "search": {
+      "request": {
+        "body": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "must": [
+                {"match": {"event_type": "audit"}},
+                {"match": {"result": "failure"}},
+                {"match": {"type": "USER_AUTH"}}
+              ],
+              "filter": {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-5m"
+                  }
+                }
+              }
+            }
+          },
+          "aggs": {
+            "failed_auth": {
+              "terms": {
+                "field": "audit_event.acct.keyword",
+                "size": 10
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "condition": {
+    "compare": {
+      "ctx.payload.hits.total": {
+        "gt": 5
+      }
+    }
+  },
+  "actions": {
+    "email_admin": {
+      "email": {
+        "to": "security@company.com",
+        "subject": "High Failed Authentication Rate",
+        "body": "Detected {{ctx.payload.hits.total}} failed authentications in last 5 minutes"
+      }
+    }
+  }
+}
+----
+
+==== Изменения Критических Файлов
+
+[source,splunk]
+----
+// Splunk алерт для изменений файлов
+| tstats count WHERE index=security sourcetype=auditd type=PATH name IN (/etc/passwd,/etc/shadow,/etc/sudoers) BY _time span=5m
+| where count > 1
+| eval severity="high"
+| sendalert email_admin
+----
+
+=== Метрики Производительности
+
+==== Мониторинг Backlog
+
+[source,prometheus]
+----
+# Prometheus метрики для аудита
+- name: audit_backlog_current
+  type: gauge
+  help: Current audit backlog
+
+- name: audit_events_per_second
+  type: counter
+  help: Number of audit events processed per second
+
+- name: audit_log_file_size
+  type: gauge
+  help: Size of audit log files in bytes
+----
+
+==== Дашборды Мониторинга
+
+[source,grafana]
+----
+{
+  "dashboard": {
+    "title": "Auditd Performance Dashboard",
+    "panels": [
+      {
+        "title": "Audit Events Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(audit_events_total[5m])",
+            "legendFormat": "Events/sec"
+          }
+        ]
+      },
+      {
+        "title": "Audit Backlog",
+        "type": "singlestat",
+        "targets": [
+          {
+            "expr": "audit_backlog_current",
+            "valueName": "current"
+          }
+        ]
+      },
+      {
+        "title": "Log File Sizes",
+        "type": "bargauge",
+        "targets": [
+          {
+            "expr": "audit_log_file_size",
+            "legendFormat": "{{file}}"
+          }
+        ]
+      }
+    ]
+  }
+}
+----
+
+== Масштабирование и High Availability
+
+=== Множественные Агенты
+
+[source,mermaid]
+----
+graph TB
+    A1[Auditd Node 1] --> C[Load Balancer]
+    A2[Auditd Node 2] --> C
+    A3[Auditd Node 3] --> C
+    C --> S[SIEM Cluster]
+
+    S1[SIEM Node 1] --> DB[(Shared Database)]
+    S2[SIEM Node 2] --> DB
+    S3[SIEM Node 3] --> DB
+----
+
+=== Геораспределенная Агрегация
+
+[source,mermaid]
+----
+graph TB
+    subgraph "Region A"
+        A1[Auditd Agents] --> LA[Local Aggregator]
+        LA --> RA[Regional SIEM]
+    end
+
+    subgraph "Region B"
+        B1[Auditd Agents] --> LB[Local Aggregator]
+        LB --> RB[Regional SIEM]
+    end
+
+    RA --> CA[Central Analytics]
+    RB --> CA
+    CA --> GS[Global SIEM]
+----
+
+== Безопасность Интеграции
+
+=== Шифрование Транспорта
+
+[source,nginx]
+----
+# Nginx reverse proxy с TLS
+server {
+    listen 8443 ssl http2;
+    server_name siem.company.com;
+
+    ssl_certificate /etc/ssl/certs/siem.crt;
+    ssl_certificate_key /etc/ssl/private/siem.key;
+
+    location /audit {
+        proxy_pass http://siem-backend:9200;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+----
+
+=== Аутентификация Агентов
+
+[source,conf]
+----
+# Filebeat с аутентификацией
+output.elasticsearch:
+  hosts: ["siem.company.com:9200"]
+  username: "filebeat"
+  password: "secure_password"
+  ssl.certificate_authorities: ["/etc/ssl/certs/ca.crt"]
+  ssl.certificate: "/etc/ssl/certs/filebeat.crt"
+  ssl.key: "/etc/ssl/private/filebeat.key"
+----
+
+=== Целостность Данных
+
+[source,yaml]
+----
+# Проверка целостности логов
+integrity:
+  check_interval: 300  # Каждые 5 минут
+  hash_algorithm: sha256
+  alert_threshold: 1    # Любое изменение вызывает алерт
+
+# Цифровые подписи
+signatures:
+  enabled: true
+  key_file: /etc/audit/signing.key
+  cert_file: /etc/audit/siem.crt
+----
+
+== Troubleshooting Интеграции
+
+=== Диагностика Агентов
+
+[source,bash]
+----
+# Проверка статуса агента
+sudo systemctl status filebeat
+sudo systemctl status fluentd
+sudo systemctl status rsyslog
+
+# Проверка конфигурации
+sudo filebeat test config
+sudo fluentd --dry-run -c /etc/fluentd/fluentd.conf
+
+# Проверка подключения к SIEM
+curl -k https://siem.company.com:9200/_cluster/health
+----
+
+=== Мониторинг Производительности
+
+[source,bash]
+----
+# Мониторинг использования ресурсов агентами
+htop | grep -E "(filebeat|fluentd|rsyslog)"
+
+# Проверка очередей
+sudo filebeat test output
+sudo fluentd --dry-run -c /etc/fluentd/fluentd.conf | grep -A 5 "output"
+
+# Мониторинг сетевого трафика
+iftop -i eth0 -f "port 9200 or port 514 or port 12201"
+----
+
+=== Отладка Форматирования
+
+[source,bash]
+----
+# Тестирование парсинга логов
+echo '{"timestamp":1234567890,"type":"USER_AUTH","result":"success"}' | jq .
+
+# Проверка форматов времени
+sudo ausearch -ts today -f /etc/passwd | head -5 | jq '.timestamp'
+
+# Валидация JSON структур
+sudo aureport -f -ts today | jq . > /tmp/audit-sample.json
+----
+
+== Лучшие Практики Enterprise
+
+=== Производительность
+
+1. **Асинхронная обработка** для предотвращения блокировок
+2. **Буферизация** для сглаживания пиковых нагрузок
+3. **Компрессия** трафика для снижения сетевой нагрузки
+4. **Локальное кеширование** для временных сбоев SIEM
+
+=== Надежность
+
+1. **Множественные пути доставки** (primary + fallback)
+2. **Автоматическое восстановление** после сбоев
+3. **Мониторинг задержек** доставки логов
+4. **Резервное хранение** локальных копий
+
+=== Безопасность
+
+1. **Шифрование end-to-end** всех логов аудита
+2. **Аутентификация** всех агентов и серверов
+3. **Целостность данных** с цифровыми подписями
+4. **Контроль доступа** к агрегированным логам
+
+=== Масштабируемость
+
+1. **Горизонтальное масштабирование** агентов
+2. **Разделение по регионам** для геораспределенных систем
+3. **Автоматическое балансирование нагрузки**
+4. **Эффективное партиционирование** данных
+
+== Заключение
+
+Интеграция auditd с SIEM системами обеспечивает:
+
+- **Централизованную видимость** всех событий безопасности
+- **Корреляцию событий** между различными системами
+- **Автоматическое обнаружение угроз** на основе поведенческого анализа
+- **Compliance отчетность** для регуляторных требований
+- **Долгосрочное хранение** и forensic анализ
+
+Правильная интеграция требует внимания к производительности, безопасности и надежности, но обеспечивает мощную основу для enterprise безопасности и compliance.

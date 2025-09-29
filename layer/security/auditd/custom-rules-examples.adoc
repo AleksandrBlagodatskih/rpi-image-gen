@@ -1,0 +1,565 @@
+= Примеры Кастомных Правил Аудита Auditd
+
+== Обзор Кастомных Правил
+
+Кастомные правила аудита позволяют мониторить специфические действия, файлы и процессы, важные для вашей организации. Ниже приведены практические примеры для различных сценариев использования.
+
+== Категории Кастомных Правил
+
+=== Мониторинг Конфиденциальных Данных
+
+==== Финансовые Данные
+
+[source,bash]
+----
+# Мониторинг доступа к финансовым данным
+-w /var/finance/ -p rwa -k financial_data
+-w /opt/accounting/ -p rwa -k accounting_data
+-w /home/*/finance/ -p rwa -k user_financial_data
+
+# Мониторинг финансовых приложений
+-w /usr/bin/banking-app -p x -k banking_software
+-w /opt/trading-platform/ -p x -k trading_platform
+
+# Мониторинг финансовых отчетов
+-w /var/reports/financial/ -p wa -k financial_reports
+----
+
+==== Медицинские Данные (HIPAA)
+
+[source,bash]
+----
+# Мониторинг медицинских записей
+-w /var/patient-records/ -p rwa -k patient_data
+-w /opt/ehr-system/ -p rwa -k ehr_access
+-w /home/doctor*/patient-files/ -p rwa -k doctor_patient_data
+
+# Мониторинг медицинского ПО
+-w /usr/bin/medication-tracker -p x -k medication_software
+-w /opt/diagnostic-tools/ -p x -k diagnostic_software
+
+# Мониторинг медицинских устройств
+-w /dev/medical-device* -p rwa -k medical_devices
+----
+
+==== Персональные Данные (GDPR)
+
+[source,bash]
+----
+# Мониторинг баз данных клиентов
+-w /var/customer-database/ -p rwa -k customer_data
+-w /opt/crm-system/ -p rwa -k crm_access
+-w /home/*/client-files/ -p rwa -k client_files
+
+# Мониторинг email систем
+-w /var/mail/ -p rwa -k email_data
+-w /opt/email-server/ -p x -k email_server
+
+# Мониторинг веб-приложений с данными пользователей
+-w /var/www/user-data/ -p rwa -k web_user_data
+----
+
+=== Мониторинг Критических Системных Файлов
+
+==== Расширенный Мониторинг Аутентификации
+
+[source,bash]
+----
+# Мониторинг SSH ключей
+-w /home/*/.ssh/ -p wa -k ssh_keys
+-w /root/.ssh/ -p wa -k root_ssh_keys
+
+# Мониторинг PAM конфигурации
+-w /etc/pam.d/ -p wa -k pam_config
+-w /etc/security/ -p wa -k security_config
+
+# Мониторинг пользователей и групп
+-w /usr/sbin/useradd -p x -k user_management
+-w /usr/sbin/usermod -p x -k user_management
+-w /usr/sbin/userdel -p x -k user_management
+-w /usr/sbin/groupadd -p x -k group_management
+-w /usr/sbin/groupmod -p x -k group_management
+-w /usr/sbin/groupdel -p x -k group_management
+----
+
+==== Мониторинг Сетевой Конфигурации
+
+[source,bash]
+----
+# Мониторинг сетевых интерфейсов
+-w /etc/network/interfaces -p wa -k network_config
+-w /etc/netplan/ -p wa -k netplan_config
+-w /etc/systemd/network/ -p wa -k systemd_network
+
+# Мониторинг firewall правил
+-w /etc/ufw/ -p wa -k ufw_config
+-w /etc/iptables/ -p wa -k iptables_config
+-w /etc/firewalld/ -p wa -k firewalld_config
+
+# Мониторинг DNS конфигурации
+-w /etc/resolv.conf -p wa -k dns_config
+-w /etc/hosts -p wa -k hosts_file
+-w /etc/hostname -p wa -k hostname_config
+----
+
+=== Мониторинг Приложений и Сервисов
+
+==== Веб-Серверы
+
+[source,bash]
+----
+# Мониторинг Apache/Nginx конфигурации
+-w /etc/apache2/ -p wa -k apache_config
+-w /etc/nginx/ -p wa -k nginx_config
+
+# Мониторинг веб-контента
+-w /var/www/ -p wa -k web_content
+-w /opt/web-applications/ -p rwa -k web_apps
+
+# Мониторинг логов веб-серверов
+-w /var/log/apache2/ -p wa -k apache_logs
+-w /var/log/nginx/ -p wa -k nginx_logs
+----
+
+==== Базы Данных
+
+[source,bash]
+----
+# Мониторинг PostgreSQL
+-w /etc/postgresql/ -p wa -k postgresql_config
+-w /var/lib/postgresql/ -p rwa -k postgresql_data
+-w /usr/bin/psql -p x -k postgresql_client
+
+# Мониторинг MySQL/MariaDB
+-w /etc/mysql/ -p wa -k mysql_config
+-w /var/lib/mysql/ -p rwa -k mysql_data
+-w /usr/bin/mysql -p x -k mysql_client
+
+# Мониторинг MongoDB
+-w /etc/mongod.conf -p wa -k mongodb_config
+-w /var/lib/mongodb/ -p rwa -k mongodb_data
+----
+
+==== Контейнеры и Оркестрация
+
+[source,bash]
+----
+# Мониторинг Docker
+-w /var/lib/docker/ -p rwa -k docker_data
+-w /etc/docker/ -p wa -k docker_config
+-w /usr/bin/docker -p x -k docker_commands
+
+# Мониторинг Kubernetes
+-w /etc/kubernetes/ -p wa -k kubernetes_config
+-w /var/lib/kubelet/ -p rwa -k kubelet_data
+-w /usr/bin/kubectl -p x -k kubectl_commands
+
+# Мониторинг Podman
+-w /var/lib/containers/ -p rwa -k podman_data
+-w /etc/containers/ -p wa -k podman_config
+-w /usr/bin/podman -p x -k podman_commands
+----
+
+=== Мониторинг Безопасности
+
+==== Антивирус и Защита
+
+[source,bash]
+----
+# Мониторинг антивирусного ПО
+-w /opt/antivirus/ -p rwa -k antivirus_data
+-w /var/log/antivirus/ -p wa -k antivirus_logs
+-w /usr/bin/clamscan -p x -k antivirus_scan
+-w /usr/bin/malware-detect -p x -k malware_scan
+
+# Мониторинг систем обнаружения вторжений
+-w /etc/snort/ -p wa -k snort_config
+-w /etc/suricata/ -p wa -k suricata_config
+-w /var/log/snort/ -p wa -k snort_logs
+-w /var/log/suricata/ -p wa -k suricata_logs
+----
+
+==== Шифрование и Ключи
+
+[source,bash]
+----
+# Мониторинг ключей шифрования
+-w /etc/ssl/ -p rwa -k ssl_certificates
+-w /etc/pki/ -p rwa -k pki_certificates
+-w /home/*/.ssh/ -p rwa -k user_ssh_keys
+
+# Мониторинг инструментов шифрования
+-w /usr/bin/openssl -p x -k openssl_usage
+-w /usr/bin/gpg -p x -k gpg_usage
+-w /usr/bin/encrypt-tools -p x -k encryption_tools
+----
+
+=== Мониторинг Производительности
+
+==== Ресурсоемкие Операции
+
+[source,bash]
+----
+# Мониторинг компиляции
+-w /usr/bin/gcc -p x -k compilation
+-w /usr/bin/make -p x -k build_process
+-w /usr/bin/cargo -p x -k rust_build
+
+# Мониторинг резервного копирования
+-w /usr/bin/rsync -p x -k backup_operations
+-w /usr/bin/tar -p x -k archive_operations
+-w /usr/bin/borg -p x -k borg_backup
+
+# Мониторинг системных ресурсов
+-a exit,always -F arch=b64 -S ioprio_set -k io_priority
+-a exit,always -F arch=b64 -S setpriority -k process_priority
+----
+
+=== Специализированные Сценарии
+
+==== IoT и Embedded Устройства
+
+[source,bash]
+----
+# Мониторинг GPIO и аппаратных интерфейсов
+-w /sys/class/gpio/ -p wa -k gpio_access
+-w /dev/i2c-* -p rwa -k i2c_devices
+-w /dev/spi* -p rwa -k spi_devices
+
+# Мониторинг датчиков и сенсоров
+-w /sys/bus/iio/ -p r -k sensor_data
+-w /proc/device-tree/ -p r -k device_tree
+
+# Мониторинг камер и видео
+-w /dev/video* -p rwa -k camera_devices
+-w /opt/video-processing/ -p x -k video_processing
+----
+
+==== Криптовалюты и Блокчейн
+
+[source,bash]
+----
+# Мониторинг крипто-кошельков
+-w /home/*/.bitcoin/ -p rwa -k bitcoin_wallet
+-w /home/*/.ethereum/ -p rwa -k ethereum_wallet
+-w /opt/blockchain-node/ -p rwa -k blockchain_data
+
+# Мониторинг майнинга
+-w /usr/bin/miner-software -p x -k mining_operations
+-w /opt/mining-rigs/ -p rwa -k mining_hardware
+----
+
+==== CI/CD и DevOps
+
+[source,bash]
+----
+# Мониторинг Git операций
+-w /usr/bin/git -p x -k git_operations
+-w /home/*/.git/ -p rwa -k git_repositories
+
+# Мониторинг инструментов сборки
+-w /usr/bin/docker -p x -k docker_build
+-w /usr/bin/podman -p x -k podman_build
+-w /usr/bin/jenkins -p x -k jenkins_operations
+
+# Мониторинг развертывания
+-w /usr/bin/ansible-playbook -p x -k ansible_deploy
+-w /usr/bin/terraform -p x -k terraform_operations
+----
+
+== Примеры Комплексных Наборов Правил
+
+=== Минимальный Набор для Малого Бизнеса
+
+[source,bash]
+----
+# Базовый аудит для малого бизнеса
+# Мониторинг аутентификации
+-w /var/log/auth.log -p wa -k authentication
+-w /var/log/sudo.log -p wa -k sudo_usage
+
+# Мониторинг критических файлов
+-w /etc/passwd -p wa -k user_accounts
+-w /etc/shadow -p wa -k passwords
+-w /etc/sudoers -p wa -k sudo_config
+
+# Мониторинг сетевой конфигурации
+-w /etc/network/ -p wa -k network_config
+-w /etc/hosts -p wa -k hosts_file
+
+# Мониторинг бизнес-приложений
+-w /opt/business-apps/ -p rwa -k business_data
+-w /var/business-logs/ -p wa -k business_logs
+----
+
+=== Стандартный Набор для Среднего Бизнеса
+
+[source,bash]
+----
+# Расширенный аудит для среднего бизнеса
+# Все базовые правила плюс:
+
+# Мониторинг веб-серверов
+-w /etc/apache2/ -p wa -k web_server_config
+-w /etc/nginx/ -p wa -k web_server_config
+-w /var/www/ -p wa -k web_content
+
+# Мониторинг баз данных
+-w /etc/mysql/ -p wa -k database_config
+-w /var/lib/mysql/ -p rwa -k database_data
+
+# Мониторинг email серверов
+-w /etc/postfix/ -p wa -k email_config
+-w /var/mail/ -p rwa -k email_data
+
+# Мониторинг облачных сервисов
+-w /opt/cloud-backup/ -p x -k cloud_backup
+-w /usr/bin/aws -p x -k aws_operations
+-w /usr/bin/azure -p x -k azure_operations
+----
+
+=== Максимальный Набор для Enterprise
+
+[source,bash]
+----
+# Полный аудит для enterprise окружения
+# Все предыдущие правила плюс:
+
+# Мониторинг контейнеров
+-w /var/lib/docker/ -p rwa -k docker_data
+-w /etc/kubernetes/ -p wa -k kubernetes_config
+
+# Мониторинг мониторинга
+-w /etc/prometheus/ -p wa -k prometheus_config
+-w /etc/grafana/ -p wa -k grafana_config
+-w /var/lib/prometheus/ -p rwa -k prometheus_data
+
+# Мониторинг безопасности
+-w /etc/apparmor/ -p wa -k apparmor_config
+-w /etc/selinux/ -p wa -k selinux_config
+-w /var/log/audit/ -p wa -k audit_config
+
+# Мониторинг compliance инструментов
+-w /usr/bin/oscap -p x -k compliance_scan
+-w /usr/bin/openscap -p x -k security_scan
+
+# Мониторинг резервного копирования
+-w /usr/bin/borg -p x -k backup_operations
+-w /usr/bin/restic -p x -k backup_operations
+----
+
+== Управление Кастомными Правилами
+
+=== Добавление Правил
+
+[source,bash]
+----
+# Добавление одиночного правила
+sudo auditctl -w /path/to/monitor -p wa -k custom_key
+
+# Добавление правила для конкретного системного вызова
+sudo auditctl -a exit,always -F arch=b64 -S open -F path=/etc/shadow -k shadow_access
+
+# Добавление правила для конкретного пользователя
+sudo auditctl -a exit,always -F arch=b64 -S execve -F auid=1000 -k user_1000_exec
+----
+
+=== Удаление Правил
+
+[source,bash]
+----
+# Удаление по ключу
+sudo auditctl -W custom_key
+
+# Удаление по номеру правила (узнать номером через -l)
+sudo auditctl -d 15
+
+# Удаление всех правил
+sudo auditctl -D
+----
+
+=== Сохранение Правил
+
+[source,bash]
+----
+# Сохранение текущих правил в файл
+sudo auditctl -l > /etc/audit/audit.rules.backup
+
+# Загрузка правил из файла
+sudo auditctl -R /etc/audit/audit.rules.backup
+
+# Восстановление правил из резервной копии
+sudo cp /etc/audit/audit.rules.backup /etc/audit/audit.rules
+sudo systemctl reload auditd
+----
+
+== Тестирование Кастомных Правил
+
+=== Проверка Синтаксиса
+
+[source,bash]
+----
+# Тестирование правила перед добавлением
+echo '-w /test/path -p wa -k test_key' | sudo auditctl -R /dev/stdin
+
+# Проверка загрузки всех правил
+sudo auditctl -l | grep -v '^#' | wc -l
+----
+
+=== Тестирование Событий
+
+[source,bash]
+----
+# Генерация тестового события
+touch /test/path/test_file
+echo "test content" > /test/path/test_file
+rm /test/path/test_file
+
+# Поиск сгенерированных событий
+sudo ausearch -k test_key -ts today
+
+# Проверка что правило работает
+sudo ausearch -k test_key | jq '. | length'
+----
+
+=== Мониторинг Производительности
+
+[source,bash]
+----
+# Проверка статистики аудита
+sudo auditctl -s
+
+# Мониторинг backlog
+watch 'sudo auditctl -s | grep backlog'
+
+# Анализ производительности
+sudo aureport -s | head -20
+
+# Проверка размера логов
+du -sh /var/log/audit/audit.log*
+----
+
+== Лучшие Практики для Кастомных Правил
+
+=== Организация
+
+1. **Группировка по категориям** с понятными ключами
+2. **Документирование** каждого правила в комментариях
+3. **Регулярный аудит** правил на актуальность
+4. **Версионирование** наборов правил
+
+=== Производительность
+
+1. **Минимизация количества правил** для критичных систем
+2. **Использование фильтров** (arch, uid, success) для снижения нагрузки
+3. **Мониторинг backlog** для предотвращения потери событий
+4. **Оптимизация путей** мониторинга (избегать рекурсивных директорий где возможно)
+
+=== Безопасность
+
+1. **Регулярное резервное копирование** кастомных правил
+2. **Тестирование в staging** перед production развертыванием
+3. **Мониторинг влияния** на производительность системы
+4. **Документирование** бизнес-обоснования каждого правила
+
+=== Масштабируемость
+
+1. **Централизованное управление** правилами через конфигурационные файлы
+2. **Автоматическое развертывание** правил через Ansible/Puppet
+3. **Мониторинг покрытия** критичных областей
+4. **Регулярное обновление** в соответствии с новыми угрозами
+
+== Интеграция с SIEM
+
+=== Отправка Кастомных Событий
+
+[source,bash]
+----
+# Создание кастомного события для SIEM
+sudo ausearch -k custom_key -ts today | jq -r '.[] | {
+  timestamp: .timestamp,
+  event_type: .type,
+  key: .key,
+  file: .name,
+  user: .auid
+}' | while read event; do
+  # Отправка в SIEM
+  curl -X POST -H "Content-Type: application/json" \
+    -d "$event" \
+    https://siem.company.com/api/events
+done
+----
+
+=== Агрегация Кастомных Метрик
+
+[source,yaml]
+----
+# Prometheus метрики для кастомных правил
+- name: audit_custom_events_total
+  type: counter
+  help: Total number of custom audit events
+  labels:
+    - rule_key
+    - event_type
+    - severity
+
+- name: audit_custom_files_modified_total
+  type: counter
+  help: Total number of custom file modifications
+  labels:
+    - file_path
+    - rule_key
+----
+
+== Примеры Реальных Сценариев
+
+=== Обнаружение Атаки на Веб-Сервер
+
+[source,bash]
+----
+# Мониторинг подозрительной активности веб-сервера
+-w /var/www/uploads/ -p wa -k web_uploads
+-w /usr/bin/wget -p x -k wget_downloads
+-w /usr/bin/curl -p x -k curl_requests
+
+# Поиск подозрительной активности
+sudo ausearch -k web_uploads -ts today | grep -E "(php|jsp|asp)" | head -10
+----
+
+=== Мониторинг Изменений Конфигурации
+
+[source,bash]
+----
+# Мониторинг изменений конфигурации
+-w /etc/ -p wa -k config_changes
+-w /opt/config/ -p rwa -k application_config
+
+# Ежедневный отчет изменений
+sudo ausearch -k config_changes -ts today | \
+  jq -r '.[] | select(.type=="PATH") | .name' | \
+  sort | uniq > daily_config_changes.txt
+----
+
+=== Мониторинг Доступа к Конфиденциальным Файлам
+
+[source,bash]
+----
+# Мониторинг доступа к конфиденциальным файлам
+-w /opt/secret-project/ -p r -k secret_project_read
+-w /opt/secret-project/ -p w -k secret_project_write
+
+# Поиск несанкционированного доступа
+sudo ausearch -k secret_project_read -ts today | \
+  grep -v "auid=1000\|auid=1001" | head -10
+----
+
+== Заключение
+
+Кастомные правила аудита позволяют адаптировать мониторинг под специфические требования вашей организации. Правильное планирование, тестирование и сопровождение обеспечивают:
+
+- **Актуальное покрытие** критичных областей безопасности
+- **Минимальное влияние** на производительность системы
+- **Эффективное обнаружение** угроз и аномалий
+- **Соответствие** регуляторным требованиям
+
+Рекомендуется начинать с минимального набора правил и постепенно расширять его в соответствии с выявленными рисками и требованиями бизнеса.

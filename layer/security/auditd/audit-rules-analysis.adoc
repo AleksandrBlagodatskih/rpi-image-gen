@@ -1,0 +1,465 @@
+= Глубокий Анализ Правил Аудита Auditd
+
+== Обзор Правил Аудита
+
+Auditd слой автоматически настраивает **18 базовых правил мониторинга** для комплексного аудита системы. Эти правила охватывают ключевые области безопасности и соответствуют рекомендациям CIS (Center for Internet Security).
+
+== Детальный Разбор Правил
+
+=== Аутентификация и Доступ
+
+[source,bash]
+----
+# Мониторинг аутентификации пользователей
+-w /var/log/auth.log -p wa -k auth
+-w /var/log/sudo.log -p wa -k sudo
+----
+
+*Назначение:* Отслеживание всех событий аутентификации и использования sudo
+*Ключи аудита:* `auth`, `sudo`
+*Параметры:*
+- `-w` - мониторинг файла
+- `-p wa` - отслеживание записи (w) и изменения атрибутов (a)
+- `-k` - ключ для группировки событий
+
+=== Системные Вызовы и Привилегии
+
+[source,bash]
+----
+# Мониторинг системных вызовов для эскалации привилегий
+-a exit,always -F arch=b64 -S execve -k exec
+-a exit,always -F arch=b32 -S execve -k exec
+----
+
+*Назначение:* Отслеживание выполнения программ (execve системный вызов)
+*Архитектуры:* Поддержка 64-битной (b64) и 32-битной (b32) архитектур
+*Фильтры:*
+- `-a exit,always` - аудит при завершении системного вызова
+- `-F arch=b64` - фильтр по архитектуре процессора
+- `-S execve` - конкретный системный вызов
+
+=== Критические Системные Файлы
+
+[source,bash]
+----
+# Мониторинг изменений критических файлов
+-w /etc/passwd -p wa -k passwd
+-w /etc/shadow -p wa -k shadow
+-w /etc/group -p wa -k group
+-w /etc/sudoers -p wa -k sudoers
+----
+
+*Назначение:* Контроль изменений файлов аутентификации и авторизации
+*Критические файлы:*
+- `/etc/passwd` - учетные записи пользователей
+- `/etc/shadow` - хэши паролей
+- `/etc/group` - группы пользователей
+- `/etc/sudoers` - права sudo
+
+=== Сетевая Конфигурация
+
+[source,bash]
+----
+# Мониторинг сетевых изменений
+-w /etc/network/ -p wa -k network
+-w /etc/hosts -p wa -k hosts
+----
+
+*Назначение:* Отслеживание изменений сетевой конфигурации
+*Охват:*
+- Вся директория `/etc/network/`
+- Файл hosts для DNS resolution
+
+=== Управление Сервисами
+
+[source,bash]
+----
+# Мониторинг управления systemd
+-w /etc/systemd/ -p wa -k systemd
+-w /var/log/systemd/ -p wa -k systemd
+----
+
+*Назначение:* Контроль изменений конфигурации служб и логов systemd
+
+=== Модули Ядра
+
+[source,bash]
+----
+# Мониторинг загрузки модулей ядра
+-w /sbin/insmod -p x -k modules
+-w /sbin/rmmod -p x -k modules
+-w /sbin/modprobe -p x -k modules
+----
+
+*Назначение:* Отслеживание операций с модулями ядра
+*Команды:* insmod, rmmod, modprobe
+*Параметр:* `-p x` - мониторинг выполнения
+
+=== Файловые Системы
+
+[source,bash]
+----
+# Мониторинг монтирования файловых систем
+-a exit,always -F arch=b64 -S mount -k mount
+-a exit,always -F arch=b32 -S mount -k mount
+----
+
+*Назначение:* Контроль операций монтирования
+
+=== Привилегии и Права Доступа
+
+[source,bash]
+----
+# Мониторинг эскалации привилегий
+-a exit,always -F arch=b64 -S setuid -k setuid
+-a exit,always -F arch=b32 -S setuid -k setuid
+-a exit,always -F arch=b64 -S setgid -k setgid
+-a exit,always -F arch=b32 -S setgid -k setgid
+----
+
+*Назначение:* Отслеживание изменения UID/GID процессов
+*Системные вызовы:* setuid, setgid
+
+=== Дополнительные Критические Файлы
+
+[source,bash]
+----
+# Мониторинг аудита и cron
+-w /etc/audit/ -p wa -k audit
+-w /etc/cron* -p wa -k cron
+-w /var/spool/cron/ -p wa -k cron
+----
+
+*Назначение:* Контроль конфигурации аудита и планировщика задач
+
+== Категории Событий Аудита
+
+=== По Типам Событий
+
+[cols="1,3",options="header"]
+|===
+| Тип | Описание
+
+| USER_AUTH
+| События аутентификации пользователей
+
+| USER_ACCT
+| Изменения учетных записей
+
+| CRED_ACQ
+| Получение учетных данных
+
+| CRED_DISP
+| Освобождение учетных данных
+
+| LOGIN
+| События входа в систему
+
+| SYSCALL
+| Системные вызовы
+
+| PATH
+| Доступ к файлам и директориям
+
+| IPC
+| Межпроцессное взаимодействие
+
+| NETWORK
+| Сетевые события
+
+| MAC_POLICY_LOAD
+| Загрузка политик MAC
+
+| MAC_CONFIG_CHANGE
+| Изменения конфигурации MAC
+
+| MAC_STATUS
+| Статус MAC
+
+| FS_RELABEL
+| Перемаркировка файловой системы
+
+| MMAP
+| Отображение памяти
+
+| CONFIG_CHANGE
+| Изменения конфигурации
+
+| USER_TTY
+| Действия пользователя в терминале
+
+| USER_END
+| Завершение сессии пользователя
+
+| SYSTEM_BOOT
+| Загрузка системы
+
+| SYSTEM_SHUTDOWN
+| Выключение системы
+
+| SYSTEM_RUNLEVEL
+| Изменение уровня выполнения
+
+| SERVICE_START
+| Запуск служб
+
+| SERVICE_STOP
+| Остановка служб
+
+| DAC_SET
+| Изменения DAC (Discretionary Access Control)
+
+| CHGRP_ID
+| Изменения группы
+
+| TEST
+| Тестовые события
+|===
+
+=== По Уровням Важности
+
+[cols="1,3",options="header"]
+|===
+| Уровень | Описание
+
+| critical
+| Критические события безопасности
+
+| high
+| Высокий приоритет безопасности
+
+| medium
+| Средний приоритет
+
+| low
+| Низкий приоритет
+
+| informational
+| Информационные события
+|===
+
+== Примеры Кастомных Правил
+
+=== Мониторинг Конкретных Директорий
+
+[source,bash]
+----
+# Мониторинг директории с конфиденциальными данными
+-w /opt/confidential/ -p rwa -k confidential_data
+
+# Мониторинг домашней директории администратора
+-w /home/admin/ -p wa -k admin_home
+
+# Мониторинг директории с финансовыми данными
+-w /var/finance/ -p rwa -k financial_data
+----
+
+=== Мониторинг Конкретных Команд
+
+[source,bash]
+----
+# Мониторинг выполнения определенных команд
+-w /usr/bin/passwd -p x -k passwd_command
+-w /usr/bin/useradd -p x -k user_management
+-w /usr/bin/usermod -p x -k user_management
+-w /usr/bin/userdel -p x -k user_management
+----
+
+=== Мониторинг Сетевой Активности
+
+[source,bash]
+----
+# Мониторинг сетевых подключений
+-a exit,always -F arch=b64 -S connect -k network_connect
+-a exit,always -F arch=b64 -S accept -k network_accept
+
+# Мониторинг изменений firewall
+-w /etc/ufw/ -p wa -k firewall_changes
+-w /etc/iptables/ -p wa -k iptables_changes
+----
+
+=== Мониторинг Доступа к Файлам
+
+[source,bash]
+----
+# Мониторинг доступа к конфиденциальным файлам
+-a exit,always -F arch=b64 -S open -F path=/etc/shadow -k shadow_access
+-a exit,always -F arch=b64 -S open -F path=/etc/sudoers -k sudoers_access
+
+# Мониторинг создания файлов в системных директориях
+-a exit,always -F arch=b64 -S creat -F dir=/tmp -k tmp_files
+----
+
+== Оптимизация Правил Аудита
+
+=== Производительность
+
+[source,bash]
+----
+# Уменьшение нагрузки на систему
+# Использовать фильтры для снижения количества событий
+-a exit,always -F arch=b64 -S execve -F success=1 -k exec_success
+
+# Исключить шумные события
+-a exit,never -F arch=b64 -S getpid -k noise
+----
+
+=== Масштабируемость
+
+[source,bash]
+----
+# Разделение правил по категориям для лучшей организации
+# Правило 1: Аутентификация
+-w /var/log/auth.log -p wa -k auth
+
+# Правило 2: Файлы
+-w /etc/passwd -p wa -k system_files
+
+# Правило 3: Сеть
+-a exit,always -F arch=b64 -S connect -k network
+----
+
+=== Enterprise Масштаб
+
+[source,bash]
+----
+# Для больших окружений использовать более детальные фильтры
+-a exit,always -F arch=b64 -S execve -F uid>=1000 -k user_exec
+-a exit,always -F arch=b64 -S execve -F uid<1000 -k system_exec
+
+# Разделить по уровням привилегий
+-a exit,always -F arch=b64 -S execve -F euid=0 -k root_exec
+----
+
+== Анализ и Отчетность
+
+=== Использование aureport
+
+[source,bash]
+----
+# Общий отчет о событиях
+sudo aureport
+
+# Отчет по аутентификации
+sudo aureport -au
+
+# Отчет по изменениям файлов
+sudo aureport -f
+
+# Отчет по системным вызовам
+sudo aureport -s
+
+# Детальный отчет за период
+sudo aureport --start 01/01/2024 --end 01/31/2024
+----
+
+=== Использование ausearch
+
+[source,bash]
+----
+# Поиск событий по ключу
+sudo ausearch -k sudo
+
+# Поиск неудачных аутентификаций
+sudo ausearch -m USER_AUTH -sv no
+
+# Поиск событий за сегодня
+sudo ausearch -ts today
+
+# Поиск по конкретному пользователю
+sudo ausearch -ua admin
+
+# Поиск по конкретному файлу
+sudo ausearch -f /etc/passwd
+----
+
+=== Генерация Отчетов
+
+[source,bash]
+----
+# Создание ежедневного отчета
+sudo aureport -au -ts today > daily_auth_report.txt
+sudo aureport -f -ts today > daily_file_report.txt
+
+# Отчет по подозрительной активности
+sudo ausearch -k exec -ts today | grep -v "sh\|bash\|ls" > suspicious_exec.txt
+----
+
+== Лучшие Практики
+
+=== Организация Правил
+
+1. **Группировка по категориям** с понятными ключами
+2. **Использование фильтров** для снижения нагрузки
+3. **Регулярный аудит правил** на актуальность
+4. **Документирование** каждого правила
+
+=== Производительность
+
+1. **Минимизация количества правил** для критичных систем
+2. **Использование фильтров** по архитектуре и UID
+3. **Мониторинг backlog** для предотвращения потери событий
+4. **Регулярная ротация логов**
+
+=== Безопасность
+
+1. **Регулярное резервное копирование** логов аудита
+2. **Централизованная агрегация** для enterprise окружений
+3. **Шифрование логов** для конфиденциальной информации
+4. **Регулярный анализ** на наличие подозрительной активности
+
+== Примеры Реальных Сценариев
+
+=== Обнаружение Атаки
+
+[source,bash]
+----
+# Поиск подозрительной активности
+sudo ausearch -k exec -ts today | grep -E "(nc|netcat|wget|curl)" | head -10
+
+# Поиск неудачных SSH подключений
+sudo ausearch -m USER_AUTH -sv no -ts today | grep sshd
+
+# Поиск изменений системных файлов
+sudo ausearch -k system_files -ts today
+----
+
+=== Мониторинг Compliance
+
+[source,bash]
+----
+# Проверка доступа к конфиденциальным файлам
+sudo ausearch -f /etc/shadow -ts today
+
+# Мониторинг использования sudo
+sudo ausearch -k sudo -ts today | grep -v "systemctl\|journalctl"
+
+# Проверка сетевой активности
+sudo ausearch -k network -ts today | grep -v "127.0.0.1\|::1"
+----
+
+=== Анализ Производительности
+
+[source,bash]
+----
+# Анализ наиболее активных процессов
+sudo aureport -s | head -20
+
+# Анализ использования системных ресурсов аудитом
+sudo auditctl -s
+
+# Мониторинг размера логов
+du -sh /var/log/audit/
+----
+
+== Заключение
+
+Auditd предоставляет мощную систему для мониторинга безопасности Linux систем. Правильная настройка правил аудита обеспечивает:
+
+- **Комплексный мониторинг** всех критических операций
+- **Соответствие стандартам** безопасности (CIS, PCI DSS, HIPAA)
+- **Обнаружение угроз** в реальном времени
+- **Аудит compliance** для регуляторных требований
+- **Оптимизированную производительность** для enterprise окружений
+
+Рекомендуется регулярно пересматривать и оптимизировать правила аудита в соответствии с изменяющимися требованиями безопасности и производительности.
