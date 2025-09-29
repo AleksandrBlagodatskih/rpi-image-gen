@@ -1,0 +1,135 @@
+# AppArmor профиль для мониторинговых служб
+# Обеспечивает безопасность для Prometheus, Grafana, Node Exporter и т.д.
+
+#include <tunables/global>
+#include <tunables/rpi>
+
+profile usr.sbin.monitoring /usr/sbin/*monitoring* {
+    #include <abstractions/base>
+    #include <abstractions/dbus>
+
+    # Основные мониторинговые инструменты
+    /usr/sbin/prometheus mr,
+    /usr/sbin/node_exporter mr,
+    /usr/sbin/grafana-server mr,
+    /usr/bin/telegraf mr,
+
+    # Директории мониторинга
+    /var/lib/prometheus/** rw,
+    /var/lib/grafana/** rw,
+    /var/lib/telegraf/** rw,
+    /etc/prometheus/** r,
+    /etc/grafana/** r,
+
+    # Логи мониторинга
+    /var/log/prometheus/** rw,
+    /var/log/grafana/** rw,
+    /var/log/telegraf/** rw,
+
+    # Runtime директории
+    /run/prometheus/** rw,
+    /run/grafana/** rw,
+
+    # Системные метрики
+    /proc/** r,
+    /sys/** r,
+    /dev/** r,
+
+    # Специфические устройства Raspberry Pi для мониторинга
+    @{RPI_DEVICES} r,
+    @{RPI_GPIO} r,
+    @{RPI_GRAPHICS} r,
+
+    # Температурные датчики
+    /sys/class/thermal/** r,
+    /sys/devices/virtual/thermal/** r,
+
+    # Датчики питания и батареи
+    /sys/class/power_supply/** r,
+    /sys/devices/platform/soc/*.battery/** r,
+
+    # CPU и память информация
+    /proc/cpuinfo r,
+    /proc/meminfo r,
+    /proc/loadavg r,
+    /proc/stat r,
+
+    # Дисковая статистика
+    /proc/diskstats r,
+    /proc/mounts r,
+
+    # Сетевые интерфейсы для мониторинга
+    /sys/class/net/** r,
+    /proc/net/** r,
+
+    # Разрешенные сетевые протоколы для мониторинга
+    network inet stream,
+    network inet6 stream,
+    network netlink raw,
+
+    # Разрешенные порты мониторинга
+    network tcp 9090,     # Prometheus
+    network tcp 9100,     # Node Exporter
+    network tcp 3000,     # Grafana
+    network tcp 8086,     # InfluxDB
+    network tcp 8125,     # StatsD
+
+    # Разрешенные возможности для мониторинга
+    capability sys_admin,
+    capability net_admin,
+    capability dac_override,
+    capability dac_read_search,
+
+    # Разрешенные системные вызовы
+    mount (read-only),
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Разрешенные сигналы
+    signal receive peer=@{profile_name},
+
+    # Файловые операции
+    file *** -> @{profile_name},
+}
+
+# Профиль для системных утилит мониторинга
+profile usr.bin.system-monitoring /usr/bin/*mon* {
+    #include <abstractions/base>
+
+    # Системные команды мониторинга
+    /usr/bin/uptime mr,
+    /usr/bin/free mr,
+    /usr/bin/iostat mr,
+    /usr/bin/vmstat mr,
+    /usr/bin/mpstat mr,
+    /usr/bin/pidstat mr,
+
+    # Системные файлы для чтения
+    /proc/** r,
+    /sys/** r,
+    /dev/** r,
+
+    # Логи для анализа
+    /var/log/** r,
+    /run/log/** r,
+
+    # Разрешенные сетевые протоколы (только локальные)
+    unix stream,
+
+    # Ограничение сетевого доступа
+    deny network inet,
+    deny network inet6,
+    deny network raw,
+
+    # Разрешенные возможности
+    capability dac_override,
+    capability dac_read_search,
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Файловые операции только для чтения
+    file /proc/**/* -> @{profile_name},
+    file /sys/**/* -> @{profile_name},
+}

@@ -1,0 +1,89 @@
+#!/bin/bash -e
+# AppArmor базовая настройка во время essential этапа
+# Устанавливает базовые компоненты AppArmor
+
+echo "Setting up basic AppArmor components..."
+
+# Проверка включения AppArmor
+igconf isy IGconf_apparmor_enable || exit 0
+
+# Установка базовых пакетов AppArmor если они еще не установлены
+echo "Installing AppArmor base packages..."
+
+# Проверка наличия apparmor_parser
+if [ ! -f "$1/sbin/apparmor_parser" ]; then
+    echo "Warning: apparmor_parser not found, AppArmor may not be properly installed"
+fi
+
+# Создание базовых директорий если они отсутствуют
+mkdir -p "$1/etc/apparmor"
+mkdir -p "$1/etc/apparmor.d"
+mkdir -p "$1/etc/apparmor.d/profiles"
+mkdir -p "$1/etc/apparmor.d/tunables"
+mkdir -p "$1/etc/initramfs-tools/hooks"
+mkdir -p "$1/etc/initramfs-tools/scripts/init-premount"
+mkdir -p "$1/var/lib/apparmor"
+mkdir -p "$1/var/log/apparmor"
+
+# Создание базового конфигурационного файла если он отсутствует
+if [ ! -f "$1/etc/apparmor/parser.conf" ]; then
+    cat > "$1/etc/apparmor/parser.conf" << 'EOF'
+# AppArmor parser configuration
+# Базовая конфигурация для работы с профилями
+
+# Пути для поиска профилей
+Include /etc/apparmor.d/
+
+# Tunables для различных дистрибутивов
+Include /etc/apparmor.d/tunables/global
+Include /etc/apparmor.d/tunables/rpi
+
+# Базовые профили
+Include /etc/apparmor.d/sbin.init
+Include /etc/apparmor.d/bin.systemd
+EOF
+fi
+
+# Настройка логирования AppArmor
+if [ ! -f "$1/etc/rsyslog.d/apparmor.conf" ]; then
+    cat > "$1/etc/rsyslog.d/apparmor.conf" << 'EOF'
+# AppArmor log configuration
+# Логирование событий AppArmor
+
+if $programname == 'kernel' and $msg contains 'apparmor' then /var/log/apparmor/apparmor.log
+& stop
+EOF
+fi
+
+# Создание systemd сервиса для AppArmor если он отсутствует
+if [ ! -f "$1/lib/systemd/system/apparmor.service" ]; then
+    cat > "$1/lib/systemd/system/apparmor.service" << 'EOF'
+[Unit]
+Description=Load AppArmor profiles
+Before=sysinit.target
+DefaultDependencies=false
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/apparmor_parser -r /etc/apparmor.d/
+ExecReload=/sbin/apparmor_parser -r /etc/apparmor.d/
+ExecStop=/sbin/apparmor_parser -R /etc/apparmor.d/
+
+[Install]
+WantedBy=sysinit.target
+EOF
+fi
+
+# Включение сервиса в автозагрузку
+mkdir -p "$1/etc/systemd/system/sysinit.target.wants"
+chroot "$1" ln -sf /lib/systemd/system/apparmor.service /etc/systemd/system/sysinit.target.wants/apparmor.service 2>/dev/null || true
+
+echo "Basic AppArmor setup completed"
+
+# Проверка установки
+echo "AppArmor installation check:"
+echo "- Parser: $(ls -la "$1/sbin/apparmor_parser" 2>/dev/null | wc -l) files"
+echo "- Service: $(ls -la "$1/lib/systemd/system/apparmor.service" 2>/dev/null | wc -l) files"
+echo "- Config: $(ls -la "$1/etc/apparmor/parser.conf" 2>/dev/null | wc -l) files"
+echo "- Tunables dir: $(ls -la "$1/etc/apparmor.d/tunables" 2>/dev/null | wc -l) files"

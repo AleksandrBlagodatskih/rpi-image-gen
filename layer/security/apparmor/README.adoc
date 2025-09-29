@@ -8,13 +8,26 @@ Mandatory Access Control (MAC) с AppArmor для систем на базе Deb
 
 Особенности для Raspberry Pi:
 * Автоматическая настройка параметров ядра для Raspberry Pi bootloader
-* Поддержка initramfs с AppArmor
+* Поддержка initramfs с AppArmor для ранней защиты
 * Гарантированное монтирование securityfs
 
-* Оптимизированные профили для VideoCore GPU
-* Поддержка GPIO/I2C/SPI интерфейсов
-* Совместимость с Raspberry Pi OS и ядром
-* Автоматическая настройка для EFI и initramfs
+* **Raspberry Pi оптимизированные профили**:
+  - Профиль для VideoCore GPU с доступом к `/opt/vc/`, `/dev/vchiq`, `/dev/vc-*`
+  - Профиль для GPIO через Python с доступом к `/sys/class/gpio/`, `/sys/devices/platform/soc/`
+  - Профиль для контейнерных рантаймов (Docker, Podman) с поддержкой графических устройств
+  - Профиль для мониторинговых служб (Prometheus, Grafana) с доступом к системным метрикам
+
+* **Расширенная поддержка**:
+  - GPIO/I2C/SPI интерфейсы для аппаратных проектов
+  - Графические устройства для медиа-приложений
+  - Камеры и мультимедиа устройства
+  - Сетевые интерфейсы для стриминга
+
+* **Интеграция**:
+  - Совместимость с Raspberry Pi OS и ядром
+  - Автоматическая настройка для EFI и initramfs
+  - Поддержка контейнеров разработки (Distrobox)
+  - Интеграция с системами мониторинга
 
 == Использование
 
@@ -187,6 +200,83 @@ apparmor:
   enable: y
   mode: enforce
   rpi_optimized: n   # Без RPi оптимизаций
+----
+
+=== Полная настройка для production
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  class: pi5
+
+image:
+  layer: image-rpios
+  name: production-secure
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: apparmor
+  monitoring: system-monitoring
+  container: docker-runtime
+
+# Полная конфигурация AppArmor для production
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: y
+  profiles_enable: y
+  initramfs_integration: y
+  logging_enable: y
+  container_support: y
+  monitoring_support: y
+
+monitoring:
+  prometheus: y
+  grafana: y
+  node_exporter: y
+
+container:
+  docker: y
+  podman: y
+----
+
+=== Настройка для IoT устройства
+
+[source,yaml]
+----
+device:
+  layer: rpi-cm4
+  class: cm4
+  variant: iot
+
+image:
+  layer: image-base
+  name: iot-secure-device
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: apparmor
+  iot: gpio-control
+  networking: iot-networking
+
+# Фокус на аппаратной безопасности
+apparmor:
+  enable: y
+  mode: enforce
+  rpi_optimized: y
+  profiles_enable: y
+  initramfs_integration: y
+  logging_enable: y
+  container_support: n     # Не нужны контейнеры для простого IoT
+  monitoring_support: y    # Мониторинг критически важен
+
+iot:
+  gpio_control: y
+  i2c_sensors: y
+  spi_devices: y
 ----
 
 == Безопасность и лучшие практики

@@ -1,0 +1,147 @@
+# AppArmor профиль для контейнерных рантаймов (Docker, Podman)
+# Обеспечивает безопасность контейнерных окружений на Raspberry Pi
+
+#include <tunables/global>
+#include <tunables/rpi>
+
+profile usr.bin.containerd /usr/bin/containerd* {
+    #include <abstractions/base>
+    #include <abstractions/dbus>
+
+    # Основные пути контейнерного рантайма
+    /usr/bin/containerd* mr,
+    /usr/bin/ctr mr,
+    /usr/bin/docker mr,
+    /usr/bin/podman mr,
+
+    # Директории контейнеров
+    /var/lib/containerd/** rw,
+    /var/lib/docker/** rw,
+    /var/lib/containers/** rw,
+    /run/containerd/** rw,
+    /run/docker/** rw,
+    /run/podman/** rw,
+
+    # CNI сетевые плагины
+    /opt/cni/bin/** mr,
+    /usr/lib/cni/** mr,
+
+    # Сетевые конфигурации
+    /etc/cni/** r,
+    /etc/containerd/** r,
+    /etc/docker/** r,
+
+    # Устройства для контейнеров
+    /dev/null rw,
+    /dev/zero rw,
+    /dev/urandom rw,
+    /dev/fuse rw,
+    /dev/net/tun rw,
+
+    # Графические устройства для GUI контейнеров
+    /dev/dri/** rw,
+    /dev/fb* rw,
+    /dev/vchiq rw,
+    /dev/vc-* rw,
+
+    # GPIO устройства для IoT контейнеров
+    /sys/class/gpio/** rw,
+    /sys/devices/platform/soc/*.gpio/gpio*/** rw,
+
+    # I2C/SPI устройства
+    /dev/i2c-* rw,
+    /dev/spidev*.* rw,
+
+    # Raspberry Pi устройства
+    @{RPI_DEVICES}/** rw,
+
+    # Сетевые интерфейсы
+    /sys/class/net/** r,
+    /sys/devices/virtual/net/** r,
+
+    # Разрешенные сетевые протоколы
+    network inet stream,
+    network inet6 stream,
+    network netlink raw,
+
+    # Разрешенные порты для контейнерных сервисов
+    network tcp 2375:2376,   # Docker API
+    network tcp 8080,        # Container web UI
+    network tcp 5000,        # Registry
+
+    # Логи контейнеров
+    /var/log/containerd/** rw,
+    /var/log/docker/** rw,
+    /var/log/podman/** rw,
+
+    # Разрешенные возможности для контейнерного рантайма
+    capability sys_admin,
+    capability net_admin,
+    capability dac_override,
+    capability dac_read_search,
+
+    # Разрешенные системные вызовы
+    mount,
+    umount,
+
+    # Ограничение ptrace для безопасности
+    ptrace (complain) peer=@{profile_name},
+
+    # Разрешенные сигналы
+    signal receive peer=@{profile_name},
+
+    # Файловые операции
+    file *** -> @{profile_name},
+}
+
+# Профиль для Distrobox
+profile usr.bin.distrobox /usr/bin/distrobox* {
+    #include <abstractions/base>
+    #include <abstractions/dbus>
+
+    # Основные пути Distrobox
+    /usr/bin/distrobox* mr,
+    /usr/bin/docker mr,
+    /usr/bin/podman mr,
+
+    # Домашние директории контейнеров
+    @{HOME}/.distrobox/** rw,
+    @{HOME}/.local/share/containers/** rw,
+
+    # Конфигурационные файлы Distrobox
+    @{HOME}/.config/distrobox/** rw,
+
+    # Временные директории
+    /tmp/distrobox-** rw,
+
+    # Разрешенные устройства для контейнеров
+    /dev/null rw,
+    /dev/zero rw,
+    /dev/urandom rw,
+    /dev/dri/** rw,
+    /dev/fb* rw,
+
+    # GPIO для разработки
+    /sys/class/gpio/** rw,
+
+    # Сетевые доступ для контейнеров разработки
+    network inet stream,
+    network inet6 stream,
+
+    # X11 для GUI приложений
+    @{XDG_RUNTIME_DIR}/** rw,
+    /tmp/.X11-unix/** rw,
+
+    # D-Bus для межпроцессного взаимодействия
+    /run/user/*/bus rw,
+
+    # Разрешенные возможности для разработки
+    capability dac_override,
+    capability dac_read_search,
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Файловые операции
+    file *** -> @{profile_name},
+}

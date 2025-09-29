@@ -17,7 +17,7 @@ layer:
   security: security-hardening
   sbom: sbom-base
 
-# Настройки серверной оптимизации (все по умолчанию включены)
+# Настройки серверной оптимизации
 rpi5_server:
   disable_hdmi: y
   disable_wifi: y
@@ -26,6 +26,9 @@ rpi5_server:
   pcie_max_speed: y
   usb_max_performance: y
   disable_unused_interfaces: y
+  # Дополнительные возможности (опционально)
+  optimize_performance: n    # Включить для максимальной производительности
+  security_hardening: n      # Включить для повышенной безопасности
 
 # Дополнительные настройки безопасности
 security:
@@ -36,3 +39,81 @@ security:
 sbom:
   enable: y
   provider: syft
+
+---
+# Пример конфигурации для высокопроизводительного сервера
+device:
+  layer: rpi5
+  hostname: rpi5-performance-server
+  storage_type: nvme
+  user1: admin
+
+image:
+  layer: image-rpios
+  name: rpi5-performance-server
+  compression: zstd
+
+layer:
+  server: rpi5-server-config
+  base: bookworm-minbase
+
+# Максимальная производительность
+rpi5_server:
+  disable_hdmi: y
+  disable_wifi: y
+  disable_bluetooth: y
+  disable_audio: y
+  pcie_max_speed: y
+  usb_max_performance: y
+  disable_unused_interfaces: y
+  optimize_performance: y    # Максимальная производительность
+  security_hardening: n      # Не используем для максимальной производительности
+
+---
+# Пример конфигурации для безопасного сервера
+device:
+  layer: rpi5
+  hostname: rpi5-secure-server
+  storage_type: nvme
+  user1: admin
+
+image:
+  layer: image-rpios
+  name: rpi5-secure-server
+  compression: zstd
+
+layer:
+  server: rpi5-server-config
+  base: bookworm-minbase
+  security: maximum-security
+
+# Максимальная безопасность
+rpi5_server:
+  disable_hdmi: y
+  disable_wifi: y
+  disable_bluetooth: y
+  disable_audio: y
+  pcie_max_speed: y
+  usb_max_performance: y
+  disable_unused_interfaces: y
+  optimize_performance: n    # Не используем для максимальной безопасности
+  security_hardening: y      # Максимальная безопасность
+
+security:
+  enable_encryption: y
+  secure_boot: y
+  tpm_required: y
+
+---
+# Тестовая конфигурация для валидации
+device:
+  layer: rpi5
+  class: pi5
+
+layer:
+  server: rpi5-server-config
+
+# Минимальная конфигурация для тестирования
+rpi5_server:
+  disable_hdmi: y
+  pcie_max_speed: y

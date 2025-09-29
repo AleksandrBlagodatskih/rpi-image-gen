@@ -13,25 +13,25 @@
 # X-Env-Var-port-Desc: Port for Cockpit web interface
 # X-Env-Var-port-Required: n
 # X-Env-Var-port-Valid: int
-# X-Env-Var-port-Set: y
+# X-Env-Var-port-Set: immediate
 #
 # X-Env-Var-allow_unprivileged: n
 # X-Env-Var-allow_unprivileged-Desc: Allow unprivileged users to access Cockpit
 # X-Env-Var-allow_unprivileged-Required: n
 # X-Env-Var-allow_unprivileged-Valid: bool
-# X-Env-Var-allow_unprivileged-Set: y
+# X-Env-Var-allow_unprivileged-Set: immediate
 #
 # X-Env-Var-max_startup_time: 120
 # X-Env-Var-max_startup_time-Desc: Maximum startup time in seconds
 # X-Env-Var-max_startup_time-Required: n
 # X-Env-Var-max_startup_time-Valid: int
-# X-Env-Var-max_startup_time-Set: y
+# X-Env-Var-max_startup_time-Set: immediate
 #
 # X-Env-Var-login_banner: "Welcome to $(hostname)"
 # X-Env-Var-login_banner-Desc: Login banner message
 # X-Env-Var-login_banner-Required: n
 # X-Env-Var-login_banner-Valid: string
-# X-Env-Var-login_banner-Set: y
+# X-Env-Var-login_banner-Set: immediate
 # METAEND
 ---
 mmdebstrap:

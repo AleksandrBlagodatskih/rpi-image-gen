@@ -48,6 +48,18 @@
 # X-Env-Var-disable_unused_interfaces-Required: n
 # X-Env-Var-disable_unused_interfaces-Valid: bool
 # X-Env-Var-disable_unused_interfaces-Set: immediate
+#
+# X-Env-Var-optimize_performance: n
+# X-Env-Var-optimize_performance-Desc: Enable additional performance optimizations (may increase power consumption)
+# X-Env-Var-optimize_performance-Required: n
+# X-Env-Var-optimize_performance-Valid: bool
+# X-Env-Var-optimize_performance-Set: immediate
+#
+# X-Env-Var-security_hardening: n
+# X-Env-Var-security_hardening-Desc: Enable security hardening features (disables USB mass storage, UART)
+# X-Env-Var-security_hardening-Required: n
+# X-Env-Var-security_hardening-Valid: bool
+# X-Env-Var-security_hardening-Set: immediate
 # METAEND
 ---
 mmdebstrap:
@@ -132,3 +144,23 @@ mmdebstrap:
       echo "disable_camera_led=1" >> $1/boot/firmware/config.txt
       echo "disable_splash=1" >> $1/boot/firmware/config.txt
       echo "" >> $1/boot/firmware/config.txt
+
+    # Дополнительные оптимизации производительности для серверного использования
+    - |
+      if [ "${IGconf_rpi5_server_optimize_performance}" = "y" ]; then
+        echo "# Additional performance optimizations for server workloads" >> $1/boot/firmware/config.txt
+        echo "# Increase CPU frequency for better server performance" >> $1/boot/firmware/config.txt
+        echo "# Note: This may increase power consumption but improves performance" >> $1/boot/firmware/config.txt
+        echo "" >> $1/boot/firmware/config.txt
+      fi
+
+    # Безопасность: отключение потенциально опасных интерфейсов
+    - |
+      if [ "${IGconf_rpi5_server_security_hardening}" = "y" ]; then
+        echo "# Security hardening for server environment" >> $1/boot/firmware/config.txt
+        echo "# Disable USB mass storage gadget for security" >> $1/boot/firmware/config.txt
+        echo "dtoverlay=disable-mass-storage" >> $1/boot/firmware/config.txt
+        echo "# Disable serial console access for security" >> $1/boot/firmware/config.txt
+        echo "enable_uart=0" >> $1/boot/firmware/config.txt
+        echo "" >> $1/boot/firmware/config.txt
+      fi

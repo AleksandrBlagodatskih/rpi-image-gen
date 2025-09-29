@@ -50,6 +50,14 @@ Raspberry Pi 5 оптимизированная конфигурация для 
 |`rpi5_server_disable_unused_interfaces`
 |`y`
 |Отключить SPI, I2C, I2S интерфейсы, обычно не нужные на серверах
+
+|`rpi5_server_optimize_performance`
+|`n`
+|Дополнительные оптимизации производительности (может увеличить энергопотребление)
+
+|`rpi5_server_security_hardening`
+|`n`
+|Дополнительные меры безопасности (отключает USB mass storage, UART)
 |===
 
 == Пример использования

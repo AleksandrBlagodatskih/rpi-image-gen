@@ -1,0 +1,98 @@
+#!/bin/bash -e
+# Финализация настройки AppArmor
+# Очистка и проверка финальной конфигурации
+
+echo "Finalizing AppArmor configuration..."
+
+# Проверка включения AppArmor
+igconf isy IGconf_apparmor_enable || exit 0
+
+# Очистка временных файлов AppArmor
+echo "Cleaning up AppArmor temporary files..."
+
+# Удаление временных файлов компиляции профилей
+find "$1/tmp" -name "*apparmor*" -type f -delete 2>/dev/null || true
+find "$1/tmp" -name ".apparmor*" -type f -delete 2>/dev/null || true
+
+# Очистка кеша парсера если он существует
+if [ -d "$1/var/cache/apparmor" ]; then
+    rm -rf "$1/var/cache/apparmor/*" 2>/dev/null || true
+fi
+
+# Проверка корректности профилей
+echo "Validating AppArmor profiles..."
+
+if [ -x "$1/sbin/apparmor_parser" ]; then
+    # Валидация всех профилей
+    PROFILE_COUNT=$(find "$1/etc/apparmor.d" -name "*.profile" -o -name "*.conf" | wc -l)
+    echo "Found $PROFILE_COUNT AppArmor profiles"
+
+    # Проверка синтаксиса профилей
+    find "$1/etc/apparmor.d" -name "*.profile" -o -name "*.conf" | while read -r profile; do
+        if [ -f "$profile" ]; then
+            echo "Checking profile: $(basename "$profile")"
+            chroot "$1" apparmor_parser -Q "$profile" 2>/dev/null || {
+                echo "Warning: Profile $(basename "$profile") has syntax issues"
+                # Не прерываем выполнение, просто предупреждаем
+            }
+        fi
+    done
+else
+    echo "Warning: apparmor_parser not available for profile validation"
+fi
+
+# Финальная проверка конфигурации
+echo "Final AppArmor configuration summary:"
+echo "- Status: $(igconf getval IGconf_apparmor_enable)"
+echo "- Mode: $(igconf getval IGconf_apparmor_mode)"
+echo "- RPi optimized: $(igconf getval IGconf_apparmor_rpi_optimized)"
+
+# Проверка наличия ключевых компонентов
+COMPONENT_CHECK=0
+
+if [ -f "$1/sbin/apparmor_parser" ]; then
+    echo "- Parser: ✓"
+    COMPONENT_CHECK=$((COMPONENT_CHECK + 1))
+else
+    echo "- Parser: ✗"
+fi
+
+if [ -f "$1/lib/systemd/system/apparmor.service" ]; then
+    echo "- Service: ✓"
+    COMPONENT_CHECK=$((COMPONENT_CHECK + 1))
+else
+    echo "- Service: ✗"
+fi
+
+if [ -d "$1/etc/apparmor.d" ]; then
+    PROFILE_COUNT=$(find "$1/etc/apparmor.d" -type f | wc -l)
+    echo "- Profiles: ✓ ($PROFILE_COUNT files)"
+    COMPONENT_CHECK=$((COMPONENT_CHECK + 1))
+else
+    echo "- Profiles: ✗"
+fi
+
+if [ -f "$1/etc/apparmor/parser.conf" ]; then
+    echo "- Config: ✓"
+    COMPONENT_CHECK=$((COMPONENT_CHECK + 1))
+else
+    echo "- Config: ✗"
+fi
+
+echo "AppArmor component check: $COMPONENT_CHECK/4 passed"
+
+if [ "$COMPONENT_CHECK" -lt 3 ]; then
+    echo "Warning: AppArmor installation may be incomplete"
+fi
+
+# Создание отчета о настройке
+cat > "$1/var/lib/apparmor/setup-report.txt" << EOF
+AppArmor Setup Report
+Generated: $(date)
+Status: $(igconf getval IGconf_apparmor_enable)
+Mode: $(igconf getval IGconf_apparmor_mode)
+RPi Optimized: $(igconf getval IGconf_apparmor_rpi_optimized)
+Components: $COMPONENT_CHECK/4
+EOF
+
+echo "AppArmor finalization completed"

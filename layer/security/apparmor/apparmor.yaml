@@ -1,9 +1,10 @@
 # METABEGIN
 # X-Env-Layer-Name: apparmor
 # X-Env-Layer-Category: security
-# X-Env-Layer-Desc: AppArmor Mandatory Access Control with base profiles
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Desc: AppArmor Mandatory Access Control with Raspberry Pi optimized profiles
+# X-Env-Layer-Version: 1.1.0
 # X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: apparmor
 #
 # X-Env-VarPrefix: apparmor
 #
@@ -11,13 +12,49 @@
 # X-Env-Var-enable-Desc: Enable AppArmor Mandatory Access Control
 # X-Env-Var-enable-Required: n
 # X-Env-Var-enable-Valid: bool
-# X-Env-Var-enable-Set: y
+# X-Env-Var-enable-Set: immediate
 #
 # X-Env-Var-mode: enforce
 # X-Env-Var-mode-Desc: AppArmor mode - enforce (block violations) or complain (log only)
 # X-Env-Var-mode-Required: n
 # X-Env-Var-mode-Valid: keywords:enforce,complain
 # X-Env-Var-mode-Set: lazy
+#
+# X-Env-Var-rpi_optimized: y
+# X-Env-Var-rpi_optimized-Desc: Enable Raspberry Pi specific optimizations (VideoCore, GPIO, I2C, SPI)
+# X-Env-Var-rpi_optimized-Required: n
+# X-Env-Var-rpi_optimized-Valid: bool
+# X-Env-Var-rpi_optimized-Set: immediate
+#
+# X-Env-Var-profiles_enable: y
+# X-Env-Var-profiles_enable-Desc: Enable installation of custom AppArmor profiles
+# X-Env-Var-profiles_enable-Required: n
+# X-Env-Var-profiles_enable-Valid: bool
+# X-Env-Var-profiles_enable-Set: immediate
+#
+# X-Env-Var-initramfs_integration: y
+# X-Env-Var-initramfs_integration-Desc: Enable AppArmor integration with initramfs for early boot protection
+# X-Env-Var-initramfs_integration-Required: n
+# X-Env-Var-initramfs_integration-Valid: bool
+# X-Env-Var-initramfs_integration-Set: immediate
+#
+# X-Env-Var-logging_enable: y
+# X-Env-Var-logging_enable-Desc: Enable AppArmor event logging to syslog/rsyslog
+# X-Env-Var-logging_enable-Required: n
+# X-Env-Var-logging_enable-Valid: bool
+# X-Env-Var-logging_enable-Set: immediate
+#
+# X-Env-Var-container_support: y
+# X-Env-Var-container_support-Desc: Enable AppArmor profiles for container runtimes (Docker, Podman)
+# X-Env-Var-container_support-Required: n
+# X-Env-Var-container_support-Valid: bool
+# X-Env-Var-container_support-Set: immediate
+#
+# X-Env-Var-monitoring_support: y
+# X-Env-Var-monitoring_support-Desc: Enable AppArmor profiles for monitoring services (Prometheus, Grafana)
+# X-Env-Var-monitoring_support-Required: n
+# X-Env-Var-monitoring_support-Valid: bool
+# X-Env-Var-monitoring_support-Set: immediate
 #
 # METAEND
 ---
@@ -27,6 +64,8 @@ mmdebstrap:
     - apparmor-utils
     - apparmor-profiles
     - apparmor-profiles-extra
+    - initramfs-tools
+    - rsyslog
   customize-hooks:
     # Настройка AppArmor для Raspberry Pi
     - |
@@ -76,3 +115,55 @@ mmdebstrap:
               chroot "$1" aa-enforce /etc/apparmor.d/* 2>/dev/null || true
               ;;
       esac
+
+      # Проверка дополнительных настроек
+      PROFILES_ENABLE=$(igconf getval IGconf_apparmor_profiles_enable 2>/dev/null || echo "y")
+      INITRAMFS_INTEGRATION=$(igconf getval IGconf_apparmor_initramfs_integration 2>/dev/null || echo "y")
+      LOGGING_ENABLE=$(igconf getval IGconf_apparmor_logging_enable 2>/dev/null || echo "y")
+      CONTAINER_SUPPORT=$(igconf getval IGconf_apparmor_container_support 2>/dev/null || echo "y")
+      MONITORING_SUPPORT=$(igconf getval IGconf_apparmor_monitoring_support 2>/dev/null || echo "y")
+
+      echo "AppArmor additional settings:"
+      echo "- Profiles: $PROFILES_ENABLE"
+      echo "- Initramfs integration: $INITRAMFS_INTEGRATION"
+      echo "- Logging: $LOGGING_ENABLE"
+      echo "- Container support: $CONTAINER_SUPPORT"
+      echo "- Monitoring support: $MONITORING_SUPPORT"
+
+      # Настройка логирования если включено
+      if [ "$LOGGING_ENABLE" = "y" ]; then
+          echo "Configuring AppArmor logging..."
+          # Настройка rsyslog для AppArmor логов
+          if [ ! -f "$1/etc/rsyslog.d/apparmor.conf" ]; then
+              mkdir -p "$1/etc/rsyslog.d"
+              cat > "$1/etc/rsyslog.d/apparmor.conf" << 'EOF'
+# AppArmor log configuration
+if $programname == 'kernel' and $msg contains 'apparmor' then /var/log/apparmor/apparmor.log
+& stop
+EOF
+          fi
+      fi
+
+      # Настройка initramfs интеграции если включена
+      if [ "$INITRAMFS_INTEGRATION" = "y" ]; then
+          echo "Configuring initramfs AppArmor integration..."
+          mkdir -p "$1/etc/initramfs-tools/hooks"
+          mkdir -p "$1/etc/initramfs-tools/scripts/init-premount"
+
+          # Создание хуков для initramfs
+          cat > "$1/etc/initramfs-tools/hooks/apparmor" << 'EOF'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+
+# Копирование базовых профилей для ранней загрузки
+. /usr/share/initramfs-tools/hook-functions
+copy_exec /sbin/apparmor_parser
+for profile in sbin.init bin.systemd; do
+    [ -f "/etc/apparmor.d/$profile" ] && copy_file profile "/etc/apparmor.d/$profile"
+done
+EOF
+
+          chmod +x "$1/etc/initramfs-tools/hooks/apparmor"
+      fi

@@ -1,0 +1,179 @@
+# AppArmor профиль для системных служб Raspberry Pi
+# Обеспечивает безопасность для init, systemd и связанных служб
+
+#include <tunables/global>
+#include <tunables/rpi>
+
+profile sbin.init /sbin/init {
+    #include <abstractions/base>
+    #include <abstractions/consoles>
+
+    # Критические системные пути
+    /sbin/init mr,
+    /bin/systemd mr,
+    /lib/systemd/systemd mr,
+
+    # Базовые файловые системы
+    / r,
+    /bin r,
+    /sbin r,
+    /lib r,
+    /usr r,
+    /etc r,
+    /proc r,
+    /sys r,
+    /dev r,
+    /run r,
+    /tmp r,
+
+    # Устройства
+    /dev/null rw,
+    /dev/zero rw,
+    /dev/console rw,
+    /dev/tty* rw,
+    /dev/pts/* rw,
+    /dev/shm/** rw,
+
+    # Монтирование файловых систем
+    /bin/mount mr,
+    /sbin/mount* mr,
+    /bin/umount mr,
+    /sbin/umount* mr,
+
+    # Сетевые интерфейсы (базовые)
+    /sbin/ip mr,
+    /bin/ip mr,
+    /sbin/ifconfig mr,
+    /bin/ifconfig mr,
+
+    # Системные логи
+    /var/log/** rw,
+    /run/log/** rw,
+
+    # Аппаратные устройства Raspberry Pi
+    /dev/mmcblk* r,
+    /dev/nvme* r,
+    /dev/sda* r,
+
+    # Raspberry Pi firmware
+    @{RPI_FIRMWARE}/** r,
+    /boot/firmware/** r,
+
+    # Конфигурационные файлы
+    /etc/fstab r,
+    /etc/crypttab r,
+    /etc/cmdline.txt r,
+    /etc/config.txt r,
+
+    # Системные библиотеки
+    /lib/**/lib*.so* mr,
+    /usr/lib/**/lib*.so* mr,
+
+    # Криптографические устройства
+    /dev/crypto rw,
+    /dev/hwrng rw,
+
+    # Разрешенные возможности
+    capability sys_admin,
+    capability sys_chroot,
+    capability sys_module,
+    capability net_admin,
+    capability dac_override,
+    capability dac_read_search,
+
+    # Разрешенные системные вызовы
+    mount,
+    umount,
+    pivot_root,
+
+    # Ограничение ptrace
+    ptrace read peer=/sbin/init,
+
+    # Разрешенные сигналы
+    signal receive peer=/sbin/init,
+
+    # Файловые операции
+    file *** -> @{profile_name},
+}
+
+# Профиль для systemd
+profile bin.systemd /bin/systemd {
+    #include <abstractions/base>
+    #include <abstractions/dbus>
+
+    # Основные пути systemd
+    /bin/systemd mr,
+    /lib/systemd/systemd mr,
+    /usr/lib/systemd/systemd mr,
+
+    # Директории systemd
+    /etc/systemd/** r,
+    /lib/systemd/** r,
+    /usr/lib/systemd/** r,
+    /run/systemd/** rw,
+
+    # Системные устройства
+    /dev/kmsg rw,
+    /dev/null rw,
+    /dev/console rw,
+
+    # Логи systemd
+    /var/log/journal/** rw,
+    /run/log/journal/** rw,
+
+    # D-Bus для межпроцессного взаимодействия
+    /run/dbus/system_bus_socket rw,
+
+    # Разрешенные возможности
+    capability sys_admin,
+    capability dac_override,
+    capability dac_read_search,
+    capability sys_resource,
+
+    # Ограничение сетевого доступа
+    deny network tcp,
+    deny network udp,
+    deny network raw,
+
+    # Разрешенные системные вызовы
+    mount,
+    umount,
+
+    # Файловые операции
+    file *** -> @{profile_name},
+}
+
+# Профиль для Raspberry Pi bootloader
+profile boot.firmware /boot/firmware/**/* {
+    #include <abstractions/base>
+
+    # Boot файлы
+    /boot/firmware/** r,
+    /boot/firmware/cmdline.txt r,
+    /boot/firmware/config.txt r,
+
+    # Firmware компоненты
+    /boot/firmware/fixup*.dat r,
+    /boot/firmware/start*.elf r,
+    /boot/firmware/bootcode.bin r,
+
+    # Device tree файлы
+    /boot/firmware/*.dtb r,
+    /boot/firmware/overlays/*.dtbo r,
+
+    # Только чтение - загрузчик не должен модифицировать файлы
+    deny /boot/firmware/** w,
+
+    # Разрешено только чтение устройств
+    /dev/mmcblk* r,
+    /dev/disk/by-* r,
+
+    # Нет сетевого доступа для загрузчика
+    deny network,
+
+    # Ограниченные возможности
+    deny capability *,
+
+    # Файловые операции только для чтения
+    file /boot/firmware/**/* -> @{profile_name},
+}

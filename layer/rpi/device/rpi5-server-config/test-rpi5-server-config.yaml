@@ -1,0 +1,30 @@
+# Тестовая конфигурация для слоя rpi5-server-config
+device:
+  layer: rpi5
+  class: pi5
+  hostname: test-rpi5-server
+  storage_type: nvme
+
+image:
+  layer: image-base
+  name: test-rpi5-server-config
+  compression: zstd
+
+layer:
+  server: rpi5-server-config
+  base: bookworm-minbase
+
+# Тестирование всех переменных слоя
+rpi5_server:
+  # Основные оптимизации (все включены по умолчанию)
+  disable_hdmi: y
+  disable_wifi: y
+  disable_bluetooth: y
+  disable_audio: y
+  pcie_max_speed: y
+  usb_max_performance: y
+  disable_unused_interfaces: y
+
+  # Новые возможности
+  optimize_performance: n
+  security_hardening: n

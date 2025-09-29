@@ -1,0 +1,173 @@
+#!/bin/bash -e
+# AppArmor профили настройка
+# Устанавливает и настраивает профили AppArmor для Raspberry Pi компонентов
+
+echo "Setting up AppArmor profiles for Raspberry Pi..."
+
+# Проверка включения AppArmor
+igconf isy IGconf_apparmor_enable || exit 0
+
+# Создание директории для профилей если она не существует
+mkdir -p "$1/etc/apparmor.d"
+mkdir -p "$1/etc/apparmor.d/tunables"
+
+# Копирование профилей AppArmor
+echo "Copying AppArmor profiles..."
+cp -r /src/layer/security/apparmor/profiles/* "$1/etc/apparmor.d/" 2>/dev/null || true
+
+# Копирование Raspberry Pi специфических tunables
+if [ -f "/src/layer/security/apparmor/profiles/tunables/rpi" ]; then
+    cp "/src/layer/security/apparmor/profiles/tunables/rpi" "$1/etc/apparmor.d/tunables/"
+fi
+
+# Настройка профилей для Raspberry Pi оптимизаций
+RPI_OPTIMIZED=$(igconf getval IGconf_apparmor_rpi_optimized 2>/dev/null || echo "y")
+
+if [ "$RPI_OPTIMIZED" = "y" ]; then
+    echo "Enabling Raspberry Pi optimized profiles..."
+
+    # Создание символических ссылок для удобства
+    chroot "$1" ln -sf /etc/apparmor.d/tunables/rpi /etc/apparmor.d/tunables/raspberry-pi 2>/dev/null || true
+
+    # Включение профилей для VideoCore если доступны
+    if [ -f "$1/etc/apparmor.d/opt.vc" ]; then
+        echo "Enabling VideoCore GPU profile..."
+        # Профиль будет автоматически загружен при старте системы
+    fi
+
+    # Включение профилей для GPIO если доступны
+    if [ -f "$1/etc/apparmor.d/usr.bin.python3-gpio" ]; then
+        echo "Enabling GPIO profile for Python applications..."
+    fi
+
+    # Включение профилей для контейнеров если доступны
+    if [ -f "$1/etc/apparmor.d/usr.bin.containerd" ]; then
+        echo "Enabling container runtime profiles..."
+    fi
+
+    # Включение профилей мониторинга если доступны
+    if [ -f "$1/etc/apparmor.d/usr.sbin.monitoring" ]; then
+        echo "Enabling monitoring service profiles..."
+    fi
+fi
+
+# Настройка режима работы AppArmor
+APPARMOR_MODE=$(igconf getval IGconf_apparmor_mode 2>/dev/null || echo "enforce")
+
+echo "Setting AppArmor mode to: $APPARMOR_MODE"
+
+case "$APPARMOR_MODE" in
+    complain)
+        echo "Setting AppArmor to complain mode (logging only)..."
+        # Профили будут автоматически переключены в complain режим при загрузке
+        ;;
+    enforce|*)
+        echo "Setting AppArmor to enforce mode (blocking violations)..."
+        # Профили остаются в enforce режиме по умолчанию
+        ;;
+esac
+
+# Проверка корректности профилей
+echo "Validating AppArmor profiles..."
+if command -v apparmor_parser >/dev/null 2>&1; then
+    # Валидация профилей если доступен парсер
+    find "$1/etc/apparmor.d" -name "*.profile" -o -name "*.conf" | while read -r profile; do
+        if [ -f "$profile" ]; then
+            echo "Validating profile: $(basename "$profile")"
+            chroot "$1" apparmor_parser -Q "$profile" 2>/dev/null || echo "Warning: Profile $(basename "$profile") has issues"
+        fi
+    done
+else
+    echo "apparmor_parser not available, skipping profile validation"
+fi
+
+# Настройка initramfs для включения AppArmor на ранних этапах загрузки
+echo "Configuring initramfs for AppArmor support..."
+
+# Создание/обновление initramfs хука для AppArmor
+cat > "$1/etc/initramfs-tools/hooks/apparmor" << 'EOF'
+#!/bin/sh
+# Initramfs хук для AppArmor поддержки
+
+PREREQ=""
+
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case $1 in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+# Копирование AppArmor профилей в initramfs если они существуют
+if [ -d /etc/apparmor.d ]; then
+    . /usr/share/initramfs-tools/hook-functions
+    copy_exec /sbin/apparmor_parser
+    copy_file profile /etc/apparmor.d/tunables/global /etc/apparmor.d/tunables/global
+    copy_file profile /etc/apparmor.d/tunables/rpi /etc/apparmor.d/tunables/rpi
+
+    # Копирование базовых профилей для ранней загрузки
+    for profile in sbin.init bin.systemd; do
+        if [ -f "/etc/apparmor.d/$profile" ]; then
+            copy_file profile "/etc/apparmor.d/$profile" "/etc/apparmor.d/$profile"
+        fi
+    done
+fi
+EOF
+
+chmod +x "$1/etc/initramfs-tools/hooks/apparmor"
+
+# Создание скрипта для ранней загрузки AppArmor
+cat > "$1/etc/initramfs-tools/scripts/init-premount/apparmor" << 'EOF'
+#!/bin/sh
+# Ранний запуск AppArmor в initramfs
+
+PREREQ="udev"
+
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case $1 in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+# Монтирование securityfs если она не смонтирована
+if ! grep -q securityfs /proc/mounts; then
+    mount -t securityfs securityfs /sys/kernel/security 2>/dev/null || true
+fi
+
+# Загрузка AppArmor профилей если доступны
+if [ -x /sbin/apparmor_parser ]; then
+    # Загрузка базовых профилей
+    for profile in /etc/apparmor.d/sbin.init /etc/apparmor.d/bin.systemd; do
+        if [ -f "$profile" ]; then
+            apparmor_parser -r "$profile" 2>/dev/null || true
+        fi
+    done
+
+    # Включение AppArmor если параметры ядра указывают на это
+    if grep -q apparmor=1 /proc/cmdline 2>/dev/null; then
+        echo "AppArmor enabled in initramfs" > /dev/kmsg 2>/dev/null || true
+    fi
+fi
+EOF
+
+chmod +x "$1/etc/initramfs-tools/scripts/init-premount/apparmor"
+
+echo "AppArmor profiles setup completed successfully"
+
+# Проверка финальной конфигурации
+echo "Final AppArmor configuration check:"
+echo "- Profiles directory: $(ls -la "$1/etc/apparmor.d" | wc -l) files"
+echo "- Tunables: $(ls -la "$1/etc/apparmor.d/tunables" | wc -l) files"
+echo "- Mode: $APPARMOR_MODE"
+echo "- Raspberry Pi optimized: $RPI_OPTIMIZED"

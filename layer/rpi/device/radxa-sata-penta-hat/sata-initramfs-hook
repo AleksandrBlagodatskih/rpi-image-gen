@@ -1,5 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 # Initramfs hook for Radxa SATA Penta HAT SATA drivers
+# Исправлено: добавлен строгий режим bash для повышения безопасности
+
+set -eu  # exit on error, undefined variables
+set -o pipefail  # exit on pipe failures
 
 PREREQ=""
 prereqs()
@@ -16,22 +20,42 @@ esac
 
 . /usr/share/initramfs-tools/hook-functions
 
-# Force copy SATA/PATA modules for early detection
-force_load ahci
-force_load libahci
-force_load sata_mv
-force_load ata_piix
-force_load ata_generic
-force_load sd_mod
-force_load scsi_mod
-force_load scsi_transport_sas
-force_load libsas
+# Валидация окружения
+if [ -z "${DESTDIR:-}" ]; then
+    echo "Ошибка: DESTDIR не установлен" >&2
+    exit 1
+fi
 
-# JMB585 specific modules
+# Безопасная загрузка модулей с проверкой существования
+safe_force_load() {
+    local module="$1"
+    if modprobe --dry-run "$module" 2>/dev/null; then
+        force_load "$module"
+    else
+        echo "Предупреждение: модуль $module недоступен" >&2
+    fi
+}
+
+# Загрузка необходимых модулей для SATA поддержки
+safe_force_load ahci
+safe_force_load libahci
+safe_force_load libata
+safe_force_load sd_mod
+safe_force_load scsi_mod
+
+# Опциональные модули (если доступны)
+safe_force_load sata_mv || true
+safe_force_load ata_piix || true
+safe_force_load ata_generic || true
+safe_force_load scsi_transport_sas || true
+safe_force_load libsas || true
+
+# Специфичные модули для JMB585 контроллера
 manual_add_modules ahci_platform
-manual_add_modules libata
 manual_add_modules scsi_transport_sata
 
-# GPIO and PCIe modules for power management
+# Модули для управления питанием и PCIe
 manual_add_modules gpio_raspberrypi_exp
 manual_add_modules pcie-brcmstb
+
+echo "Radxa SATA Penta HAT: модули initramfs загружены успешно"

@@ -1,5 +1,5 @@
-# Пример конфигурации с AppArmor для Raspberry Pi
-# Mandatory Access Control для повышения безопасности системы
+# Пример полной конфигурации с AppArmor для Raspberry Pi
+# Mandatory Access Control с оптимизациями для Raspberry Pi платформы
 
 device:
   layer: rpi5
@@ -15,18 +15,37 @@ image:
 layer:
   base: bookworm-minbase
   security: apparmor
+  monitoring: system-monitoring
+  container: docker-runtime
   sbom: sbom-base
 
-# AppArmor настройки
+# Полная конфигурация AppArmor для production окружения
 apparmor:
-  enable: y              # Включить AppArmor
-  mode: enforce          # Режим блокировки нарушений
-  rpi_optimized: y       # Raspberry Pi оптимизации
+  enable: y                    # Включить AppArmor
+  mode: enforce                # Режим блокировки нарушений
+  rpi_optimized: y             # Raspberry Pi оптимизации
+  profiles_enable: y           # Установить кастомные профили
+  initramfs_integration: y     # Интеграция с initramfs
+  logging_enable: y            # Включить логирование
+  container_support: y         # Поддержка контейнеров
+  monitoring_support: y        # Поддержка мониторинга
+
+# Мониторинг системы
+monitoring:
+  prometheus: y
+  grafana: y
+  node_exporter: y
+
+# Контейнерная среда
+container:
+  docker: y
+  podman: y
 
 # SBOM для аудита и compliance
 sbom:
   enable: y
   provider: syft
+  detailed_scan: y
 
 # Дополнительные меры безопасности (опционально)
 # security:

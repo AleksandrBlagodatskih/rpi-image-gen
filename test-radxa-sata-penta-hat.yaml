@@ -1,0 +1,19 @@
+# Тестовая конфигурация для проверки слоя radxa-sata-penta-hat
+device:
+  layer: rpi5
+  class: pi5
+  hostname: test-radxa-sata
+
+image:
+  layer: image-base
+  name: test-radxa-sata-image
+  compression: zstd
+
+layer:
+  device: radxa-sata-penta-hat
+  base: bookworm-minbase
+
+# Настройки Radxa SATA Penta HAT для тестирования
+radxa_sata:
+  pcie_gen3: y        # Включить PCIe Gen 3.0
+  initramfs_sata: y   # Включить initramfs SATA инициализацию

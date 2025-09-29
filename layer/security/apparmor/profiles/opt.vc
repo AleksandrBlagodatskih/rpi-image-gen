@@ -1,0 +1,136 @@
+# AppArmor профиль для VideoCore GPU (Raspberry Pi)
+# Разрешает доступ к VideoCore компонентам для GPU приложений
+
+#include <tunables/global>
+#include <tunables/rpi>
+
+profile opt.vc /opt/vc/**/* {
+    #include <abstractions/base>
+    #include <abstractions/dbus>
+
+    # Доступ к VideoCore директории
+    /opt/vc/** r,
+    /opt/vc/bin/** px,
+    /opt/vc/sbin/** px,
+    /opt/vc/lib/** r,
+    /opt/vc/include/** r,
+
+    # Устройства VideoCore
+    /dev/vchiq rw,
+    /dev/vcsm rw,
+    /dev/vc-mem rw,
+    /dev/vcio rw,
+
+    # Графические устройства
+    /dev/fb* rw,
+    /dev/dri/** rw,
+    /dev/galcore rw,
+
+    # Временные файлы для GPU
+    /tmp/vc-** rw,
+    /tmp/gpu_** rw,
+
+    # Firmware файлы
+    @{RPI_FIRMWARE}/** r,
+
+    # Настройки GPU
+    /boot/firmware/config.txt r,
+    /boot/firmware/cmdline.txt r,
+
+    # GPIO для видео приложений
+    /sys/class/gpio/** r,
+    /sys/devices/platform/soc/*.gpio/gpio*/** r,
+
+    # I2C устройства для камер/дисплеев
+    /dev/i2c-* rw,
+    /sys/bus/i2c/devices/** r,
+
+    # SPI устройства
+    /dev/spidev*.* rw,
+    /sys/bus/spi/devices/** r,
+
+    # Сетевые интерфейсы для стриминга
+    /dev/net/tun rw,
+    network inet stream,
+    network inet6 stream,
+
+    # Локальные сокеты для межпроцессного взаимодействия
+    @{RUN}/vc-* rw,
+    @{RUN}/gpu-* rw,
+
+    # Ограничение сетевого доступа (только необходимые порты)
+    deny network tcp,
+    deny network udp,
+
+    # Разрешенные порты для видео стриминга
+    network tcp 8554,    # RTSP
+    network tcp 1935,    # RTMP
+    network udp 5000:5100, # RTP
+
+    # Доступ к логам
+    /var/log/vc-* w,
+    /var/log/gpu-* w,
+
+    # Ограничение ptrace (отладка только для владельца)
+    ptrace (complain) peer=@{profile_name},
+
+    # Ограничение системных вызовов
+    deny capability sys_admin,
+    deny capability sys_module,
+    capability dac_override,
+    capability dac_read_search,
+
+    # Разрешенные файловые операции
+    file *** -> @{profile_name},
+}
+
+# Профиль для Python GPIO приложений
+profile usr.bin.python3-gpio /usr/bin/python3* {
+    #include <abstractions/base>
+    #include <abstractions/python>
+
+    # GPIO устройства
+    /sys/class/gpio/** rw,
+    /sys/devices/platform/soc/*.gpio/gpio*/** rw,
+
+    # I2C устройства
+    /dev/i2c-* rw,
+    /sys/bus/i2c/devices/** r,
+
+    # SPI устройства
+    /dev/spidev*.* rw,
+    /sys/bus/spi/devices/** r,
+
+    # Device tree информация
+    /proc/device-tree/** r,
+    /sys/firmware/devicetree/** r,
+
+    # Python библиотеки для GPIO
+    /usr/lib/python3/dist-packages/RPi.GPIO-*.egg-info/** r,
+    /usr/lib/python3/dist-packages/gpiozero/** r,
+    /usr/lib/python3/dist-packages/smBus*/** r,
+
+    # Локальные файлы GPIO
+    @{HOME}/gpio_* rw,
+    @{HOME}/.gpio* rw,
+
+    # Ограничение сетевого доступа
+    deny network tcp,
+    deny network udp,
+    deny network raw,
+
+    # Разрешены только локальные соединения
+    unix peer=(label=@{profile_name}),
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Запрещенные возможности
+    deny capability sys_admin,
+    deny capability sys_module,
+    deny mount,
+    deny umount,
+
+    # Разрешенные файловые операции
+    file *** -> @{profile_name},
+}

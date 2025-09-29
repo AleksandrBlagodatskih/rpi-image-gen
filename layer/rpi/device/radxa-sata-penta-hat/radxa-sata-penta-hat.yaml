@@ -3,7 +3,7 @@
 # X-Env-Layer-Category: device
 # X-Env-Layer-Desc: Radxa SATA Penta HAT support for Raspberry Pi 5 with PCIe Gen 3.0 and initramfs SATA initialization
 # X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: rpi5,rpi-linux-v8
+# X-Env-Layer-Requires: device-base,pi5
 #
 # X-Env-VarPrefix: radxa_sata
 #
@@ -18,27 +18,73 @@
 ---
 mmdebstrap:
   customize-hooks:
+    # Валидация ресурсов слоя перед выполнением
+    - |
+      set -eu  # exit on error, undefined variables
+      set -o pipefail  # exit on pipe failures
+
+      # Проверка существования необходимых файлов ресурсов
+      if [ ! -f "sata-initramfs-hook" ]; then
+        echo "Ошибка: файл sata-initramfs-hook не найден в директории слоя" >&2
+        exit 1
+      fi
+
+      if [ ! -f "initramfs-modules" ]; then
+        echo "Ошибка: файл initramfs-modules не найден в директории слоя" >&2
+        exit 1
+      fi
+
+      echo "Radxa SATA Penta HAT: ресурсы слоя проверены"
+
     # Настройка PCIe Gen 3.0 для SATA контроллера JMB585
     - |
+      set -eu
       if [ "${IGconf_radxa_sata_pcie_gen3}" = "y" ]; then
         echo "# Radxa SATA Penta HAT: Enable PCIe Gen 3.0 for JMB585 controller" >> $1/boot/firmware/config.txt
         echo "dtparam=pciex1_gen=3" >> $1/boot/firmware/config.txt
+        echo "Radxa SATA Penta HAT: PCIe Gen 3.0 настроен"
       fi
 
     # Настройка initramfs для ранней загрузки SATA драйверов
     - |
+      set -eu
       if [ "${IGconf_radxa_sata_initramfs_sata}" = "y" ]; then
-        # Создание initramfs hooks для SATA
-        mkdir -p $1/etc/initramfs-tools/hooks
-        install -m 755 sata-initramfs-hook $1/etc/initramfs-tools/hooks/sata_penta
+        echo "Radxa SATA Penta HAT: настройка initramfs SATA драйверов"
 
-        # Настройка initramfs modules
+        # Создание директорий initramfs
+        mkdir -p $1/etc/initramfs-tools/hooks
         mkdir -p $1/etc/initramfs-tools/modules
-        cat initramfs-modules >> $1/etc/initramfs-tools/modules
+
+        # Копирование хука с проверкой
+        if install -m 755 sata-initramfs-hook $1/etc/initramfs-tools/hooks/sata_penta; then
+          echo "Radxa SATA Penta HAT: хук initramfs установлен"
+        else
+          echo "Ошибка: не удалось установить хук initramfs" >&2
+          exit 1
+        fi
+
+        # Добавление модулей
+        if cat initramfs-modules >> $1/etc/initramfs-tools/modules; then
+          echo "Radxa SATA Penta HAT: модули initramfs добавлены"
+        else
+          echo "Ошибка: не удалось добавить модули initramfs" >&2
+          exit 1
+        fi
 
         # Настройка initramfs.conf для SATA поддержки
-        sed -i 's/MODULES=most/MODULES=list/' $1/etc/initramfs-tools/initramfs.conf
+        if [ -f $1/etc/initramfs-tools/initramfs.conf ]; then
+          sed -i 's/MODULES=most/MODULES=list/' $1/etc/initramfs-tools/initramfs.conf
+          echo "Radxa SATA Penta HAT: initramfs.conf настроен"
+        fi
       fi
 
     # Перегенерация initramfs после всех настроек
-    - chroot $1 update-initramfs -u -k all
+    - |
+      set -eu
+      echo "Radxa SATA Penta HAT: обновление initramfs"
+      if chroot $1 update-initramfs -u -k all; then
+        echo "Radxa SATA Penta HAT: initramfs успешно обновлен"
+      else
+        echo "Ошибка: не удалось обновить initramfs" >&2
+        exit 1
+      fi

@@ -45,14 +45,8 @@ mmdebstrap:
     - curl
     - wget
     - bash
+    - distrobox
   customize-hooks:
-    # Установка Distrobox
-    - |
-      echo "Installing Distrobox..."
-      chroot $1 sh -c "
-        curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | \
-        sh -s -- --prefix /usr/local
-      "
 
     # Настройка Distrobox для использования container backend
     - mkdir -p $1/etc/distrobox

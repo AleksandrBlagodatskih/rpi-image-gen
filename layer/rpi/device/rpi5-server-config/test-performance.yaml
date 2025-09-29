@@ -1,0 +1,19 @@
+# Тест максимальной производительности
+device:
+  layer: rpi5
+  class: pi5
+  hostname: test-rpi5-performance
+
+layer:
+  server: rpi5-server-config
+
+rpi5_server:
+  disable_hdmi: y
+  disable_wifi: y
+  disable_bluetooth: y
+  disable_audio: y
+  pcie_max_speed: y
+  usb_max_performance: y
+  disable_unused_interfaces: y
+  optimize_performance: y    # Максимальная производительность
+  security_hardening: n      # Отключаем для производительности
