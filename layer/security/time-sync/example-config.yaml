@@ -12,16 +12,18 @@ layer:
   base: bookworm-minbase
   security: time-sync
 
-# Полная настройка синхронизации времени для enterprise
+# Полная настройка синхронизации времени для enterprise с предотвращением конфликтов
 time_sync:
   enable: y                             # Включить синхронизацию времени
   provider: chrony                      # Использовать Chrony для максимальной точности
   servers: "ntp1.company.com ntp2.company.com ntp3.company.com"
   fallback_servers: "0.debian.pool.ntp.org 1.debian.pool.ntp.org"
-  chrony_pool: "ntp1.company.com ntp2.company.com ntp3.company.com"
   chrony_makestep: "0.5 3"             # Быстрая корректировка времени
   chrony_rtcsync: y                    # Синхронизировать аппаратные часы
-  chrony_options: ""                   # Дополнительные опции Chrony
+
+# Альтернативные провайдеры:
+# provider: systemd-timesyncd           # Легковесный встроенный провайдер
+# provider: ntp                        # Классический NTP для полной совместимости
 
 # Дополнительные security слои
 layer:
@@ -38,7 +40,7 @@ layer:
 apparmor:
   enable: y
   mode: enforce
-  rpi_optimized: y
+  system_monitoring: y
 
 # Firewall
 ufw:

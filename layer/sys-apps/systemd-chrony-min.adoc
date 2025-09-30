@@ -1,57 +1,199 @@
-= systemd-chrony-min
-
-Слой `systemd-chrony-min` предоставляет базовую функциональность systemd с chrony для синхронизации времени вместо systemd-timesyncd.
+= systemd-chrony-min - Systemd with Chrony NTP Client
 
 == Описание
 
-Этот слой заменяет `systemd-min` и использует chrony - более точную и гибкую реализацию NTP клиента.
+Слой `systemd-chrony-min` предоставляет базовые компоненты systemd для инициализации системы, совместимости с SysV и клиент NTP на базе chrony вместо systemd-timesyncd. Chrony обеспечивает более точную синхронизацию времени и лучшую производительность по сравнению с systemd-timesyncd.
 
-== Пакеты
+== Основные возможности
 
-Устанавливаемые пакеты:
-- `systemd` - Система инициализации
-- `systemd-sysv` - Совместимость с SysV
-- `chrony` - NTP клиент и сервер
+* Полная поддержка systemd для инициализации и управления сервисами
+* Синхронизация времени через chrony NTP клиент
+* Совместимость с традиционными SysV init скриптами
+* Гибкая настройка режимов работы chrony (клиент, сервер, кастомный)
+* Поддержка кастомных NTP серверов
+* Опциональное логирование для отладки
+
+== Режимы работы chrony
+
+=== Клиентский режим (client)
+[source,yaml]
+----
+systemd_chrony:
+  chrony_config: client
+  ntp_servers: time.google.com,ntp.ubuntu.com,pool.ntp.org
+----
+
+=== Серверный режим (server)
+[source,yaml]
+----
+systemd_chrony:
+  chrony_config: server
+  ntp_servers: 0.debian.pool.ntp.org,1.debian.pool.ntp.org
+----
+
+=== Кастомный режим (custom)
+[source,yaml]
+----
+systemd_chrony:
+  chrony_config: custom
+----
+
+Для кастомного режима создайте файл `/etc/chrony/chrony.conf` с желаемой конфигурацией.
 
 == Конфигурация
 
-Chrony настраивается с использованием пула NTP серверов Debian:
-- `pool 2.debian.pool.ntp.org iburst`
+=== Минимальная конфигурация
 
-== Использование
+[source,yaml]
+----
+layer:
+  sys-apps: systemd-chrony-min
+----
+
+=== Полная конфигурация
+
+[source,yaml]
+----
+layer:
+  sys-apps: systemd-chrony-min
+
+# Настройки systemd-chrony-min
+systemd_chrony:
+  enable: y                      # Включить слой
+  chrony_config: default         # Режим работы chrony
+  ntp_servers: 2.debian.pool.ntp.org,3.debian.pool.ntp.org  # NTP серверы
+  enable_logging: n              # Включить логирование
+----
+
+== Переменные настройки
+
+* `enable` - Включить слой systemd с chrony (по умолчанию: y)
+* `chrony_config` - Режим конфигурации chrony (default, server, client, custom)
+* `ntp_servers` - Список NTP серверов через запятую
+* `enable_logging` - Включить детальное логирование chrony
+
+== Примеры использования
+
+=== Базовый сервер времени
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: ntp-server
+
+layer:
+  base: bookworm-minbase
+  sys-apps: systemd-chrony-min
+
+systemd_chrony:
+  chrony_config: server
+  ntp_servers: 0.debian.pool.ntp.org,1.debian.pool.ntp.org
+  enable_logging: y
+----
+
+=== Клиент с кастомными серверами
 
 [source,yaml]
 ----
 layer:
   base: bookworm-minbase
-  system: systemd-chrony-min  # Вместо systemd-min
+  sys-apps: systemd-chrony-min
+
+systemd_chrony:
+  chrony_config: client
+  ntp_servers: time.cloudflare.com,ntp.ubuntu.com,time.google.com
+  enable_logging: n
 ----
 
-== Преимущества chrony
+=== Минимальная установка
 
-- Более точная синхронизация времени
-- Поддержка NTS (Network Time Security)
-- Лучшая работа в виртуализированных окружениях
-- Гибкая конфигурация
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  sys-apps: systemd-chrony-min
+----
 
-== Сравнение с systemd-timesyncd
+== Совместимость
 
-|===
-| Характеристика | systemd-timesyncd | chrony
+* **ОС**: Debian Bookworm, Trixie
+* **Архитектуры**: amd64, arm64, armhf
+* **Ядро**: Linux 4.15+ (рекомендуется 5.0+)
+* **Конфликтует**: systemd-timesyncd, systemd-min
 
-| Точность
-| Хорошая
-| Отличная
+== Зависимости
 
-| NTS поддержка
-| Нет
-| Да
+* `essential` - Базовые системные компоненты
 
-| Конфигурация
-| Простая
-| Гибкая
+== Предоставляемые возможности
 
-| Ресурсы
-| Минимальные
-| Небольшие
-|===
+* `systemd` - Система инициализации systemd
+* `ntp-client` - Клиент синхронизации времени
+* `timesync` - Синхронизация системного времени
+
+== Диагностика
+
+=== Проверка статуса chrony
+
+[source,bash]
+----
+# Проверка статуса сервиса
+systemctl status chrony
+
+# Проверка синхронизации
+chronyc tracking
+
+# Проверка источников времени
+chronyc sources
+
+# Проверка активности
+chronyc activity
+----
+
+=== Логи chrony
+
+[source,bash]
+----
+# Просмотр логов chrony
+journalctl -u chrony -f
+
+# Если включено логирование в файл
+tail -f /var/log/chrony/measurements.log
+tail -f /var/log/chrony/statistics.log
+tail -f /var/log/chrony/tracking.log
+----
+
+=== Отладка конфигурации
+
+[source,bash]
+----
+# Проверка конфигурации
+chronyc configdump
+
+# Тестирование подключения к серверам
+chronyc -n sources
+
+# Проверка метрик
+chronyc -n tracking
+----
+
+== Производительность
+
+* chrony потребляет меньше ресурсов чем systemd-timesyncd
+* Поддержка burst режима для быстрой синхронизации
+* Автоматическое переключение между серверами
+* Поддержка аппаратного времени (RTC)
+
+== Безопасность
+
+* chrony работает от непривилегированного пользователя
+* Поддержка NTS (Network Time Security) в новых версиях
+* Ограничение доступа через cmdallow директивы
+* Безопасное хранение ключей синхронизации
+
+== Ссылки
+
+* https://chrony-project.org/[Официальный сайт chrony]
+* https://wiki.debian.org/Chrony[Debian Wiki - Chrony]
+* https://manpages.debian.org/bookworm/chrony/chrony.conf.5[Документация chrony.conf]

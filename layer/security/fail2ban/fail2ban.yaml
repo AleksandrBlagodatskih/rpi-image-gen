@@ -66,6 +66,25 @@
 # X-Env-Var-ban_action-Required: n
 # X-Env-Var-ban_action-Valid: string
 # X-Env-Var-ban_action-Set: lazy
+#
+# X-Env-Var-email_notifications: n
+# X-Env-Var-email_notifications-Desc: Enable email notifications when IPs are banned/unbanned
+# X-Env-Var-email_notifications-Required: n
+# X-Env-Var-email_notifications-Valid: bool
+# X-Env-Var-email_notifications-Set: lazy
+#
+# X-Env-Var-email_address: root@localhost
+# X-Env-Var-email_address-Desc: Email address for notifications (requires email server configuration)
+# X-Env-Var-email_address-Required: n
+# X-Env-Var-email_address-Valid: string
+# X-Env-Var-email_address-Set: lazy
+#
+#
+# X-Env-Var-web_server_support: y
+# X-Env-Var-web_server_support-Desc: Enable monitoring of web server services (nginx, apache2)
+# X-Env-Var-web_server_support-Required: n
+# X-Env-Var-web_server_support-Valid: bool
+# X-Env-Var-web_server_support-Set: lazy
 # METAEND
 ---
 mmdebstrap:
@@ -74,7 +93,10 @@ mmdebstrap:
   customize-hooks:
     # Основная настройка Fail2Ban
     - |
-      igconf isy IGconf_fail2ban_enable || exit 0
+      if [ "${IGconf_fail2ban_enable:-n}" != "y" ]; then
+        echo "Fail2Ban disabled by configuration"
+        exit 0
+      fi
 
       echo "Configuring Fail2Ban intrusion prevention system..."
 
@@ -85,24 +107,24 @@ mmdebstrap:
       JAIL_LOCAL="/etc/fail2ban/jail.local"
 
       # Backend для парсинга логов
-      BACKEND=$(igconf getval IGconf_fail2ban_backend)
+      BACKEND="${IGconf_fail2ban_backend:-systemd}"
       echo "Setting backend: $BACKEND"
       chroot "$1" sed -i "s|^backend = auto|backend = $BACKEND|" "$JAIL_LOCAL"
 
       # Уровень логирования
-      LOG_LEVEL=$(igconf getval IGconf_fail2ban_log_level)
+      LOG_LEVEL="${IGconf_fail2ban_log_level:-INFO}"
       echo "Setting log level: $LOG_LEVEL"
       chroot "$1" sed -i "s|^loglevel = INFO|loglevel = $LOG_LEVEL|" "$JAIL_LOCAL"
 
       # Время хранения записей в БД
-      DB_PURGE_AGE=$(igconf getval IGconf_fail2ban_db_purge_age)
+      DB_PURGE_AGE="${IGconf_fail2ban_db_purge_age:-1d}"
       echo "Setting db purge age: $DB_PURGE_AGE"
       chroot "$1" sed -i "s|^dbpurgeage = 1d|dbpurgeage = $DB_PURGE_AGE|" "$JAIL_LOCAL"
 
       # Параметры по умолчанию для всех jail
-      BAN_TIME=$(igconf getval IGconf_fail2ban_default_ban_time)
-      FIND_TIME=$(igconf getval IGconf_fail2ban_default_find_time)
-      MAX_RETRY=$(igconf getval IGconf_fail2ban_default_max_retry)
+      BAN_TIME="${IGconf_fail2ban_default_ban_time:-10m}"
+      FIND_TIME="${IGconf_fail2ban_default_find_time:-10m}"
+      MAX_RETRY="${IGconf_fail2ban_default_max_retry:-5}"
 
       echo "Setting default jail parameters: bantime=$BAN_TIME, findtime=$FIND_TIME, maxretry=$MAX_RETRY"
       chroot "$1" sed -i "s|^bantime  = 10m|bantime  = $BAN_TIME|" "$JAIL_LOCAL"
@@ -110,7 +132,7 @@ mmdebstrap:
       chroot "$1" sed -i "s|^maxretry = 5|maxretry = $MAX_RETRY|" "$JAIL_LOCAL"
 
       # Игнорируемые IP адреса
-      IGNORE_IPS=$(igconf getval IGconf_fail2ban_ignore_ips)
+      IGNORE_IPS="${IGconf_fail2ban_ignore_ips:-}"
       if [ -n "$IGNORE_IPS" ]; then
         echo "Setting ignore IPs: $IGNORE_IPS"
         # Заменяем запятые на пробелы для fail2ban формата
@@ -119,12 +141,12 @@ mmdebstrap:
       fi
 
       # Действие при бане
-      BAN_ACTION=$(igconf getval IGconf_fail2ban_ban_action)
+      BAN_ACTION="${IGconf_fail2ban_ban_action:-iptables-multiport}"
       echo "Setting ban action: $BAN_ACTION"
       chroot "$1" sed -i "s|^banaction = iptables-multiport|banaction = $BAN_ACTION|" "$JAIL_LOCAL"
 
       # Включение выбранных jail
-      ENABLED_JAILS=$(igconf getval IGconf_fail2ban_enabled_jails)
+      ENABLED_JAILS="${IGconf_fail2ban_enabled_jails:-sshd,dropbear}"
       if [ -n "$ENABLED_JAILS" ]; then
         echo "Enabling jails: $ENABLED_JAILS"
 
@@ -142,6 +164,170 @@ mmdebstrap:
           fi
         done
       fi
+
+      # Настройка дополнительных параметров
+      EMAIL_NOTIFICATIONS="${IGconf_fail2ban_email_notifications:-n}"
+      EMAIL_ADDRESS="${IGconf_fail2ban_email_address:-root@localhost}"
+      WEB_SERVER_SUPPORT="${IGconf_fail2ban_web_server_support:-y}"
+
+      # Настройка email уведомлений если включены
+      if [ "$EMAIL_NOTIFICATIONS" = "y" ]; then
+        echo "Configuring email notifications..."
+        # Настройка email параметров в jail.local
+        chroot "$1" sed -i "s|^#destemail = root@localhost|destemail = $EMAIL_ADDRESS|" "$JAIL_LOCAL"
+        chroot "$1" sed -i "s|^#sender = fail2ban@<fq-hostname>|sender = fail2ban@$HOSTNAME|" "$JAIL_LOCAL"
+        chroot "$1" sed -i "s|^#mta = sendmail|mta = sendmail|" "$JAIL_LOCAL"
+        echo "Email notifications configured for: $EMAIL_ADDRESS"
+      fi
+
+      # Создание кастомных jail для общего мониторинга доступа к системе
+      echo "Creating custom jails for system access monitoring..."
+
+      # Jail для системных служб аутентификации
+      cat >> "$1/etc/fail2ban/jail.local" << 'EOF'
+
+# Custom jail for system authentication services
+[system-auth]
+enabled = true
+port = ssh,22,2222
+filter = system-auth
+logpath = /var/log/auth.log
+          /var/log/secure
+          /var/log/messages
+maxretry = 3
+bantime = 3600
+findtime = 600
+
+# Custom jail for sudo access monitoring
+[sudo-access]
+enabled = true
+port = ssh,22,2222
+filter = sudo-access
+logpath = /var/log/sudo.log
+          /var/log/auth.log
+          /var/log/secure
+maxretry = 5
+bantime = 1800
+findtime = 300
+
+# Custom jail for system administration commands
+[system-admin]
+enabled = true
+port = ssh,22,2222
+filter = system-admin
+logpath = /var/log/auth.log
+          /var/log/secure
+          /var/log/messages
+maxretry = 10
+bantime = 7200
+findtime = 900
+EOF
+
+      # Jail для мониторинга критических системных файлов
+      cat >> "$1/etc/fail2ban/jail.local" << 'EOF'
+
+# Custom jail for critical system files access
+[critical-files]
+enabled = true
+port = ssh,22,2222
+filter = critical-files
+logpath = /var/log/audit/audit.log
+          /var/log/auth.log
+          /var/log/secure
+maxretry = 2
+bantime = 86400
+findtime = 3600
+
+# Custom jail for privilege escalation attempts
+[privilege-escalation]
+enabled = true
+port = ssh,22,2222
+filter = privilege-escalation
+logpath = /var/log/audit/audit.log
+          /var/log/auth.log
+          /var/log/secure
+maxretry = 3
+bantime = 43200
+findtime = 1800
+EOF
+
+      # Создание фильтров для кастомных jail мониторинга доступа к системе
+      mkdir -p "$1/etc/fail2ban/filter.d"
+
+      # Фильтр для системных служб аутентификации
+      cat > "$1/etc/fail2ban/filter.d/system-auth.conf" << 'EOF'
+# Fail2Ban filter for system authentication services
+# Monitors SSH, login, and other authentication failures
+
+[Definition]
+failregex = ^.*authentication failure.*rhost=<HOST>
+            ^.*Failed password for.*from <HOST>
+            ^.*failed login.*from <HOST>
+            ^.*invalid user.*from <HOST>
+            ^.*bad username.*from <HOST>
+            ^.*POSSIBLE BREAK-IN ATTEMPT.*from <HOST>
+
+ignoreregex =
+EOF
+
+      # Фильтр для sudo доступа
+      cat > "$1/etc/fail2ban/filter.d/sudo-access.conf" << 'EOF'
+# Fail2Ban filter for sudo access monitoring
+# Monitors sudo authentication failures and suspicious usage
+
+[Definition]
+failregex = ^.*sudo.*authentication failure.*rhost=<HOST>
+            ^.*sudo.*incorrect password attempts.*from <HOST>
+            ^.*sudo.*command not allowed.*from <HOST>
+            ^.*sudo.*user .* is not allowed to execute.*from <HOST>
+
+ignoreregex =
+EOF
+
+      # Фильтр для системных административных команд
+      cat > "$1/etc/fail2ban/filter.d/system-admin.conf" << 'EOF'
+# Fail2Ban filter for system administration commands
+# Monitors suspicious system administration activities
+
+[Definition]
+failregex = ^.*systemctl.*authentication failure.*from <HOST>
+            ^.*service.*unauthorized access.*from <HOST>
+            ^.*journalctl.*unauthorized access.*from <HOST>
+            ^.*userdel.*unauthorized.*from <HOST>
+            ^.*usermod.*unauthorized.*from <HOST>
+
+ignoreregex =
+EOF
+
+      # Фильтр для критических системных файлов
+      cat > "$1/etc/fail2ban/filter.d/critical-files.conf" << 'EOF'
+# Fail2Ban filter for critical system files access
+# Monitors unauthorized access to critical system files
+
+[Definition]
+failregex = ^.*audit.*unauthorized access to.*<HOST>
+            ^.*authentication failure.*critical.*from <HOST>
+            ^.*permission denied.*shadow.*from <HOST>
+            ^.*permission denied.*sudoers.*from <HOST>
+            ^.*unauthorized.*passwd.*from <HOST>
+
+ignoreregex =
+EOF
+
+      # Фильтр для попыток эскалации привилегий
+      cat > "$1/etc/fail2ban/filter.d/privilege-escalation.conf" << 'EOF'
+# Fail2Ban filter for privilege escalation attempts
+# Monitors attempts to gain elevated privileges
+
+[Definition]
+failregex = ^.*su.*authentication failure.*from <HOST>
+            ^.*sudo.*authentication failure.*from <HOST>
+            ^.*setuid.*unauthorized.*from <HOST>
+            ^.*setgid.*unauthorized.*from <HOST>
+            ^.*privilege escalation attempt.*from <HOST>
+
+ignoreregex =
+EOF
 
       # Создание символической ссылки для systemd (если используется systemd backend)
       if [ "$BACKEND" = "systemd" ]; then

@@ -1,7 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: openssh-server
-# X-Env-Layer-Desc: OpenSSH server daemon and local user SSH key setup.
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: general
+# X-Env-Layer-Desc: OpenSSH server daemon with security hardening and local user SSH key setup.
+# X-Env-Layer-Version: 1.1.0
 # X-Env-Layer-Requires: rpi-user-credentials
 #
 # X-Env-VarRequires: IGconf_device_user1
@@ -34,6 +35,78 @@
 # X-Env-Var-pubkey_only-Required: n
 # X-Env-Var-pubkey_only-Valid: bool
 # X-Env-Var-pubkey_only-Set: y
+#
+# X-Env-Var-security_hardening: y
+# X-Env-Var-security_hardening-Desc: Enable SSH security hardening measures
+# X-Env-Var-security_hardening-Required: n
+# X-Env-Var-security_hardening-Valid: bool
+# X-Env-Var-security_hardening-Set: lazy
+#
+# X-Env-Var-disable_protocol_v1: y
+# X-Env-Var-disable_protocol_v1-Desc: Disable SSH protocol version 1 (legacy and insecure)
+# X-Env-Var-disable_protocol_v1-Required: n
+# X-Env-Var-disable_protocol_v1-Valid: bool
+# X-Env-Var-disable_protocol_v1-Set: lazy
+#
+# X-Env-Var-permit_empty_passwords: n
+# X-Env-Var-permit_empty_passwords-Desc: Never permit empty passwords (security risk)
+# X-Env-Var-permit_empty_passwords-Required: n
+# X-Env-Var-permit_empty_passwords-Valid: bool
+# X-Env-Var-permit_empty_passwords-Set: lazy
+#
+# X-Env-Var-x11_forwarding: n
+# X-Env-Var-x11_forwarding-Desc: Disable X11 forwarding (reduces attack surface unless needed)
+# X-Env-Var-x11_forwarding-Required: n
+# X-Env-Var-x11_forwarding-Valid: bool
+# X-Env-Var-x11_forwarding-Set: lazy
+#
+# X-Env-Var-strict_modes: y
+# X-Env-Var-strict_modes-Desc: Enable strict modes checking for SSH files
+# X-Env-Var-strict_modes-Required: n
+# X-Env-Var-strict_modes-Valid: bool
+# X-Env-Var-strict_modes-Set: lazy
+#
+# X-Env-Var-ignore_rhosts: y
+# X-Env-Var-ignore_rhosts-Desc: Ignore .rhosts and .shosts files (legacy authentication)
+# X-Env-Var-ignore_rhosts-Required: n
+# X-Env-Var-ignore_rhosts-Valid: bool
+# X-Env-Var-ignore_rhosts-Set: lazy
+#
+# X-Env-Var-log_level: VERBOSE
+# X-Env-Var-log_level-Desc: SSH daemon log level for better security monitoring
+# X-Env-Var-log_level-Required: n
+# X-Env-Var-log_level-Valid: keywords:QUIET,FATAL,ERROR,INFO,VERBOSE,DEBUG,DEBUG1,DEBUG2,DEBUG3
+# X-Env-Var-log_level-Set: lazy
+#
+# X-Env-Var-max_auth_tries: 3
+# X-Env-Var-max_auth_tries-Desc: Maximum number of authentication attempts per connection
+# X-Env-Var-max_auth_tries-Required: n
+# X-Env-Var-max_auth_tries-Valid: int
+# X-Env-Var-max_auth_tries-Set: lazy
+#
+# X-Env-Var-login_grace_time: 30
+# X-Env-Var-login_grace_time-Desc: Login grace time in seconds (time before disconnecting inactive connections)
+# X-Env-Var-login_grace_time-Required: n
+# X-Env-Var-login_grace_time-Valid: int
+# X-Env-Var-login_grace_time-Set: lazy
+#
+# X-Env-Var-max_sessions: 10
+# X-Env-Var-max_sessions-Desc: Maximum number of concurrent sessions per network connection
+# X-Env-Var-max_sessions-Required: n
+# X-Env-Var-max_sessions-Valid: int
+# X-Env-Var-max_sessions-Set: lazy
+#
+# X-Env-Var-client_alive_interval: 300
+# X-Env-Var-client_alive_interval-Desc: Client alive interval in seconds (prevents hanging connections)
+# X-Env-Var-client_alive_interval-Required: n
+# X-Env-Var-client_alive_interval-Valid: int
+# X-Env-Var-client_alive_interval-Set: lazy
+#
+# X-Env-Var-client_alive_count_max: 3
+# X-Env-Var-client_alive_count_max-Desc: Maximum number of client alive messages before disconnecting
+# X-Env-Var-client_alive_count_max-Required: n
+# X-Env-Var-client_alive_count_max-Valid: int
+# X-Env-Var-client_alive_count_max-Set: lazy
 # METAEND
 ---
 mmdebstrap:
@@ -63,5 +136,88 @@ mmdebstrap:
       PubkeyAuthentication yes
       AuthenticationMethods publickey
       EOCHROOT
+      fi
+    - |-
+      # SSH security hardening configuration
+      if igconf isy ssh_security_hardening ; then
+         mkdir -p $1/etc/ssh/sshd_config.d
+
+         # Get configuration values with defaults
+         DISABLE_PROTOCOL_V1=$(igconf getval ssh_disable_protocol_v1 2>/dev/null || echo "y")
+         PERMIT_EMPTY_PASSWORDS=$(igconf getval ssh_permit_empty_passwords 2>/dev/null || echo "n")
+         X11_FORWARDING=$(igconf getval ssh_x11_forwarding 2>/dev/null || echo "n")
+         STRICT_MODES=$(igconf getval ssh_strict_modes 2>/dev/null || echo "y")
+         IGNORE_RHOSTS=$(igconf getval ssh_ignore_rhosts 2>/dev/null || echo "y")
+         LOG_LEVEL=$(igconf getval ssh_log_level 2>/dev/null || echo "VERBOSE")
+         MAX_AUTH_TRIES=$(igconf getval ssh_max_auth_tries 2>/dev/null || echo "3")
+         LOGIN_GRACE_TIME=$(igconf getval ssh_login_grace_time 2>/dev/null || echo "30")
+         MAX_SESSIONS=$(igconf getval ssh_max_sessions 2>/dev/null || echo "10")
+         CLIENT_ALIVE_INTERVAL=$(igconf getval ssh_client_alive_interval 2>/dev/null || echo "300")
+         CLIENT_ALIVE_COUNT_MAX=$(igconf getval ssh_client_alive_count_max 2>/dev/null || echo "3")
+
+         cat > $1/etc/ssh/sshd_config.d/02-security-hardening.conf << EOF
+      # SSH Security Hardening Configuration
+      # Generated by rpi-image-gen openssh-server layer
+
+      # Disable legacy SSH protocol (insecure) if enabled
+      $([ "$DISABLE_PROTOCOL_V1" = "y" ] && echo "Protocol 2")
+
+      # Never permit empty passwords (security risk)
+      $([ "$PERMIT_EMPTY_PASSWORDS" = "n" ] && echo "PermitEmptyPasswords no")
+
+      # Disable X11 forwarding (reduces attack surface unless needed)
+      $([ "$X11_FORWARDING" = "n" ] && echo "X11Forwarding no")
+
+      # Enable strict modes checking for SSH files
+      $([ "$STRICT_MODES" = "y" ] && echo "StrictModes yes")
+
+      # Ignore .rhosts and .shosts files (legacy authentication)
+      $([ "$IGNORE_RHOSTS" = "y" ] && echo "IgnoreRhosts yes")
+
+      # Enhanced logging for security monitoring
+      LogLevel $LOG_LEVEL
+
+      # Limit authentication attempts per connection
+      MaxAuthTries $MAX_AUTH_TRIES
+
+      # Login grace time (disconnect inactive connections)
+      LoginGraceTime $LOGIN_GRACE_TIME
+
+      # Maximum concurrent sessions per connection
+      MaxSessions $MAX_SESSIONS
+
+      # Client alive interval (prevents hanging connections)
+      ClientAliveInterval $CLIENT_ALIVE_INTERVAL
+      ClientAliveCountMax $CLIENT_ALIVE_COUNT_MAX
+
+      # Additional security measures
+      AllowTcpForwarding no
+      AllowAgentForwarding no
+      PermitTunnel no
+
+      # Only allow specific authentication methods (when combined with pubkey-only)
+      $(igconf isy ssh_pubkey_only && echo "AuthenticationMethods publickey")
+
+      # Disable host-based authentication
+      HostbasedAuthentication no
+
+      # Disable Rhosts authentication
+      RhostsAuthentication no
+      RhostsRSAAuthentication no
+
+      # Disable Kerberos authentication
+      KerberosAuthentication no
+      KerberosOrLocalPasswd no
+      KerberosTicketCleanup yes
+
+      # Disable PAM when pubkey-only mode is enabled
+      $(igconf isy ssh_pubkey_only && echo "UsePAM no")
+
+      # Security-related options
+      Compression no
+      TCPKeepAlive no
+
+      EOF
+         echo "SSH security hardening configuration applied with custom settings"
       fi
     - $BDEBSTRAP_HOOKS/enable-units "$1" ssh

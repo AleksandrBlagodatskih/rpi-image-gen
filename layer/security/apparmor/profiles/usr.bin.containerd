@@ -41,19 +41,6 @@ profile usr.bin.containerd /usr/bin/containerd* {
     # Графические устройства для GUI контейнеров
     /dev/dri/** rw,
     /dev/fb* rw,
-    /dev/vchiq rw,
-    /dev/vc-* rw,
-
-    # GPIO устройства для IoT контейнеров
-    /sys/class/gpio/** rw,
-    /sys/devices/platform/soc/*.gpio/gpio*/** rw,
-
-    # I2C/SPI устройства
-    /dev/i2c-* rw,
-    /dev/spidev*.* rw,
-
-    # Raspberry Pi устройства
-    @{RPI_DEVICES}/** rw,
 
     # Сетевые интерфейсы
     /sys/class/net/** r,
@@ -121,19 +108,16 @@ profile usr.bin.distrobox /usr/bin/distrobox* {
     /dev/dri/** rw,
     /dev/fb* rw,
 
-    # GPIO для разработки
-    /sys/class/gpio/** rw,
-
-    # Сетевые доступ для контейнеров разработки
-    network inet stream,
-    network inet6 stream,
-
     # X11 для GUI приложений
     @{XDG_RUNTIME_DIR}/** rw,
     /tmp/.X11-unix/** rw,
 
     # D-Bus для межпроцессного взаимодействия
     /run/user/*/bus rw,
+
+    # Сетевые доступ для контейнеров разработки
+    network inet stream,
+    network inet6 stream,
 
     # Разрешенные возможности для разработки
     capability dac_override,

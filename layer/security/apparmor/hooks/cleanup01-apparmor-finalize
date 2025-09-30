@@ -45,7 +45,7 @@ fi
 echo "Final AppArmor configuration summary:"
 echo "- Status: $(igconf getval IGconf_apparmor_enable)"
 echo "- Mode: $(igconf getval IGconf_apparmor_mode)"
-echo "- RPi optimized: $(igconf getval IGconf_apparmor_rpi_optimized)"
+echo "- System monitoring: $(igconf getval IGconf_apparmor_system_monitoring)"
 
 # Проверка наличия ключевых компонентов
 COMPONENT_CHECK=0
@@ -91,7 +91,7 @@ AppArmor Setup Report
 Generated: $(date)
 Status: $(igconf getval IGconf_apparmor_enable)
 Mode: $(igconf getval IGconf_apparmor_mode)
-RPi Optimized: $(igconf getval IGconf_apparmor_rpi_optimized)
+System Monitoring: $(igconf getval IGconf_apparmor_system_monitoring)
 Components: $COMPONENT_CHECK/4
 EOF
 

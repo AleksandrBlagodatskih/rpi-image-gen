@@ -1,19 +1,36 @@
 # METABEGIN
 # X-Env-Layer-Name: radxa-sata-penta-hat
 # X-Env-Layer-Category: device
-# X-Env-Layer-Desc: Radxa SATA Penta HAT support for Raspberry Pi 5 with PCIe Gen 3.0 and initramfs SATA initialization
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Desc: Radxa SATA Penta HAT support for Raspberry Pi 5 with RP1 modules, PCIe Gen 3.0 and initramfs SATA initialization
+# X-Env-Layer-Version: 1.1.0
 # X-Env-Layer-Requires: device-base,pi5
+# X-Env-Layer-Provides: sata-controller,jmb585-support
 #
 # X-Env-VarPrefix: radxa_sata
 #
 # X-Env-Var-pcie_gen3: y
-# X-Env-Var-pcie_gen3-Set: immediate
+# X-Env-Var-pcie_gen3-Desc: Enable PCIe Gen 3.0 for JMB585 controller (dtparam=pciex1_gen=3)
+# X-Env-Var-pcie_gen3-Required: n
 # X-Env-Var-pcie_gen3-Valid: bool
+# X-Env-Var-pcie_gen3-Set: immediate
 #
 # X-Env-Var-initramfs_sata: y
-# X-Env-Var-initramfs_sata-Set: immediate
+# X-Env-Var-initramfs_sata-Desc: Enable initramfs SATA initialization with RP1 and PCIe modules
+# X-Env-Var-initramfs_sata-Required: n
 # X-Env-Var-initramfs_sata-Valid: bool
+# X-Env-Var-initramfs_sata-Set: immediate
+#
+# X-Env-Var-load_rp1_modules: y
+# X-Env-Var-load_rp1_modules-Desc: Load RP1 I/O chip modules (rpi_poe, rpi_poe_firmware, rpi_poe_firmware_update)
+# X-Env-Var-load_rp1_modules-Required: n
+# X-Env-Var-load_rp1_modules-Valid: bool
+# X-Env-Var-load_rp1_modules-Set: immediate
+#
+# X-Env-Var-enable_gpio_power: n
+# X-Env-Var-enable_gpio_power-Desc: Enable GPIO power management for HAT (experimental)
+# X-Env-Var-enable_gpio_power-Required: n
+# X-Env-Var-enable_gpio_power-Valid: bool
+# X-Env-Var-enable_gpio_power-Set: immediate
 # METAEND
 ---
 mmdebstrap:
@@ -36,13 +53,15 @@ mmdebstrap:
 
       echo "Radxa SATA Penta HAT: ресурсы слоя проверены"
 
-    # Настройка PCIe Gen 3.0 для SATA контроллера JMB585
+    # Настройка PCIe Gen 3.0 для SATA контроллера JMB585 с поддержкой RP1
     - |
       set -eu
       if [ "${IGconf_radxa_sata_pcie_gen3}" = "y" ]; then
         echo "# Radxa SATA Penta HAT: Enable PCIe Gen 3.0 for JMB585 controller" >> $1/boot/firmware/config.txt
         echo "dtparam=pciex1_gen=3" >> $1/boot/firmware/config.txt
-        echo "Radxa SATA Penta HAT: PCIe Gen 3.0 настроен"
+        echo "# RP1 I/O chip configuration for PCIe" >> $1/boot/firmware/config.txt
+        echo "dtoverlay=rp1-poe-hat" >> $1/boot/firmware/config.txt
+        echo "Radxa SATA Penta HAT: PCIe Gen 3.0 с RP1 поддержкой настроен"
       fi
 
     # Настройка initramfs для ранней загрузки SATA драйверов
@@ -75,6 +94,23 @@ mmdebstrap:
         if [ -f $1/etc/initramfs-tools/initramfs.conf ]; then
           sed -i 's/MODULES=most/MODULES=list/' $1/etc/initramfs-tools/initramfs.conf
           echo "Radxa SATA Penta HAT: initramfs.conf настроен"
+        fi
+
+        # Настройка GPIO управления питанием (если включено)
+        if [ "${IGconf_radxa_sata_enable_gpio_power}" = "y" ]; then
+          mkdir -p $1/etc/udev/rules.d
+          cat > $1/etc/udev/rules.d/99-radxa-sata-power.rules << 'EOF'
+# Udev rules for Radxa SATA Penta HAT power management
+# Автоматическое включение питания SATA при обнаружении устройств
+
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", ACTION=="add", \
+  RUN+="/bin/sh -c 'echo 1 > /sys/class/gpio/gpio26/value 2>/dev/null || true'"
+
+# Отключение питания при удалении устройств (опционально)
+SUBSYSTEM=="gpio", KERNEL=="gpiochip*", ACTION=="remove", \
+  RUN+="/bin/sh -c 'echo 0 > /sys/class/gpio/gpio26/value 2>/dev/null || true'"
+EOF
+          echo "Radxa SATA Penta HAT: GPIO power management настроен"
         fi
       fi
 

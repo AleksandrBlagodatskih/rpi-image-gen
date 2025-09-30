@@ -1,8 +1,37 @@
 # METABEGIN
 # X-Env-Layer-Name: systemd-chrony-min
-# X-Env-Layer-Desc: Core systemd components for init, SysV compatibility
-#  and chrony NTP client instead of systemd-timesyncd.
+# X-Env-Layer-Category: sys-apps
+# X-Env-Layer-Desc: Core systemd components for init, SysV compatibility and chrony NTP client instead of systemd-timesyncd
 # X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+# X-Env-Layer-Provides: systemd,ntp-client,timesync
+# X-Env-Layer-Conflicts: systemd-timesyncd (provides NTP),systemd-min (overlaps systemd components)
+#
+# X-Env-VarPrefix: systemd_chrony
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable systemd with chrony NTP client (replaces systemd-timesyncd)
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+#
+# X-Env-Var-chrony_config: default
+# X-Env-Var-chrony_config-Desc: Chrony configuration mode - default, server, client, or custom
+# X-Env-Var-chrony_config-Required: n
+# X-Env-Var-chrony_config-Valid: keywords:default,server,client,custom
+# X-Env-Var-chrony_config-Set: immediate
+#
+# X-Env-Var-ntp_servers: 2.debian.pool.ntp.org,3.debian.pool.ntp.org
+# X-Env-Var-ntp_servers-Desc: Comma-separated list of NTP servers for chrony configuration
+# X-Env-Var-ntp_servers-Required: n
+# X-Env-Var-ntp_servers-Valid: string
+# X-Env-Var-ntp_servers-Set: immediate
+#
+# X-Env-Var-enable_logging: n
+# X-Env-Var-enable_logging-Desc: Enable chrony logging for debugging and monitoring
+# X-Env-Var-enable_logging-Required: n
+# X-Env-Var-enable_logging-Valid: bool
+# X-Env-Var-enable_logging-Set: immediate
 # METAEND
 ---
 mmdebstrap:
@@ -11,7 +40,136 @@ mmdebstrap:
     - systemd-sysv
     - chrony
   customize-hooks:
+    # Включение systemd сервисов
     - $BDEBSTRAP_HOOKS/enable-units "$1" chrony
+    - $BDEBSTRAP_HOOKS/enable-units "$1" systemd-timesyncd  # Отключить timesyncd если используется chrony
+
+    # Кастомная настройка chrony на основе переменных
+    - |
+      if [ "${IGconf_systemd_chrony_enable}" = "y" ]; then
+        echo "Configuring systemd with chrony NTP client..."
+
+        # Создание директории для chrony
+        mkdir -p $1/etc/chrony
+
+        # Настройка chrony в зависимости от режима
+        case "${IGconf_systemd_chrony_chrony_config}" in
+          "server")
+            # Режим NTP сервера с кастомными серверами
+            NTP_SERVERS=$(echo "${IGconf_systemd_chrony_ntp_servers}" | tr ',' '\n' | sed 's/^/server /' | sed 's/$/ iburst/' | tr '\n' '\n')
+            cat > $1/etc/chrony/chrony.conf << EOF
+# Chrony configuration - NTP Server mode
+# Allow clients to connect
+allow 192.168.0.0/16
+allow 10.0.0.0/8
+
+# Server configuration with custom servers
+${NTP_SERVERS}
+
+# Enable kernel synchronization
+rtcsync
+
+# Step the system clock instead of slewing if adjustment is larger than 1 second
+makestep 1 3
+
+# Save NTS keys and cookies
+ntsdumpdir /var/lib/chrony
+
+# Log directory
+logdir /var/log/chrony
+
+# Maximum clock error
+maxupdateskew 100.0
+
+# Local stratum
+local stratum 10
+
+# Enable command socket for chronyc
+cmdallow 127.0.0.1
+cmdallow ::1
+
+# Enable logging if requested
+$(if [ "${IGconf_systemd_chrony_enable_logging}" = "y" ]; then echo "log tracking measurements statistics"; fi)
+EOF
+            ;;
+
+          "client")
+            # Режим NTP клиента с кастомными серверами
+            NTP_SERVERS=$(echo "${IGconf_systemd_chrony_ntp_servers}" | tr ',' '\n' | sed 's/^/pool /' | sed 's/$/ iburst/' | tr '\n' '\n')
+            cat > $1/etc/chrony/chrony.conf << EOF
+# Chrony configuration - NTP Client mode
+# Use custom NTP servers
+${NTP_SERVERS}
+
+# Enable kernel synchronization
+rtcsync
+
+# Step the system clock instead of slewing if adjustment is larger than 1 second
+makestep 1 3
+
+# Save NTS keys and cookies
+ntsdumpdir /var/lib/chrony
+
+# Log directory
+logdir /var/log/chrony
+
+# Maximum clock error
+maxupdateskew 100.0
+
+# Enable logging if requested
+$(if [ "${IGconf_systemd_chrony_enable_logging}" = "y" ]; then echo "log tracking measurements statistics"; fi)
+EOF
+            ;;
+
+          "custom")
+            # Кастомная конфигурация - пользователь должен предоставить файл
+            if [ -f $1/etc/chrony/chrony.conf ]; then
+              echo "Using custom chrony configuration"
+            else
+              echo "Warning: Custom chrony config mode selected but no /etc/chrony/chrony.conf found"
+            fi
+            ;;
+
+          *)
+            # Режим по умолчанию - базовая конфигурация с кастомными серверами
+            NTP_SERVERS=$(echo "${IGconf_systemd_chrony_ntp_servers}" | tr ',' '\n' | sed 's/^/pool /' | sed 's/$/ iburst/' | tr '\n' '\n')
+            cat > $1/etc/chrony/chrony.conf << EOF
+# Chrony configuration - Default mode
+# Use custom NTP servers
+${NTP_SERVERS}
+
+# Enable kernel synchronization
+rtcsync
+
+# Step the system clock instead of slewing if adjustment is larger than 1 second
+makestep 1 3
+
+# Save NTS keys and cookies
+ntsdumpdir /var/lib/chrony
+
+# Log directory
+logdir /var/log/chrony
+
+# Maximum clock error
+maxupdateskew 100.0
+
+# Enable logging if requested
+$(if [ "${IGconf_systemd_chrony_enable_logging}" = "y" ]; then echo "log tracking measurements statistics"; fi)
+EOF
+            ;;
+        esac
+
+        # Установка правильных прав доступа
+        chmod 644 $1/etc/chrony/chrony.conf
+
+        # Создание директории для логов
+        mkdir -p $1/var/log/chrony
+        mkdir -p $1/var/lib/chrony
+
+        echo "systemd-chrony configuration completed"
+      fi
+
+    # Стандартная настройка systemd хуков
     - $LAYER_HOOKS/systemd/chrony-setup "$1"
     - mkdir -p $1/etc/systemd/system/getty@tty1.service.d
     - $LAYER_HOOKS/systemd/ttyset noclear > $1/etc/systemd/system/getty@tty1.service.d/noclear.conf

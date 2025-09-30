@@ -1,0 +1,13 @@
+# Test configuration for building raid1-external layer
+device:
+  layer: rpi5
+  class: pi5
+
+image:
+  layer: raid1-external
+  name: test-raid1-external-build
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  essential: essential

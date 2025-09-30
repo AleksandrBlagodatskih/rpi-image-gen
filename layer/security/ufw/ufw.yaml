@@ -54,6 +54,13 @@
 # X-Env-Var-logging-Required: n
 # X-Env-Var-logging-Valid: keywords:off,low,medium,high,full
 # X-Env-Var-logging-Set: lazy
+#
+#
+# X-Env-Var-ipv6_support: y
+# X-Env-Var-ipv6_support-Desc: Enable IPv6 firewall rules and support
+# X-Env-Var-ipv6_support-Required: n
+# X-Env-Var-ipv6_support-Valid: bool
+# X-Env-Var-ipv6_support-Set: lazy
 # METAEND
 ---
 mmdebstrap:
@@ -62,7 +69,10 @@ mmdebstrap:
   customize-hooks:
     # Основная настройка UFW firewall
     - |
-      igconf isy IGconf_ufw_enable || exit 0
+      if [ "${IGconf_ufw_enable:-n}" != "y" ]; then
+        echo "UFW disabled by configuration"
+        exit 0
+      fi
 
       echo "Configuring UFW firewall..."
 
@@ -70,15 +80,15 @@ mmdebstrap:
       chroot "$1" ufw --force disable || true
 
       # Установка политик по умолчанию
-      DEFAULT_INCOMING=$(igconf getval IGconf_ufw_default_incoming)
-      DEFAULT_OUTGOING=$(igconf getval IGconf_ufw_default_outgoing)
+      DEFAULT_INCOMING="${IGconf_ufw_default_incoming:-deny}"
+      DEFAULT_OUTGOING="${IGconf_ufw_default_outgoing:-allow}"
 
       echo "Setting default policies: incoming=$DEFAULT_INCOMING, outgoing=$DEFAULT_OUTGOING"
       chroot "$1" ufw default $DEFAULT_INCOMING incoming
       chroot "$1" ufw default $DEFAULT_OUTGOING outgoing
 
       # Разрешение сервисов
-      ALLOW_SERVICES=$(igconf getval IGconf_ufw_allow_services)
+      ALLOW_SERVICES="${IGconf_ufw_allow_services:-ssh}"
       if [ -n "$ALLOW_SERVICES" ]; then
         echo "Allowing services: $ALLOW_SERVICES"
         IFS=',' read -ra SERVICE_ARRAY <<< "$ALLOW_SERVICES"
@@ -92,7 +102,7 @@ mmdebstrap:
       fi
 
       # Разрешение портов
-      ALLOW_PORTS=$(igconf getval IGconf_ufw_allow_ports)
+      ALLOW_PORTS="${IGconf_ufw_allow_ports:-}"
       if [ -n "$ALLOW_PORTS" ]; then
         echo "Allowing ports: $ALLOW_PORTS"
         IFS=',' read -ra PORT_ARRAY <<< "$ALLOW_PORTS"
@@ -106,7 +116,7 @@ mmdebstrap:
       fi
 
       # Разрешение IP адресов/сетей
-      ALLOW_IPS=$(igconf getval IGconf_ufw_allow_ips)
+      ALLOW_IPS="${IGconf_ufw_allow_ips:-}"
       if [ -n "$ALLOW_IPS" ]; then
         echo "Allowing IPs/networks: $ALLOW_IPS"
         IFS=',' read -ra IP_ARRAY <<< "$ALLOW_IPS"
@@ -120,7 +130,7 @@ mmdebstrap:
       fi
 
       # Блокировка IP адресов/сетей
-      BLOCK_IPS=$(igconf getval IGconf_ufw_block_ips)
+      BLOCK_IPS="${IGconf_ufw_block_ips:-}"
       if [ -n "$BLOCK_IPS" ]; then
         echo "Blocking IPs/networks: $BLOCK_IPS"
         IFS=',' read -ra IP_ARRAY <<< "$BLOCK_IPS"
@@ -134,7 +144,7 @@ mmdebstrap:
       fi
 
       # Настройка логирования
-      LOGGING_LEVEL=$(igconf getval IGconf_ufw_logging)
+      LOGGING_LEVEL="${IGconf_ufw_logging:-low}"
       echo "Setting logging level: $LOGGING_LEVEL"
       chroot "$1" ufw logging "$LOGGING_LEVEL"
 
@@ -142,6 +152,57 @@ mmdebstrap:
       echo "Enabling UFW firewall..."
       chroot "$1" ufw --force enable
 
+      # Настройка дополнительных параметров
+      IPV6_SUPPORT="${IGconf_ufw_ipv6_support:-y}"
+
+      # Настройка базовых правил безопасности
+      echo "Configuring basic firewall rules..."
+
+      # Разрешение локального доступа к базовым сервисам
+      chroot "$1" ufw allow from 127.0.0.1 to 127.0.0.1 proto tcp port 22 comment "SSH access"
+      chroot "$1" ufw allow from 127.0.0.1 to 127.0.0.1 proto tcp port 80 comment "HTTP access"
+      chroot "$1" ufw allow from 127.0.0.1 to 127.0.0.1 proto tcp port 443 comment "HTTPS access"
+
+      # Настройка IPv6 поддержки если включена
+      if [ "$IPV6_SUPPORT" = "y" ]; then
+        echo "Enabling IPv6 firewall support..."
+
+        # Включение IPv6 в UFW
+        chroot "$1" ufw allow from ::1 to ::1 comment "IPv6 localhost access"
+
+        # Разрешение IPv6 для основных сервисов если они указаны
+        if [ -n "$ALLOW_SERVICES" ]; then
+          echo "Enabling IPv6 for allowed services..."
+          # IPv6 версии основных сервисов будут автоматически включены
+        fi
+      fi
+
+      # Создание базовых профилей приложений
+      echo "Creating basic application profiles..."
+
+      # Создание директории для кастомных правил
+      mkdir -p "$1/etc/ufw/applications.d"
+
+      # Создание базового профиля приложения для веб-сервисов
+      cat > "$1/etc/ufw/applications.d/web-services" << 'EOF'
+[Web-Services]
+title=Web Services
+description=Basic web services (HTTP, HTTPS)
+ports=80,443/tcp
+
+[SSH]
+title=SSH Service
+description=Secure Shell access
+ports=22/tcp
+EOF
+      echo "Created basic web services application profile"
+
+      # Перезагрузка правил UFW
+      echo "Reloading UFW rules..."
+      chroot "$1" ufw reload || echo "Warning: Could not reload UFW rules"
+
       # Проверка статуса
       echo "UFW status:"
       chroot "$1" ufw status verbose
+
+      echo "UFW firewall configuration completed successfully"

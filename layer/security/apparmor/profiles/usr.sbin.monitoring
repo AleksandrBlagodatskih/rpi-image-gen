@@ -35,18 +35,12 @@ profile usr.sbin.monitoring /usr/sbin/*monitoring* {
     /sys/** r,
     /dev/** r,
 
-    # Специфические устройства Raspberry Pi для мониторинга
-    @{RPI_DEVICES} r,
-    @{RPI_GPIO} r,
-    @{RPI_GRAPHICS} r,
-
     # Температурные датчики
     /sys/class/thermal/** r,
     /sys/devices/virtual/thermal/** r,
 
     # Датчики питания и батареи
     /sys/class/power_supply/** r,
-    /sys/devices/platform/soc/*.battery/** r,
 
     # CPU и память информация
     /proc/cpuinfo r,

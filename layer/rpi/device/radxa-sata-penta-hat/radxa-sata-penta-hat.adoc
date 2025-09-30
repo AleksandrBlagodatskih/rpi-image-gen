@@ -32,7 +32,7 @@ layer:
   device: radxa-sata-penta-hat
 ----
 
-=== Расширенная конфигурация
+=== Расширенная конфигурация с RP1 поддержкой
 
 [source,yaml]
 ----
@@ -43,10 +43,12 @@ device:
 layer:
   device: radxa-sata-penta-hat
 
-# Настройки Radxa SATA Penta HAT
+# Настройки Radxa SATA Penta HAT с полной поддержкой RP1
 radxa_sata:
   pcie_gen3: y        # Включить PCIe Gen 3.0 (рекомендуется)
-  initramfs_sata: y   # Включить initramfs SATA инициализацию
+  initramfs_sata: y   # Включить initramfs SATA инициализацию с RP1 модулями
+  load_rp1_modules: y # Загружать модули RP1 чипа ввода-вывода
+  enable_gpio_power: n # GPIO управление питанием (экспериментально)
 ----
 
 == Initramfs инициализация
@@ -59,13 +61,33 @@ radxa_sata:
 
 === Включаемые модули
 
+==== Модули RP1 чипа ввода-вывода
+* `rpi_poe` - RP1 Power over Ethernet модуль
+* `rpi_poe_firmware` - Прошивка RP1 PoE
+* `rpi_poe_firmware_update` - Обновление прошивки RP1
+
+==== PCIe модули для Raspberry Pi 5
+* `pcie-brcmstb` - PCIe драйвер Broadcom
+* `pcie-rp1` - PCIe драйвер для RP1 чипа
+* `pci-host-generic` - Универсальный PCI хост контроллер
+
+==== SATA контроллер модули для JMB585
 * `ahci` - Advanced Host Controller Interface
+* `ahci_platform` - Платформенный драйвер AHCI
 * `libahci` - AHCI библиотека
 * `libata` - ATA библиотека
 * `sd_mod` - SCSI disk module
 * `scsi_mod` - SCSI core
+* `scsi_transport_sata` - SATA транспорт для SCSI
+
+==== GPIO и управление питанием
 * `gpio_raspberrypi_exp` - GPIO expander
-* `pcie-brcmstb` - PCIe Broadcom driver
+* `gpio_keys` - GPIO клавиши
+* `gpio_keys_polled` - Опрашиваемые GPIO клавиши
+
+==== Дополнительные модули
+* `ata_piix` - ATA PIIX контроллер
+* `ata_generic` - Универсальный ATA драйвер
 
 == Аппаратная настройка
 

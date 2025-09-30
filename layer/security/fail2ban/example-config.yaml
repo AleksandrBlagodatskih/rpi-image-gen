@@ -1,0 +1,73 @@
+# Пример полной конфигурации Fail2Ban для Raspberry Pi с современными компонентами
+# Intrusion prevention system с поддержкой RP1, контейнеров и веб-серверов
+
+device:
+  layer: rpi5
+  hostname: secure-rpi-server
+  user1: admin
+  user1pass: SecurePass123!
+
+image:
+  layer: image-rpios
+  name: rpi-fail2ban-secure
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: fail2ban
+  network: systemd-net-min
+  container: docker-runtime
+  monitoring: system-monitoring
+  sbom: sbom-base
+
+# Полная конфигурация Fail2Ban для enterprise окружения
+fail2ban:
+  enable: y                          # Включить Fail2Ban
+  backend: systemd                   # Использовать systemd для логов
+  log_level: INFO                    # Уровень логирования
+  db_purge_age: 7d                   # Хранить записи 7 дней
+  default_ban_time: 1h               # Банить на 1 час по умолчанию
+  default_find_time: 10m             # Окно поиска 10 минут
+  default_max_retry: 5               # Максимум 5 попыток
+
+  # Включенные jail (стандартные + кастомные)
+  enabled_jails: sshd,dropbear,rp1-services,container-runtime,web-servers
+
+  # Игнорируемые IP адреса (локальная сеть)
+  ignore_ips: 192.168.0.0/16,10.0.0.0/8,172.16.0.0/12
+
+  # Действие при бане
+  ban_action: iptables-multiport
+
+  # Email уведомления (требует настройки SMTP)
+  email_notifications: n             # Отключено по умолчанию
+  email_address: admin@company.com   # Адрес для уведомлений
+
+  # Поддержка современных компонентов
+  rp1_support: y                     # Мониторинг RP1 сервисов (Raspberry Pi 5)
+  container_support: y               # Мониторинг контейнерных рантаймов
+  web_server_support: y              # Мониторинг веб-серверов
+
+# Мониторинг системы
+monitoring:
+  prometheus: y
+  grafana: y
+  node_exporter: y
+  alertmanager: y
+
+# Контейнерная среда
+container:
+  docker: y
+  podman: y
+
+# SBOM для аудита и compliance
+sbom:
+  enable: y
+  provider: syft
+  detailed_scan: y
+
+# Дополнительные меры безопасности (опционально)
+# security:
+#   enable_encryption: y
+#   secure_boot: y
+#   apparmor: y

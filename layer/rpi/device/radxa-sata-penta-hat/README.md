@@ -56,8 +56,10 @@ rpi-image-gen build -c config.yaml
 
 | Переменная | Значение по умолчанию | Описание |
 |------------|----------------------|----------|
-| `radxa_sata_pcie_gen3` | `y` | Включить PCIe Gen 3.0 (`dtparam=pciex1_gen=3`) |
-| `radxa_sata_initramfs_sata` | `y` | Включить initramfs SATA hooks |
+| `radxa_sata_pcie_gen3` | `y` | Включить PCIe Gen 3.0 (`dtparam=pciex1_gen=3`) с поддержкой RP1 |
+| `radxa_sata_initramfs_sata` | `y` | Включить initramfs SATA hooks с RP1 модулями |
+| `radxa_sata_load_rp1_modules` | `y` | Загружать модули RP1 чипа ввода-вывода |
+| `radxa_sata_enable_gpio_power` | `n` | Включить GPIO управление питанием (экспериментально) |
 
 ## Аппаратная настройка
 

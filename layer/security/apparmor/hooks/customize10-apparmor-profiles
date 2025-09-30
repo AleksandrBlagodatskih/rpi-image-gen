@@ -15,40 +15,25 @@ mkdir -p "$1/etc/apparmor.d/tunables"
 echo "Copying AppArmor profiles..."
 cp -r /src/layer/security/apparmor/profiles/* "$1/etc/apparmor.d/" 2>/dev/null || true
 
-# Копирование Raspberry Pi специфических tunables
-if [ -f "/src/layer/security/apparmor/profiles/tunables/rpi" ]; then
-    cp "/src/layer/security/apparmor/profiles/tunables/rpi" "$1/etc/apparmor.d/tunables/"
+# Копирование базовых tunables
+echo "Setting up basic AppArmor tunables..."
+
+# Настройка профилей для оптимизаций
+echo "Enabling system access monitoring profiles..."
+
+# Включение профилей для GUI приложений если доступны
+if [ -f "$1/etc/apparmor.d/usr.bin.gui-apps" ]; then
+    echo "Enabling GUI applications profile..."
 fi
 
-# Настройка профилей для Raspberry Pi оптимизаций
-RPI_OPTIMIZED=$(igconf getval IGconf_apparmor_rpi_optimized 2>/dev/null || echo "y")
+# Включение профилей для контейнеров если доступны
+if [ -f "$1/etc/apparmor.d/usr.bin.containerd" ]; then
+    echo "Enabling container runtime profiles..."
+fi
 
-if [ "$RPI_OPTIMIZED" = "y" ]; then
-    echo "Enabling Raspberry Pi optimized profiles..."
-
-    # Создание символических ссылок для удобства
-    chroot "$1" ln -sf /etc/apparmor.d/tunables/rpi /etc/apparmor.d/tunables/raspberry-pi 2>/dev/null || true
-
-    # Включение профилей для VideoCore если доступны
-    if [ -f "$1/etc/apparmor.d/opt.vc" ]; then
-        echo "Enabling VideoCore GPU profile..."
-        # Профиль будет автоматически загружен при старте системы
-    fi
-
-    # Включение профилей для GPIO если доступны
-    if [ -f "$1/etc/apparmor.d/usr.bin.python3-gpio" ]; then
-        echo "Enabling GPIO profile for Python applications..."
-    fi
-
-    # Включение профилей для контейнеров если доступны
-    if [ -f "$1/etc/apparmor.d/usr.bin.containerd" ]; then
-        echo "Enabling container runtime profiles..."
-    fi
-
-    # Включение профилей мониторинга если доступны
-    if [ -f "$1/etc/apparmor.d/usr.sbin.monitoring" ]; then
-        echo "Enabling monitoring service profiles..."
-    fi
+# Включение профилей мониторинга если доступны
+if [ -f "$1/etc/apparmor.d/usr.sbin.monitoring" ]; then
+    echo "Enabling monitoring service profiles..."
 fi
 
 # Настройка режима работы AppArmor

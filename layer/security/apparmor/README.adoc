@@ -6,28 +6,23 @@ Mandatory Access Control (MAC) с AppArmor для систем на базе Deb
 
 Этот слой предоставляет полную интеграцию AppArmor - системы Mandatory Access Control (MAC) для Linux. AppArmor ограничивает возможности программ согласно набору правил, указывающих, какие файлы данная программа может использовать.
 
-Особенности для Raspberry Pi:
-* Автоматическая настройка параметров ядра для Raspberry Pi bootloader
+Особенности:
+* Автоматическая настройка параметров ядра для AppArmor
 * Поддержка initramfs с AppArmor для ранней защиты
 * Гарантированное монтирование securityfs
 
-* **Raspberry Pi оптимизированные профили**:
-  - Профиль для VideoCore GPU с доступом к `/opt/vc/`, `/dev/vchiq`, `/dev/vc-*`
-  - Профиль для GPIO через Python с доступом к `/sys/class/gpio/`, `/sys/devices/platform/soc/`
-  - Профиль для контейнерных рантаймов (Docker, Podman) с поддержкой графических устройств
-  - Профиль для мониторинговых служб (Prometheus, Grafana) с доступом к системным метрикам
-
-* **Расширенная поддержка**:
-  - GPIO/I2C/SPI интерфейсы для аппаратных проектов
-  - Графические устройства для медиа-приложений
-  - Камеры и мультимедиа устройства
-  - Сетевые интерфейсы для стриминга
+* **Базовые профили безопасности**:
+  - Профиль для системных служб с ограниченным доступом
+  - Профиль для мониторинговых служб с доступом к системным метрикам
+  - Профиль для контейнерных рантаймов с базовыми разрешениями
+  - Профиль для пользовательских приложений с ограниченными правами
 
 * **Интеграция**:
-  - Совместимость с Raspberry Pi OS и ядром
+  - Совместимость с любыми Linux дистрибутивами
   - Автоматическая настройка для EFI и initramfs
-  - Поддержка контейнеров разработки (Distrobox)
+  - Поддержка контейнеров разработки
   - Интеграция с системами мониторинга
+  - Интеграция с auditd для аудита безопасности
 
 == Использование
 
@@ -48,7 +43,7 @@ layer:
 apparmor:
   enable: y           # Включить AppArmor (по умолчанию y)
   mode: enforce       # Режим: enforce (блокировать) или complain (только логировать)
-  rpi_optimized: y    # Raspberry Pi оптимизации (по умолчанию y)
+  system_monitoring: y    # Системные оптимизации (по умолчанию y)
 ----
 
 == Переменные конфигурации
@@ -67,10 +62,16 @@ apparmor:
 | `enforce`
 
 
-| `rpi_optimized`
-| Raspberry Pi специфические оптимизации
+| `system_monitoring`
+| Системные оптимизации мониторинга доступа
 | `y` / `n`
 | `y`
+
+
+| `audit_integration`
+| Интеграция с auditd для аудита безопасности
+| `y` / `n`
+| `n`
 |===
 
 == Что делает слой
@@ -83,30 +84,26 @@ apparmor:
 
 === Системная конфигурация
 
-* Настройка initramfs для Raspberry Pi bootloader
+* Настройка initramfs для bootloader
 * Добавление параметров ядра в cmdline.txt
 * Настройка securityfs через fstab
 * Установка режима работы (enforce/complain)
 
-=== Raspberry Pi оптимизации
+=== Системные оптимизации
 
-При включенной опции `rpi_optimized`:
+Настройки включают:
 
-* **Профиль для VideoCore GPU** (`/etc/apparmor.d/opt.vc`):
-  - Доступ к `/opt/vc/` директории
-  - Доступ к устройствам `/dev/vchiq`, `/dev/vcsm`, `/dev/vc-mem`
-  - Framebuffer и DRM устройства
-  - GPIO для видео приложений
+* **Профиль для системных служб** (`/etc/apparmor.d/sbin.init`):
+  - Ограниченный доступ к системным ресурсам
+  - Контроль над критическими операциями
 
-* **Профиль для GPIO** (`/etc/apparmor.d/usr.bin.python3-gpio`):
-  - Доступ к GPIO через Python
-  - I2C и SPI интерфейсы
-  - Device tree информация
+* **Профиль для мониторинга** (`/etc/apparmor.d/usr.sbin.monitoring`):
+  - Доступ к системным метрикам
+  - Контроль сетевой активности
 
-* **Специфические tunables** (`/etc/apparmor.d/tunables/rpi`):
-  - Пути VideoCore
-  - Firmware и boot директории
-  - GPIO, I2C, SPI устройства
+* **Профиль для контейнеров** (`/etc/apparmor.d/usr.bin.containerd`):
+  - Базовые разрешения для контейнерных рантаймов
+  - Ограниченный доступ к системным ресурсам
 
 == Совместимость
 
@@ -179,7 +176,7 @@ layer:
 apparmor:
   enable: y
   mode: enforce
-  rpi_optimized: y
+  system_monitoring: y
 ----
 
 === Разработка с логированием
@@ -189,7 +186,7 @@ apparmor:
 apparmor:
   enable: y
   mode: complain  # Только логировать, не блокировать
-  rpi_optimized: y
+  system_monitoring: y
 ----
 
 === Минимальная установка
@@ -199,7 +196,7 @@ apparmor:
 apparmor:
   enable: y
   mode: enforce
-  rpi_optimized: n   # Без RPi оптимизаций
+  system_monitoring: n   # Без системных оптимизаций
 ----
 
 === Полная настройка для production
@@ -225,7 +222,7 @@ layer:
 apparmor:
   enable: y
   mode: enforce
-  rpi_optimized: y
+  system_monitoring: y
   profiles_enable: y
   initramfs_integration: y
   logging_enable: y
@@ -259,24 +256,21 @@ image:
 layer:
   base: bookworm-minbase
   security: apparmor
-  iot: gpio-control
-  networking: iot-networking
+  monitoring: system-monitoring
 
-# Фокус на аппаратной безопасности
+# Общая безопасность
 apparmor:
   enable: y
   mode: enforce
-  rpi_optimized: y
   profiles_enable: y
   initramfs_integration: y
   logging_enable: y
-  container_support: n     # Не нужны контейнеры для простого IoT
-  monitoring_support: y    # Мониторинг критически важен
+  monitoring_support: y
 
-iot:
-  gpio_control: y
-  i2c_sensors: y
-  spi_devices: y
+monitoring:
+  prometheus: y
+  grafana: y
+  node_exporter: y
 ----
 
 == Безопасность и лучшие практики

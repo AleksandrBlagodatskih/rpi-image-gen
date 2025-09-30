@@ -1,7 +1,7 @@
 # METABEGIN
 # X-Env-Layer-Name: apparmor
 # X-Env-Layer-Category: security
-# X-Env-Layer-Desc: AppArmor Mandatory Access Control with Raspberry Pi optimized profiles
+# X-Env-Layer-Desc: AppArmor Mandatory Access Control with system access monitoring profiles
 # X-Env-Layer-Version: 1.1.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: apparmor
@@ -20,11 +20,11 @@
 # X-Env-Var-mode-Valid: keywords:enforce,complain
 # X-Env-Var-mode-Set: lazy
 #
-# X-Env-Var-rpi_optimized: y
-# X-Env-Var-rpi_optimized-Desc: Enable Raspberry Pi specific optimizations (VideoCore, GPIO, I2C, SPI)
-# X-Env-Var-rpi_optimized-Required: n
-# X-Env-Var-rpi_optimized-Valid: bool
-# X-Env-Var-rpi_optimized-Set: immediate
+# X-Env-Var-system_monitoring: y
+# X-Env-Var-system_monitoring-Desc: Enable comprehensive system access monitoring (authentication, file access, network)
+# X-Env-Var-system_monitoring-Required: n
+# X-Env-Var-system_monitoring-Valid: bool
+# X-Env-Var-system_monitoring-Set: immediate
 #
 # X-Env-Var-profiles_enable: y
 # X-Env-Var-profiles_enable-Desc: Enable installation of custom AppArmor profiles
@@ -56,6 +56,11 @@
 # X-Env-Var-monitoring_support-Valid: bool
 # X-Env-Var-monitoring_support-Set: immediate
 #
+# X-Env-Var-audit_integration: n
+# X-Env-Var-audit_integration-Desc: Enable integration with auditd for AppArmor event logging
+# X-Env-Var-audit_integration-Required: n
+# X-Env-Var-audit_integration-Valid: bool
+# X-Env-Var-audit_integration-Set: immediate
 # METAEND
 ---
 mmdebstrap:
@@ -69,7 +74,10 @@ mmdebstrap:
   customize-hooks:
     # Настройка AppArmor для Raspberry Pi
     - |
-      igconf isy IGconf_apparmor_enable || exit 0
+      if [ "${IGconf_apparmor_enable:-n}" != "y" ]; then
+        echo "AppArmor disabled by configuration"
+        exit 0
+      fi
 
       echo "Configuring AppArmor for Raspberry Pi compatibility..."
 
@@ -104,7 +112,7 @@ mmdebstrap:
       fi
 
       # Установка режима работы AppArmor
-      APPARMOR_MODE=$(igconf getval IGconf_apparmor_mode)
+      APPARMOR_MODE="${IGconf_apparmor_mode:-enforce}"
       case "$APPARMOR_MODE" in
           complain)
               echo "Setting AppArmor to complain mode (logging only)"
@@ -117,18 +125,19 @@ mmdebstrap:
       esac
 
       # Проверка дополнительных настроек
-      PROFILES_ENABLE=$(igconf getval IGconf_apparmor_profiles_enable 2>/dev/null || echo "y")
-      INITRAMFS_INTEGRATION=$(igconf getval IGconf_apparmor_initramfs_integration 2>/dev/null || echo "y")
-      LOGGING_ENABLE=$(igconf getval IGconf_apparmor_logging_enable 2>/dev/null || echo "y")
-      CONTAINER_SUPPORT=$(igconf getval IGconf_apparmor_container_support 2>/dev/null || echo "y")
-      MONITORING_SUPPORT=$(igconf getval IGconf_apparmor_monitoring_support 2>/dev/null || echo "y")
+      PROFILES_ENABLE="${IGconf_apparmor_profiles_enable:-y}"
+      INITRAMFS_INTEGRATION="${IGconf_apparmor_initramfs_integration:-y}"
+      LOGGING_ENABLE="${IGconf_apparmor_logging_enable:-y}"
+      MONITORING_SUPPORT="${IGconf_apparmor_monitoring_support:-y}"
+      AUDIT_INTEGRATION="${IGconf_apparmor_audit_integration:-n}"
+      SYSTEM_MONITORING="${IGconf_apparmor_system_monitoring:-y}"
 
       echo "AppArmor additional settings:"
       echo "- Profiles: $PROFILES_ENABLE"
       echo "- Initramfs integration: $INITRAMFS_INTEGRATION"
       echo "- Logging: $LOGGING_ENABLE"
-      echo "- Container support: $CONTAINER_SUPPORT"
       echo "- Monitoring support: $MONITORING_SUPPORT"
+      echo "- Audit integration: $AUDIT_INTEGRATION"
 
       # Настройка логирования если включено
       if [ "$LOGGING_ENABLE" = "y" ]; then
@@ -167,3 +176,178 @@ EOF
 
           chmod +x "$1/etc/initramfs-tools/hooks/apparmor"
       fi
+
+      # Настройка интеграции с auditd если включена
+      if [ "$AUDIT_INTEGRATION" = "y" ]; then
+          echo "Configuring AppArmor audit integration..."
+          # Настройка auditd для AppArmor событий
+          if [ ! -f "$1/etc/audit/rules.d/apparmor.rules" ]; then
+              mkdir -p "$1/etc/audit/rules.d"
+              cat > "$1/etc/audit/rules.d/apparmor.rules" << 'EOF'
+# AppArmor audit rules
+# Мониторинг событий AppArmor для аудита безопасности
+
+# Мониторинг попыток нарушения политик
+-a always,exit -F arch=b64 -S open,openat,execve -F apparmor=1
+
+# Мониторинг загрузки профилей
+-w /etc/apparmor.d/ -p wa -k apparmor_profiles
+-w /sys/kernel/security/apparmor/ -p wa -k apparmor_kernel
+
+# Мониторинг событий аутентификации в контексте AppArmor
+-a always,exit -F arch=b64 -S connect,accept,bind -F apparmor=1
+EOF
+          fi
+      fi
+
+      # Создание общих профилей мониторинга доступа к системе
+      echo "Setting up system access monitoring profiles..."
+
+      # Общий профиль для системных утилит мониторинга
+      cat > "$1/etc/apparmor.d/usr.bin.system-monitoring" << 'EOF'
+#include <tunables/global>
+#include <tunables/global>
+
+profile usr.bin.system-monitoring /usr/bin/*mon* {
+    #include <abstractions/base>
+    #include <abstractions/dbus>
+
+    # Системные команды мониторинга
+    /usr/bin/uptime mr,
+    /usr/bin/free mr,
+    /usr/bin/iostat mr,
+    /usr/bin/vmstat mr,
+    /usr/bin/mpstat mr,
+    /usr/bin/pidstat mr,
+
+    # Системные файлы для чтения
+    /proc/** r,
+    /sys/** r,
+    /dev/** r,
+
+    # Логи для анализа
+    /var/log/** r,
+    /run/log/** r,
+
+    # Разрешенные сетевые протоколы (только локальные)
+    unix stream,
+
+    # Ограничение сетевого доступа
+    deny network inet,
+    deny network inet6,
+    deny network raw,
+
+    # Разрешенные возможности
+    capability dac_override,
+    capability dac_read_search,
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Файловые операции только для чтения
+    file /proc/**/* -> @{profile_name},
+    file /sys/**/* -> @{profile_name},
+}
+EOF
+
+      # Профиль для системных служб аутентификации
+      cat > "$1/etc/apparmor.d/usr.sbin.authentication" << 'EOF'
+#include <tunables/global>
+#include <tunables/global>
+
+profile usr.sbin.authentication /usr/sbin/*auth* {
+    #include <abstractions/base>
+    #include <abstractions/authentication>
+
+    # Службы аутентификации
+    /usr/sbin/sshd mr,
+    /usr/sbin/dropbear mr,
+    /usr/sbin/login mr,
+    /usr/sbin/su mr,
+    /usr/sbin/sudo mr,
+
+    # Файлы аутентификации (только чтение)
+    /etc/passwd r,
+    /etc/shadow r,
+    /etc/group r,
+    /etc/sudoers r,
+    /etc/ssh/** r,
+
+    # Логи аутентификации
+    /var/log/auth.log w,
+    /var/log/sudo.log w,
+    /var/log/ssh.log w,
+
+    # Временные файлы для аутентификации
+    /tmp/ssh-* rw,
+    /tmp/sudo-* rw,
+
+    # Разрешенные сетевые протоколы
+    network inet stream,
+    network inet6 stream,
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Разрешенные возможности
+    capability dac_override,
+    capability dac_read_search,
+
+    # Файловые операции
+    file /etc/passwd -> @{profile_name},
+    file /etc/shadow -> @{profile_name},
+    file /var/log/auth.log -> @{profile_name},
+}
+EOF
+
+      # Профиль для системных администраторов
+      cat > "$1/etc/apparmor.d/usr.bin.admin-tools" << 'EOF'
+#include <tunables/global>
+#include <tunables/global>
+
+profile usr.bin.admin-tools /usr/bin/admin* {
+    #include <abstractions/base>
+    #include <abstractions/admin>
+
+    # Системные административные инструменты
+    /usr/bin/systemctl mr,
+    /usr/bin/journalctl mr,
+    /usr/bin/service mr,
+    /usr/bin/chmod mr,
+    /usr/bin/chown mr,
+
+    # Конфигурационные файлы
+    /etc/systemd/** rw,
+    /etc/sudoers r,
+    /etc/passwd r,
+    /etc/group r,
+
+    # Логи системы
+    /var/log/** rw,
+    /run/log/** rw,
+
+    # Временные файлы администратора
+    /tmp/admin-* rw,
+    @{HOME}/.admin/** rw,
+
+    # Ограничение сетевого доступа
+    deny network tcp,
+    deny network udp,
+
+    # Разрешенные локальные соединения
+    unix peer=(label=@{profile_name}),
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Разрешенные возможности
+    capability dac_override,
+    capability dac_read_search,
+
+    # Файловые операции
+    file /etc/systemd/**/* -> @{profile_name},
+    file /var/log/**/* -> @{profile_name},
+}
+EOF
+
+      echo "Common system access monitoring profiles setup completed"

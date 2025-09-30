@@ -16,10 +16,12 @@ image:
 layer:
   device: radxa-sata-penta-hat
 
-# Настройки Radxa SATA Penta HAT
+# Настройки Radxa SATA Penta HAT с полной поддержкой RP1
 radxa_sata:
   pcie_gen3: y        # Включить PCIe Gen 3.0 для максимальной производительности
-  initramfs_sata: y   # Включить initramfs SATA инициализацию
+  initramfs_sata: y   # Включить initramfs SATA инициализацию с RP1 модулями
+  load_rp1_modules: y # Загружать модули RP1 чипа ввода-вывода
+  enable_gpio_power: n # Отключено по умолчанию (экспериментально)
 
 # Дополнительные слои для NAS/Storage сервера
 layer:

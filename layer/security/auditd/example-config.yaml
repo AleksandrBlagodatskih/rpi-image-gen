@@ -12,7 +12,7 @@ layer:
   base: bookworm-minbase
   security: auditd
 
-# Настройки auditd для enterprise compliance
+# Полная конфигурация auditd для enterprise compliance с Raspberry Pi 5 поддержкой
 auditd:
   enable: y                    # Включить auditd
   max_log_file: 10            # Хранить 10 лог файлов
@@ -29,6 +29,11 @@ auditd:
   dispatcher: /sbin/audispd   # Стандартный диспетчер
   name_format: hostname       # Именование по hostname
 
+  # Мониторинг современных компонентов Raspberry Pi 5
+  monitoring_integration: y   # Интеграция с системами мониторинга
+  compliance_mode: y          # Расширенные правила compliance (PCI-DSS, HIPAA)
+  anomaly_detection: n        # Обнаружение аномалий (опционально)
+
 # Дополнительные security слои для полной защиты
 layer:
   base: bookworm-minbase
@@ -40,7 +45,7 @@ layer:
 apparmor:
   enable: y
   mode: enforce
-  rpi_optimized: y
+  system_monitoring: y
 
 # Firewall
 ufw:

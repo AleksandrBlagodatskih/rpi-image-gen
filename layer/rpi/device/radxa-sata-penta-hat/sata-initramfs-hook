@@ -36,26 +36,40 @@ safe_force_load() {
     fi
 }
 
-# Загрузка необходимых модулей для SATA поддержки
-safe_force_load ahci
-safe_force_load libahci
-safe_force_load libata
-safe_force_load sd_mod
-safe_force_load scsi_mod
+# Загрузка модулей для RP1 чипа ввода-вывода Raspberry Pi 5 (если включено)
+if [ -n "${IGconf_radxa_sata_load_rp1_modules:-}" ] && [ "${IGconf_radxa_sata_load_rp1_modules}" = "y" ]; then
+  safe_force_load rpi_poe || echo "RP1 PoE module not available, continuing..."
+  safe_force_load rpi_poe_firmware || echo "RP1 PoE firmware module not available, continuing..."
+  safe_force_load rpi_poe_firmware_update || echo "RP1 PoE firmware update module not available, continuing..."
+else
+  echo "RP1 modules loading disabled by configuration"
+fi
 
-# Опциональные модули (если доступны)
-safe_force_load sata_mv || true
-safe_force_load ata_piix || true
-safe_force_load ata_generic || true
-safe_force_load scsi_transport_sas || true
-safe_force_load libsas || true
+# Загрузка PCIe модулей для Raspberry Pi 5
+safe_force_load pcie-brcmstb || echo "Broadcom PCIe module not available, continuing..."
+safe_force_load pcie-rp1 || echo "RP1 PCIe module not available, continuing..."
+safe_force_load pci-host-generic || echo "PCI host generic module not available, continuing..."
 
-# Специфичные модули для JMB585 контроллера
-manual_add_modules ahci_platform
-manual_add_modules scsi_transport_sata
+# Загрузка необходимых модулей для SATA поддержки JMB585
+safe_force_load ahci || echo "AHCI module not available, continuing..."
+safe_force_load ahci_platform || echo "AHCI platform module not available, continuing..."
+safe_force_load libahci || echo "AHCI library module not available, continuing..."
+safe_force_load libata || echo "ATA library module not available, continuing..."
+safe_force_load sd_mod || echo "SCSI disk module not available, continuing..."
+safe_force_load scsi_mod || echo "SCSI core module not available, continuing..."
 
-# Модули для управления питанием и PCIe
-manual_add_modules gpio_raspberrypi_exp
-manual_add_modules pcie-brcmstb
+# Загрузка GPIO модулей для управления питанием
+safe_force_load gpio_raspberrypi_exp || echo "GPIO expander module not available, continuing..."
+safe_force_load gpio_keys || echo "GPIO keys module not available, continuing..."
+safe_force_load gpio_keys_polled || echo "GPIO keys polled module not available, continuing..."
+
+# Дополнительные модули для стабильной работы SATA
+safe_force_load scsi_transport_sata || echo "SCSI transport SATA module not available, continuing..."
+safe_force_load ata_piix || echo "ATA PIIX module not available, continuing..."
+safe_force_load ata_generic || echo "ATA generic module not available, continuing..."
+
+# Специфичные модули для JMB585 контроллера (если доступны)
+manual_add_modules ahci_platform || echo "Manual AHCI platform module addition failed"
+manual_add_modules scsi_transport_sata || echo "Manual SCSI transport SATA module addition failed"
 
 echo "Radxa SATA Penta HAT: модули initramfs загружены успешно"

@@ -42,7 +42,7 @@ layer:
 apparmor:
   enable: y
   mode: enforce
-  rpi_optimized: y
+  system_monitoring: y
 
 # Firewall
 ufw:

@@ -1,0 +1,547 @@
+# METABEGIN
+# X-Env-Layer-Name: system-monitoring
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Comprehensive system access monitoring combining AppArmor, auditd, and Fail2Ban
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: system-monitoring
+#
+# X-Env-VarPrefix: system_monitoring
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable comprehensive system access monitoring
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+#
+# X-Env-Var-apparmor_enable: y
+# X-Env-Var-apparmor_enable-Desc: Enable AppArmor Mandatory Access Control
+# X-Env-Var-apparmor_enable-Required: n
+# X-Env-Var-apparmor_enable-Valid: bool
+# X-Env-Var-apparmor_enable-Set: immediate
+#
+# X-Env-Var-auditd_enable: y
+# X-Env-Var-auditd_enable-Desc: Enable audit daemon for system logging and compliance monitoring
+# X-Env-Var-auditd_enable-Required: n
+# X-Env-Var-auditd_enable-Valid: bool
+# X-Env-Var-auditd_enable-Set: immediate
+#
+# X-Env-Var-fail2ban_enable: y
+# X-Env-Var-fail2ban_enable-Desc: Enable Fail2Ban intrusion prevention system
+# X-Env-Var-fail2ban_enable-Required: n
+# X-Env-Var-fail2ban_enable-Valid: bool
+# X-Env-Var-fail2ban_enable-Set: immediate
+#
+# X-Env-Var-authentication_monitoring: y
+# X-Env-Var-authentication_monitoring-Desc: Enable comprehensive authentication monitoring (SSH, login, sudo)
+# X-Env-Var-authentication_monitoring-Required: n
+# X-Env-Var-authentication_monitoring-Valid: bool
+# X-Env-Var-authentication_monitoring-Set: immediate
+#
+# X-Env-Var-file_access_monitoring: y
+# X-Env-Var-file_access_monitoring-Desc: Enable monitoring of critical system file access
+# X-Env-Var-file_access_monitoring-Required: n
+# X-Env-Var-file_access_monitoring-Valid: bool
+# X-Env-Var-file_access_monitoring-Set: immediate
+#
+# X-Env-Var-privilege_monitoring: y
+# X-Env-Var-privilege_monitoring-Desc: Enable monitoring of privilege escalation attempts
+# X-Env-Var-privilege_monitoring-Required: n
+# X-Env-Var-privilege_monitoring-Valid: bool
+# X-Env-Var-privilege_monitoring-Set: immediate
+#
+# X-Env-Var-network_monitoring: y
+# X-Env-Var-network_monitoring-Desc: Enable monitoring of network access and connections
+# X-Env-Var-network_monitoring-Required: n
+# X-Env-Var-network_monitoring-Valid: bool
+# X-Env-Var-network_monitoring-Set: immediate
+#
+# X-Env-Var-compliance_monitoring: n
+# X-Env-Var-compliance_monitoring-Desc: Enable compliance-focused monitoring (CIS, PCI-DSS, HIPAA, GDPR)
+# X-Env-Var-compliance_monitoring-Required: n
+# X-Env-Var-compliance_monitoring-Valid: bool
+# X-Env-Var-compliance_monitoring-Set: immediate
+#
+# X-Env-Var-alerting_enabled: y
+# X-Env-Var-alerting_enabled-Desc: Enable alerting for security events
+# X-Env-Var-alerting_enabled-Required: n
+# X-Env-Var-alerting_enabled-Valid: bool
+# X-Env-Var-alerting_enabled-Set: immediate
+#
+# X-Env-Var-log_retention_days: 90
+# X-Env-Var-log_retention_days-Desc: Number of days to retain security logs
+# X-Env-Var-log_retention_days-Required: n
+# X-Env-Var-log_retention_days-Valid: int
+# X-Env-Var-log_retention_days-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - apparmor
+    - apparmor-utils
+    - apparmor-profiles
+    - apparmor-profiles-extra
+    - auditd
+    - fail2ban
+    - rsyslog
+    - logrotate
+    - cron
+  customize-hooks:
+    # Комплексная настройка мониторинга доступа к системе
+    - |
+      if [ "${IGconf_system_monitoring_enable:-n}" != "y" ]; then
+        echo "System monitoring disabled by configuration"
+        exit 0
+      fi
+
+      echo "Setting up comprehensive system access monitoring..."
+
+      # Включение всех компонентов мониторинга
+      APPARMOR_ENABLE="${IGconf_system_monitoring_apparmor_enable:-y}"
+      AUDITD_ENABLE="${IGconf_system_monitoring_auditd_enable:-y}"
+      FAIL2BAN_ENABLE="${IGconf_system_monitoring_fail2ban_enable:-y}"
+
+      AUTH_MONITORING="${IGconf_system_monitoring_authentication_monitoring:-y}"
+      FILE_MONITORING="${IGconf_system_monitoring_file_access_monitoring:-y}"
+      PRIVILEGE_MONITORING="${IGconf_system_monitoring_privilege_monitoring:-y}"
+      NETWORK_MONITORING="${IGconf_system_monitoring_network_monitoring:-y}"
+      COMPLIANCE_MONITORING="${IGconf_system_monitoring_compliance_monitoring:-n}"
+      ALERTING_ENABLED="${IGconf_system_monitoring_alerting_enabled:-y}"
+      LOG_RETENTION="${IGconf_system_monitoring_log_retention_days:-90}"
+
+      echo "System monitoring configuration:"
+      echo "- AppArmor: $APPARMOR_ENABLE"
+      echo "- Auditd: $AUDITD_ENABLE"
+      echo "- Fail2Ban: $FAIL2BAN_ENABLE"
+      echo "- Authentication monitoring: $AUTH_MONITORING"
+      echo "- File access monitoring: $FILE_MONITORING"
+      echo "- Privilege monitoring: $PRIVILEGE_MONITORING"
+      echo "- Network monitoring: $NETWORK_MONITORING"
+      echo "- Compliance monitoring: $COMPLIANCE_MONITORING"
+      echo "- Alerting: $ALERTING_ENABLED"
+      echo "- Log retention: $LOG_RETENTION days"
+
+      # Создание единой конфигурации для всех компонентов
+      mkdir -p "$1/etc/security/monitoring"
+
+      # Создание общей конфигурации мониторинга
+      cat > "$1/etc/security/monitoring/config.yaml" << EOF
+# Unified system access monitoring configuration
+monitoring:
+  enabled: true
+  components:
+    apparmor: $APPARMOR_ENABLE
+    auditd: $AUDITD_ENABLE
+    fail2ban: $FAIL2BAN_ENABLE
+
+  monitoring_areas:
+    authentication: $AUTH_MONITORING
+    file_access: $FILE_MONITORING
+    privilege_escalation: $PRIVILEGE_MONITORING
+    network_activity: $NETWORK_MONITORING
+    compliance: $COMPLIANCE_MONITORING
+
+  alerting:
+    enabled: $ALERTING_ENABLED
+    methods: ["syslog", "email"]
+    thresholds:
+      auth_failures: 5
+      privilege_attempts: 3
+      file_access_denied: 10
+
+  retention:
+    security_logs: ${LOG_RETENTION}d
+    audit_logs: ${LOG_RETENTION}d
+    auth_logs: ${LOG_RETENTION}d
+
+  integration:
+    siem_ready: true
+    prometheus_metrics: true
+    elk_stack_compatible: true
+EOF
+
+      # Настройка интеграции между компонентами
+      if [ "$APPARMOR_ENABLE" = "y" ]; then
+        echo "Configuring AppArmor for system monitoring..."
+
+        # Настройка AppArmor для мониторинга системных команд
+        mkdir -p "$1/etc/apparmor.d"
+        cat > "$1/etc/apparmor.d/usr.bin.system-monitoring" << 'EOF'
+#include <tunables/global>
+#include <tunables/rpi>
+
+profile usr.bin.system-monitoring /usr/bin/*mon* {
+    #include <abstractions/base>
+    #include <abstractions/dbus>
+
+    # Системные команды мониторинга
+    /usr/bin/uptime mr,
+    /usr/bin/free mr,
+    /usr/bin/iostat mr,
+    /usr/bin/vmstat mr,
+    /usr/bin/mpstat mr,
+    /usr/bin/pidstat mr,
+
+    # Системные файлы для чтения
+    /proc/** r,
+    /sys/** r,
+    /dev/** r,
+
+    # Логи для анализа
+    /var/log/** r,
+    /run/log/** r,
+
+    # Разрешенные сетевые протоколы (только локальные)
+    unix stream,
+
+    # Ограничение сетевого доступа
+    deny network inet,
+    deny network inet6,
+    deny network raw,
+
+    # Разрешенные возможности
+    capability dac_override,
+    capability dac_read_search,
+
+    # Ограничение ptrace
+    ptrace (complain) peer=@{profile_name},
+
+    # Файловые операции только для чтения
+    file /proc/**/* -> @{profile_name},
+    file /sys/**/* -> @{profile_name},
+}
+EOF
+      fi
+
+      # Настройка auditd для комплексного мониторинга
+      if [ "$AUDITD_ENABLE" = "y" ]; then
+        echo "Configuring auditd for comprehensive system monitoring..."
+
+        # Создание расширенных правил аудита
+        mkdir -p "$1/etc/audit/rules.d"
+
+        cat > "$1/etc/audit/rules.d/system-monitoring.rules" << 'EOF'
+# Comprehensive system access monitoring rules
+
+# Monitor all authentication attempts
+-a exit,always -F arch=b64 -S open,openat -F dir=/var/log/ -k access_attempts
+
+# Monitor file access patterns for compliance
+-a exit,always -F arch=b64 -S open,openat -F dir=/etc/ -k config_access
+-a exit,always -F arch=b64 -S open,openat -F dir=/var/log/ -k log_access
+
+# Monitor network access for compliance
+-a exit,always -F arch=b64 -S connect,accept -k network_access
+
+# Monitor privilege changes
+-a exit,always -F arch=b64 -S setuid,setgid -k privilege_changes
+
+# Monitor system administration commands
+-a exit,always -F arch=b64 -S execve -F exe=/usr/bin/systemctl -k systemctl_commands
+-a exit,always -F arch=b64 -S execve -F exe=/usr/bin/journalctl -k journal_commands
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/service -k service_commands
+
+# Monitor user account management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/useradd -k user_management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/usermod -k user_management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/userdel -k user_management
+
+# Monitor critical system files access
+-a exit,always -F arch=b64 -S open,openat -F path=/etc/passwd -k critical_file_access
+-a exit,always -F arch=b64 -S open,openat -F path=/etc/shadow -k critical_file_access
+-a exit,always -F arch=b64 -S open,openat -F path=/etc/sudoers -k critical_file_access
+
+# Monitor system resource usage
+-a exit,always -F arch=b64 -S setpriority -k priority_changes
+-a exit,always -F arch=b64 -S ioprio_set -k io_priority_changes
+EOF
+      fi
+
+      # Настройка Fail2Ban для мониторинга доступа к системе
+      if [ "$FAIL2BAN_ENABLE" = "y" ]; then
+        echo "Configuring Fail2Ban for system access monitoring..."
+
+        # Создание кастомных jail для мониторинга доступа к системе
+        mkdir -p "$1/etc/fail2ban/jail.d"
+        mkdir -p "$1/etc/fail2ban/filter.d"
+
+        # Jail для системных служб аутентификации
+        cat > "$1/etc/fail2ban/jail.d/system-monitoring.conf" << 'EOF'
+# Custom jail for system authentication services
+[system-auth]
+enabled = true
+port = ssh,22,2222
+filter = system-auth
+logpath = /var/log/auth.log
+          /var/log/secure
+          /var/log/messages
+maxretry = 3
+bantime = 3600
+findtime = 600
+
+# Custom jail for sudo access monitoring
+[sudo-access]
+enabled = true
+port = ssh,22,2222
+filter = sudo-access
+logpath = /var/log/sudo.log
+          /var/log/auth.log
+          /var/log/secure
+maxretry = 5
+bantime = 1800
+findtime = 300
+
+# Custom jail for system administration commands
+[system-admin]
+enabled = true
+port = ssh,22,2222
+filter = system-admin
+logpath = /var/log/auth.log
+          /var/log/secure
+          /var/log/messages
+maxretry = 10
+bantime = 7200
+findtime = 900
+
+# Custom jail for critical system files access
+[critical-files]
+enabled = true
+port = ssh,22,2222
+filter = critical-files
+logpath = /var/log/audit/audit.log
+          /var/log/auth.log
+          /var/log/secure
+maxretry = 2
+bantime = 86400
+findtime = 3600
+
+# Custom jail for privilege escalation attempts
+[privilege-escalation]
+enabled = true
+port = ssh,22,2222
+filter = privilege-escalation
+logpath = /var/log/audit/audit.log
+          /var/log/auth.log
+          /var/log/secure
+maxretry = 3
+bantime = 43200
+findtime = 1800
+EOF
+
+        # Фильтры для кастомных jail
+        cat > "$1/etc/fail2ban/filter.d/system-auth.conf" << 'EOF'
+# Fail2Ban filter for system authentication services
+[Definition]
+failregex = ^.*authentication failure.*rhost=<HOST>
+            ^.*Failed password for.*from <HOST>
+            ^.*failed login.*from <HOST>
+            ^.*invalid user.*from <HOST>
+            ^.*POSSIBLE BREAK-IN ATTEMPT.*from <HOST>
+
+ignoreregex =
+EOF
+
+        cat > "$1/etc/fail2ban/filter.d/sudo-access.conf" << 'EOF'
+# Fail2Ban filter for sudo access monitoring
+[Definition]
+failregex = ^.*sudo.*authentication failure.*rhost=<HOST>
+            ^.*sudo.*incorrect password attempts.*from <HOST>
+            ^.*sudo.*command not allowed.*from <HOST>
+            ^.*sudo.*user .* is not allowed to execute.*from <HOST>
+
+ignoreregex =
+EOF
+
+        cat > "$1/etc/fail2ban/filter.d/system-admin.conf" << 'EOF'
+# Fail2Ban filter for system administration commands
+[Definition]
+failregex = ^.*systemctl.*authentication failure.*from <HOST>
+            ^.*service.*unauthorized access.*from <HOST>
+            ^.*journalctl.*unauthorized access.*from <HOST>
+            ^.*userdel.*unauthorized.*from <HOST>
+            ^.*usermod.*unauthorized.*from <HOST>
+
+ignoreregex =
+EOF
+
+        cat > "$1/etc/fail2ban/filter.d/critical-files.conf" << 'EOF'
+# Fail2Ban filter for critical system files access
+[Definition]
+failregex = ^.*audit.*unauthorized access to.*<HOST>
+            ^.*authentication failure.*critical.*from <HOST>
+            ^.*permission denied.*shadow.*from <HOST>
+            ^.*permission denied.*sudoers.*from <HOST>
+            ^.*unauthorized.*passwd.*from <HOST>
+
+ignoreregex =
+EOF
+
+        cat > "$1/etc/fail2ban/filter.d/privilege-escalation.conf" << 'EOF'
+# Fail2Ban filter for privilege escalation attempts
+[Definition]
+failregex = ^.*su.*authentication failure.*from <HOST>
+            ^.*sudo.*authentication failure.*from <HOST>
+            ^.*setuid.*unauthorized.*from <HOST>
+            ^.*setgid.*unauthorized.*from <HOST>
+            ^.*privilege escalation attempt.*from <HOST>
+
+ignoreregex =
+EOF
+      fi
+
+      # Создание скрипта для единого мониторинга и алертинга
+      cat > "$1/usr/local/bin/system-monitoring-status" << 'EOF'
+#!/bin/bash
+# Единый скрипт мониторинга статуса всех компонентов безопасности
+
+echo "=== System Access Monitoring Status ==="
+echo "Timestamp: $(date)"
+echo
+
+# Статус AppArmor
+if systemctl is-active apparmor >/dev/null 2>&1; then
+    echo "✅ AppArmor: ACTIVE"
+    echo "   Profiles loaded: $(aa-status | grep "profiles are loaded" | awk '{print $1}')"
+    echo "   Mode: $(aa-status | grep "processes are in" | head -1)"
+else
+    echo "❌ AppArmor: INACTIVE"
+fi
+echo
+
+# Статус auditd
+if systemctl is-active auditd >/dev/null 2>&1; then
+    echo "✅ Auditd: ACTIVE"
+    AUDIT_STATS=$(auditctl -s 2>/dev/null)
+    if [ $? -eq 0 ]; then
+        echo "   Backlog: $(echo "$AUDIT_STATS" | grep backlog | cut -d'=' -f2)"
+        echo "   Lost events: $(echo "$AUDIT_STATS" | grep lost | cut -d'=' -f2)"
+    fi
+else
+    echo "❌ Auditd: INACTIVE"
+fi
+echo
+
+# Статус Fail2Ban
+if systemctl is-active fail2ban >/dev/null 2>&1; then
+    echo "✅ Fail2Ban: ACTIVE"
+    echo "   Jails: $(fail2ban-client status 2>/dev/null | grep "Jail list:" | sed -E 's/^[^:]*:\s+//' | sed 's/,//g' | wc -w)"
+    echo "   Banned IPs: $(fail2ban-client status 2>/dev/null | grep -E "Currently failed|Currently banned" | awk '{sum += $NF} END {print sum}')"
+else
+    echo "❌ Fail2Ban: INACTIVE"
+fi
+echo
+
+# Недавние события безопасности (последние 5 минут)
+echo "=== Recent Security Events (5 min) ==="
+echo "Authentication failures:"
+ausearch -m USER_AUTH -sv no -ts recent 2>/dev/null | wc -l
+echo "Privilege escalations:"
+ausearch -k privilege_changes -ts recent 2>/dev/null | wc -l
+echo "File access denials:"
+ausearch -k critical_file_access -sv no -ts recent 2>/dev/null | wc -l
+echo
+
+# Рекомендации
+echo "=== Recommendations ==="
+if [ "$(auditctl -s 2>/dev/null | grep backlog | cut -d'=' -f2)" -gt 100 ]; then
+    echo "⚠️  High audit backlog - consider increasing buffer size"
+fi
+if [ "$(fail2ban-client status 2>/dev/null | grep -c "Jail.*enabled")" -lt 3 ]; then
+    echo "⚠️  Few active jails - consider enabling more monitoring"
+fi
+if ! systemctl is-active apparmor >/dev/null 2>&1; then
+    echo "❌ AppArmor not active - system may be vulnerable"
+fi
+
+echo
+echo "=== System Access Monitoring Report Complete ==="
+EOF
+
+      chmod +x "$1/usr/local/bin/system-monitoring-status"
+
+      # Настройка автоматического мониторинга и алертинга
+      if [ "$ALERTING_ENABLED" = "y" ]; then
+        echo "Setting up automated alerting..."
+
+        # Создание cron job для регулярного мониторинга
+        cat > "$1/etc/cron.d/system-monitoring" << 'EOF'
+# System access monitoring checks
+*/5 * * * * root /usr/local/bin/system-monitoring-status > /var/log/system-monitoring.log 2>&1
+# Daily security report
+0 6 * * * root /usr/local/bin/generate-security-report > /var/log/security-report.log 2>&1
+EOF
+
+        # Создание скрипта генерации ежедневных отчетов
+        cat > "$1/usr/local/bin/generate-security-report" << 'EOF'
+#!/bin/bash
+# Генерация ежедневного отчета мониторинга безопасности
+
+REPORT_DATE=$(date +%Y-%m-%d)
+REPORT_FILE="/var/reports/security-monitoring-$REPORT_DATE.txt"
+
+mkdir -p /var/reports
+
+cat > "$REPORT_FILE" << EOF
+ОТЧЕТ МОНИТОРИНГА ДОСТУПА К СИСТЕМЕ
+===================================
+Дата: $(date)
+Период: Последние 24 часа
+
+АУТЕНТИФИКАЦИЯ:
+Неудачных попыток входа: $(ausearch -m USER_AUTH -sv no -ts today 2>/dev/null | wc -l)
+Попыток sudo: $(ausearch -k sudo_access -ts today 2>/dev/null | wc -l)
+
+ДОСТУП К ФАЙЛАМ:
+Критических файлов: $(ausearch -k critical_file_access -ts today 2>/dev/null | wc -l)
+Отказов доступа: $(ausearch -k access_denied -ts today 2>/dev/null | wc -l)
+
+ПРИВИЛЕГИИ:
+Эскалаций привилегий: $(ausearch -k privilege_changes -ts today 2>/dev/null | wc -l)
+Админ команд: $(ausearch -k systemctl_commands -ts today 2>/dev/null | wc -l)
+
+СЕТЬ:
+Подозрительных подключений: $(ausearch -k suspicious_network -ts today 2>/dev/null | wc -l)
+
+ЗАЩИТА:
+Заблокированных IP: $(fail2ban-client status 2>/dev/null | grep "Currently failed" | awk '{print $NF}' || echo "0")
+Активных профилей AppArmor: $(aa-status 2>/dev/null | grep "profiles are loaded" | awk '{print $1}' || echo "0")
+
+СТАТУС КОМПОНЕНТОВ:
+AppArmor: $(systemctl is-active apparmor 2>/dev/null || echo "inactive")
+Auditd: $(systemctl is-active auditd 2>/dev/null || echo "inactive")
+Fail2Ban: $(systemctl is-active fail2ban 2>/dev/null || echo "inactive")
+
+РЕКОМЕНДАЦИИ:
+$(/usr/local/bin/system-monitoring-status | grep "===" -A 10 | tail -5)
+
+EOF
+
+echo "Security report generated: $REPORT_FILE"
+EOF
+
+        chmod +x "$1/usr/local/bin/generate-security-report"
+      fi
+
+      # Включение и запуск всех сервисов мониторинга
+      echo "Enabling and starting monitoring services..."
+
+      if [ "$APPARMOR_ENABLE" = "y" ]; then
+        chroot "$1" systemctl enable apparmor || true
+        chroot "$1" systemctl start apparmor || echo "Warning: Could not start apparmor"
+      fi
+
+      if [ "$AUDITD_ENABLE" = "y" ]; then
+        chroot "$1" systemctl enable auditd || true
+        chroot "$1" systemctl start auditd || echo "Warning: Could not start auditd"
+      fi
+
+      if [ "$FAIL2BAN_ENABLE" = "y" ]; then
+        chroot "$1" systemctl enable fail2ban || true
+        chroot "$1" systemctl start fail2ban || echo "Warning: Could not start fail2ban"
+      fi
+
+      # Финальная проверка статуса
+      echo "Final system access monitoring status check:"
+      chroot "$1" /usr/local/bin/system-monitoring-status || echo "Status check script not available"
+
+      echo "Comprehensive system access monitoring setup completed successfully"

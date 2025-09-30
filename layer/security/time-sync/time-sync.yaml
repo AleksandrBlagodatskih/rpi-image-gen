@@ -1,8 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: time-sync
 # X-Env-Layer-Category: security
-# X-Env-Layer-Desc: Time synchronization configuration (assumes packages are pre-installed)
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Desc: Enhanced time synchronization with conflict prevention (assumes packages are pre-installed)
+# X-Env-Layer-Version: 1.1.0
 # X-Env-Layer-Requires: locale-base
 #
 # X-Env-VarPrefix: time_sync
@@ -14,9 +14,9 @@
 # X-Env-Var-enable-Set: y
 #
 # X-Env-Var-provider: systemd-timesyncd
-# X-Env-Var-provider-Desc: Time sync provider (systemd-timesyncd, chrony)
+# X-Env-Var-provider-Desc: Time sync provider (systemd-timesyncd, chrony, ntp) with conflict prevention
 # X-Env-Var-provider-Required: n
-# X-Env-Var-provider-Valid: keywords:systemd-timesyncd,chrony
+# X-Env-Var-provider-Valid: keywords:systemd-timesyncd,chrony,ntp
 # X-Env-Var-provider-Set: lazy
 #
 # X-Env-Var-servers: "0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org"
@@ -24,58 +24,179 @@
 # X-Env-Var-servers-Required: n
 # X-Env-Var-servers-Valid: string
 # X-Env-Var-servers-Set: lazy
+#
+# X-Env-Var-fallback_servers: ""
+# X-Env-Var-fallback_servers-Desc: Fallback NTP servers for systemd-timesyncd and chrony
+# X-Env-Var-fallback_servers-Required: n
+# X-Env-Var-fallback_servers-Valid: string
+# X-Env-Var-fallback_servers-Set: lazy
+#
+# X-Env-Var-chrony_makestep: "1 3"
+# X-Env-Var-chrony_makestep-Desc: Chrony makestep threshold (seconds attempts)
+# X-Env-Var-chrony_makestep-Required: n
+# X-Env-Var-chrony_makestep-Valid: string
+# X-Env-Var-chrony_makestep-Set: lazy
+#
+# X-Env-Var-chrony_rtcsync: y
+# X-Env-Var-chrony_rtcsync-Desc: Enable RTC synchronization in Chrony
+# X-Env-Var-chrony_rtcsync-Required: n
+# X-Env-Var-chrony_rtcsync-Valid: bool
+# X-Env-Var-chrony_rtcsync-Set: lazy
+#
+# X-Env-Var-ntp_restrict: "default kod nomodify notrap nopeer noquery"
+# X-Env-Var-ntp_restrict-Desc: NTP access restrictions
+# X-Env-Var-ntp_restrict-Required: n
+# X-Env-Var-ntp_restrict-Valid: string
+# X-Env-Var-ntp_restrict-Set: lazy
 # METAEND
 ---
 mmdebstrap:
   includes: []
   customize-hooks:
-    # Simple time synchronization setup
+    # Enhanced time synchronization setup with conflict prevention
     - |
       igconf isy IGconf_time_sync_enable || exit 0
 
-      echo "Setting up time synchronization..."
+      echo "Setting up time synchronization with conflict prevention..."
 
       # Get configuration
       PROVIDER=$(igconf getval IGconf_time_sync_provider)
       SERVERS=$(igconf getval IGconf_time_sync_servers)
 
+      # Function to stop all time services
+      stop_all_time_services() {
+        echo "Stopping all time synchronization services..."
+
+        # Stop services (ignore errors if not running)
+        chroot "$1" systemctl stop systemd-timesyncd 2>/dev/null || true
+        chroot "$1" systemctl stop chrony 2>/dev/null || true
+        chroot "$1" systemctl stop ntp 2>/dev/null || true
+        chroot "$1" systemctl stop ntpd 2>/dev/null || true
+
+        # Disable services to prevent auto-start
+        chroot "$1" systemctl disable systemd-timesyncd 2>/dev/null || true
+        chroot "$1" systemctl disable chrony 2>/dev/null || true
+        chroot "$1" systemctl disable ntp 2>/dev/null || true
+        chroot "$1" systemctl disable ntpd 2>/dev/null || true
+
+        echo "All time services stopped and disabled"
+      }
+
+      # Function to verify service state
+      verify_service_stopped() {
+        local service="$1"
+        # Check if service is still running
+        if chroot "$2" systemctl is-active --quiet "$service" 2>/dev/null; then
+          echo "Warning: $service is still running, attempting to kill..."
+          chroot "$2" pkill -f "$service" 2>/dev/null || true
+          sleep 2
+        fi
+      }
+
       case "$PROVIDER" in
         "systemd-timesyncd")
           echo "Configuring systemd-timesyncd..."
+
+          # Stop all other time services first
+          stop_all_time_services "$1"
+
+          # Verify other services are stopped
+          verify_service_stopped "chrony" "$1"
+          verify_service_stopped "ntp" "$1"
+          verify_service_stopped "ntpd" "$1"
+
+          # Create configuration directory
           mkdir -p "$1/etc/systemd/timesyncd.conf.d"
+
+          # Remove any existing chrony config to prevent conflicts
+          rm -f "$1/etc/chrony/chrony.conf"
 
           # Create timesyncd config
           printf '[Time]\nNTP=%s\n' "${SERVERS:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org}" > "$1/etc/systemd/timesyncd.conf.d/rpi-image-gen.conf"
 
+          # Enable and start systemd-timesyncd
           chroot "$1" systemctl enable systemd-timesyncd
-          echo "systemd-timesyncd configured"
+          chroot "$1" systemctl start systemd-timesyncd
+
+          echo "systemd-timesyncd configured and started"
           ;;
 
         "chrony")
           echo "Configuring Chrony..."
-          # Stop and disable systemd-timesyncd
-          chroot "$1" systemctl disable systemd-timesyncd
-          chroot "$1" systemctl stop systemd-timesyncd
 
-          # Backup original config
-          chroot "$1" cp /etc/chrony/chrony.conf /etc/chrony/chrony.conf.backup
+          # Stop all other time services first
+          stop_all_time_services "$1"
 
-          # Create new config
-          printf '# Chrony configuration for rpi-image-gen\n\n# Security: Only allow localhost\nbindcmdaddress 127.0.0.1\nbindcmdaddress ::1\n\n# NTP servers\n' > "$1/etc/chrony/chrony.conf"
-          echo "pool ${SERVERS:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org} iburst" >> "$1/etc/chrony/chrony.conf"
-          echo "makestep 1 3" >> "$1/etc/chrony/chrony.conf"
-          echo "rtcsync" >> "$1/etc/chrony/chrony.conf"
+          # Verify other services are stopped
+          verify_service_stopped "systemd-timesyncd" "$1"
+          verify_service_stopped "ntp" "$1"
+          verify_service_stopped "ntpd" "$1"
 
+          # Backup original config if it exists
+          if [ -f "$1/etc/chrony/chrony.conf" ]; then
+            chroot "$1" cp /etc/chrony/chrony.conf /etc/chrony/chrony.conf.backup.$(date +%Y%m%d_%H%M%S)
+          fi
+
+          # Remove systemd-timesyncd config to prevent conflicts
+          rm -f "$1/etc/systemd/timesyncd.conf.d/rpi-image-gen.conf"
+
+          # Create new secure config using printf
+          printf '# Chrony configuration for rpi-image-gen\n# Generated with conflict prevention\n\n# Security: Only allow localhost management\nbindcmdaddress 127.0.0.1\nbindcmdaddress ::1\n\n# NTP servers\npool %s iburst\nmakestep 1 3\nrtcsync\n' "${SERVERS:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org}" > "$1/etc/chrony/chrony.conf"
+
+          # Enable and start chrony
           chroot "$1" systemctl enable chrony
-          echo "Chrony configured"
+          chroot "$1" systemctl start chrony
+
+          echo "Chrony configured and started"
+          ;;
+
+        "ntp")
+          echo "Configuring NTP (legacy)..."
+
+          # Stop all other time services first
+          stop_all_time_services "$1"
+
+          # Verify other services are stopped
+          verify_service_stopped "systemd-timesyncd" "$1"
+          verify_service_stopped "chrony" "$1"
+
+          # Remove conflicting configs
+          rm -f "$1/etc/systemd/timesyncd.conf.d/rpi-image-gen.conf"
+          rm -f "$1/etc/chrony/chrony.conf"
+
+          # Create NTP config using printf
+          printf '# NTP configuration for rpi-image-gen\n# Generated with conflict prevention\n\n# Security: Restrict access\nrestrict default kod nomodify notrap nopeer noquery\nrestrict -6 default kod nomodify notrap nopeer noquery\nrestrict 127.0.0.1\nrestrict -6 ::1\n\n# NTP servers\nserver %s iburst\nserver 127.127.1.0\nfudge 127.127.1.0 stratum 10\n' "${SERVERS:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org}" > "$1/etc/ntp.conf"
+
+          # Enable and start NTP
+          chroot "$1" systemctl enable ntp
+          chroot "$1" systemctl start ntp
+
+          echo "NTP configured and started"
           ;;
 
         *)
           echo "Unknown time sync provider: $PROVIDER"
+          echo "Available providers: systemd-timesyncd, chrony, ntp"
           echo "Defaulting to systemd-timesyncd"
+
+          # Fallback to systemd-timesyncd
+          stop_all_time_services "$1"
+          verify_service_stopped "chrony" "$1"
+          verify_service_stopped "ntp" "$1"
+          verify_service_stopped "ntpd" "$1"
+
+          mkdir -p "$1/etc/systemd/timesyncd.conf.d"
+          printf '[Time]\nNTP=%s\n' "${SERVERS:-0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org}" > "$1/etc/systemd/timesyncd.conf.d/rpi-image-gen.conf"
+
           chroot "$1" systemctl enable systemd-timesyncd
+          chroot "$1" systemctl start systemd-timesyncd
+          echo "systemd-timesyncd configured as fallback"
           ;;
       esac
+
+      # Final verification - check that only the intended service is running
+      echo "Verifying time synchronization setup..."
+      sleep 2
 
       # Show status
       echo "Time synchronization setup complete"

@@ -1,0 +1,16 @@
+# Full configuration for building raid1-external layer with dependencies
+device:
+  layer: rpi5
+  class: pi5
+
+image:
+  layer: image-base
+  name: test-raid1-external-full
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  essential: essential
+  # Попытка добавить необходимые зависимости для raid1-external
+  # raid-base: raid-base
+  # mdadm-tools: mdadm-tools

@@ -90,6 +90,24 @@
 # X-Env-Var-name_format-Required: n
 # X-Env-Var-name_format-Valid: keywords:none,hostname,fqd,numeric,user
 # X-Env-Var-name_format-Set: lazy
+#
+# X-Env-Var-system_monitoring: y
+# X-Env-Var-system_monitoring-Desc: Enable comprehensive system access monitoring (authentication, file access, network)
+# X-Env-Var-system_monitoring-Required: n
+# X-Env-Var-system_monitoring-Valid: bool
+# X-Env-Var-system_monitoring-Set: lazy
+#
+# X-Env-Var-security_monitoring: y
+# X-Env-Var-security_monitoring-Desc: Enable security-focused monitoring (privilege escalation, suspicious processes)
+# X-Env-Var-security_monitoring-Required: n
+# X-Env-Var-security_monitoring-Valid: bool
+# X-Env-Var-security_monitoring-Set: lazy
+#
+# X-Env-Var-compliance_monitoring: n
+# X-Env-Var-compliance_monitoring-Desc: Enable compliance-focused monitoring (audit trails, access logging)
+# X-Env-Var-compliance_monitoring-Required: n
+# X-Env-Var-compliance_monitoring-Valid: bool
+# X-Env-Var-compliance_monitoring-Set: lazy
 # METAEND
 ---
 mmdebstrap:
@@ -98,7 +116,10 @@ mmdebstrap:
   customize-hooks:
     # Настройка auditd для системного мониторинга
     - |
-      igconf isy IGconf_auditd_enable || exit 0
+      if [ "${IGconf_auditd_enable:-n}" != "y" ]; then
+        echo "Audit daemon disabled by configuration"
+        exit 0
+      fi
 
       echo "Configuring audit daemon for system monitoring..."
 
@@ -107,19 +128,19 @@ mmdebstrap:
       chroot "$1" cp /usr/share/doc/auditd/examples/auditd.conf "$AUDITD_CONF"
 
       # Настройка основных параметров
-      MAX_LOG_FILE=$(igconf getval IGconf_auditd_max_log_file)
-      MAX_LOG_ACTION=$(igconf getval IGconf_auditd_max_log_file_action)
-      SPACE_LEFT=$(igconf getval IGconf_auditd_space_left)
-      SPACE_LEFT_ACTION=$(igconf getval IGconf_auditd_space_left_action)
-      ADMIN_SPACE_LEFT=$(igconf getval IGconf_auditd_admin_space_left)
-      ADMIN_SPACE_ACTION=$(igconf getval IGconf_auditd_admin_space_left_action)
-      DISK_FULL_ACTION=$(igconf getval IGconf_auditd_disk_full_action)
-      DISK_ERROR_ACTION=$(igconf getval IGconf_auditd_disk_error_action)
-      FLUSH=$(igconf getval IGconf_auditd_flush)
-      FREQ=$(igconf getval IGconf_auditd_freq)
-      NUM_LOGS=$(igconf getval IGconf_auditd_num_logs)
-      DISPATCHER=$(igconf getval IGconf_auditd_dispatcher)
-      NAME_FORMAT=$(igconf getval IGconf_auditd_name_format)
+      MAX_LOG_FILE="${IGconf_auditd_max_log_file:-8}"
+      MAX_LOG_ACTION="${IGconf_auditd_max_log_file_action:-rotate}"
+      SPACE_LEFT="${IGconf_auditd_space_left:-75}"
+      SPACE_LEFT_ACTION="${IGconf_auditd_space_left_action:-syslog}"
+      ADMIN_SPACE_LEFT="${IGconf_auditd_admin_space_left:-50}"
+      ADMIN_SPACE_ACTION="${IGconf_auditd_admin_space_left_action:-single}"
+      DISK_FULL_ACTION="${IGconf_auditd_disk_full_action:-suspend}"
+      DISK_ERROR_ACTION="${IGconf_auditd_disk_error_action:-syslog}"
+      FLUSH="${IGconf_auditd_flush:-incremental_async}"
+      FREQ="${IGconf_auditd_freq:-50}"
+      NUM_LOGS="${IGconf_auditd_num_logs:-5}"
+      DISPATCHER="${IGconf_auditd_dispatcher:-/sbin/audispd}"
+      NAME_FORMAT="${IGconf_auditd_name_format:-hostname}"
 
       echo "Setting auditd parameters: max_log_file=$MAX_LOG_FILE, space_left=$SPACE_LEFT, flush=$FLUSH"
 
@@ -195,7 +216,168 @@ EOF
       chroot "$1" systemctl start auditd || echo "Warning: Could not start auditd during build"
 
       # Проверка статуса
+      # Настройка универсального мониторинга доступа к системе
+      SYSTEM_MONITORING="${IGconf_auditd_system_monitoring:-y}"
+      SECURITY_MONITORING="${IGconf_auditd_security_monitoring:-y}"
+      COMPLIANCE_MONITORING="${IGconf_auditd_compliance_monitoring:-n}"
+
+      # Добавление универсальных правил аудита для мониторинга доступа к системе
+      echo "Adding universal system access monitoring rules..."
+
+      # Универсальные правила мониторинга доступа к системе
+      if [ "$SYSTEM_MONITORING" = "y" ]; then
+        cat >> "$1$AUDIT_RULES" << 'EOF'
+
+# Universal system access monitoring
+# Monitor authentication events
+-a exit,always -F arch=b64 -S open,openat -F success=0 -F dir=/var/log/ -k auth_failures
+-w /var/log/auth.log -p wa -k authentication
+-w /var/log/sudo.log -p wa -k sudo_access
+
+# Monitor system calls that could indicate privilege escalation
+-a exit,always -F arch=b64 -S execve -F uid=0 -k root_execution
+-a exit,always -F arch=b64 -S setuid,setgid -k privilege_escalation
+
+# Monitor changes to critical system files
+-w /etc/passwd -p wa -k user_accounts
+-w /etc/shadow -p wa -k password_changes
+-w /etc/group -p wa -k group_changes
+-w /etc/sudoers -p wa -k sudo_config
+
+# Monitor network configuration
+-w /etc/network/ -p wa -k network_config
+-w /etc/hosts -p wa -k hosts_file
+
+# Monitor service management
+-w /etc/systemd/ -p wa -k systemd_config
+-w /var/log/systemd/ -p wa -k systemd_logs
+
+# Monitor kernel module loading
+-w /sbin/insmod -p x -k module_loading
+-w /sbin/rmmod -p x -k module_unloading
+-w /sbin/modprobe -p x -k module_management
+
+# Monitor file system mounts
+-a exit,always -F arch=b64 -S mount -k filesystem_mounts
+EOF
+      fi
+
+      # Правила мониторинга безопасности
+      if [ "$SECURITY_MONITORING" = "y" ]; then
+        cat >> "$1$AUDIT_RULES" << 'EOF'
+
+# Security monitoring rules
+# Monitor suspicious network connections
+-a exit,always -F arch=b64 -S connect -F sport>1024 -F dport<1024 -k suspicious_network
+
+# Monitor unusual process execution
+-a exit,always -F arch=b64 -S execve -F exe=/usr/bin/wget -k external_downloads
+-a exit,always -F arch=b64 -S execve -F exe=/usr/bin/curl -k external_requests
+-a exit,always -F arch=b64 -S execve -F exe=/usr/bin/python* -k python_execution
+
+# Monitor changes to system binaries
+-w /usr/bin/ -p wa -k system_binaries
+-w /usr/sbin/ -p wa -k system_admin_binaries
+-w /sbin/ -p wa -k critical_binaries
+
+# Monitor kernel parameter changes
+-w /proc/sys/ -p wa -k kernel_parameters
+EOF
+      fi
+
+      # Правила мониторинга compliance и общего доступа к системе
+      if [ "$COMPLIANCE_MONITORING" = "y" ]; then
+        cat >> "$1$AUDIT_RULES" << 'EOF'
+
+# Comprehensive system access monitoring for compliance (CIS, PCI-DSS, HIPAA, GDPR)
+# Monitor all authentication attempts
+-a exit,always -F arch=b64 -S open,openat -F dir=/var/log/ -k access_attempts
+
+# Monitor file access patterns for compliance
+-a exit,always -F arch=b64 -S open,openat -F dir=/etc/ -k config_access
+-a exit,always -F arch=b64 -S open,openat -F dir=/var/log/ -k log_access
+
+# Monitor network access for compliance
+-a exit,always -F arch=b64 -S connect,accept -k network_access
+
+# Monitor privilege changes
+-a exit,always -F arch=b64 -S setuid,setgid -k privilege_changes
+
+# Monitor system time changes
+-a exit,always -F arch=b64 -S adjtimex,settimeofday -k time_changes
+
+# Monitor kernel module operations for compliance
+-a exit,always -F arch=b64 -S init_module,finit_module -k module_operations
+
+# Monitor system administration commands
+-a exit,always -F arch=b64 -S execve -F exe=/usr/bin/systemctl -k systemctl_commands
+-a exit,always -F arch=b64 -S execve -F exe=/usr/bin/journalctl -k journal_commands
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/service -k service_commands
+
+# Monitor user account management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/useradd -k user_management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/usermod -k user_management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/userdel -k user_management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/groupadd -k group_management
+-a exit,always -F arch=b64 -S execve -F exe=/usr/sbin/groupmod -k group_management
+
+# Monitor file permission changes
+-a exit,always -F arch=b64 -S chmod -k permission_changes
+-a exit,always -F arch=b64 -S chown -k ownership_changes
+
+# Monitor system log modifications
+-a exit,always -F arch=b64 -S open,openat -F dir=/var/log/ -F success=0 -k log_access_denied
+
+# Monitor critical system files access
+-a exit,always -F arch=b64 -S open,openat -F path=/etc/passwd -k critical_file_access
+-a exit,always -F arch=b64 -S open,openat -F path=/etc/shadow -k critical_file_access
+-a exit,always -F arch=b64 -S open,openat -F path=/etc/sudoers -k critical_file_access
+-a exit,always -F arch=b64 -S open,openat -F path=/etc/group -k critical_file_access
+
+# Monitor system resource usage
+-a exit,always -F arch=b64 -S setpriority -k priority_changes
+-a exit,always -F arch=b64 -S ioprio_set -k io_priority_changes
+EOF
+      fi
+
+      # Создание скрипта для анализа логов аудита
+      cat > "$1/usr/local/bin/audit-analyze" << 'EOF'
+#!/bin/bash
+# Скрипт анализа логов аудита для выявления подозрительной активности
+
+echo "=== Audit Log Analysis ==="
+echo "Timestamp: $(date)"
+
+# Анализ неудачных аутентификаций
+echo "Failed authentications (last 24h):"
+sudo ausearch -m USER_AUTH -sv no --start recent --end now | grep -c "acct=" || echo "0"
+
+# Анализ неудачных сетевых подключений
+echo "Failed network connections (last 24h):"
+sudo ausearch -m SOCKADDR -sv no --start recent --end now | grep -c "saddr=" || echo "0"
+
+# Анализ попыток эскалации привилегий
+echo "Privilege escalation attempts (last 24h):"
+sudo ausearch -m USER_MGMT -sv no --start recent --end now | grep -c "op=" || echo "0"
+
+# Анализ изменений конфигурации
+echo "Configuration changes (last 24h):"
+sudo ausearch -m CONFIG_CHANGE -sv no --start recent --end now | grep -c "op=" || echo "0"
+
+echo "=== Top suspicious IPs ==="
+sudo aureport -f --summary | head -10
+
+echo "=== Analysis completed ==="
+EOF
+
+      chmod +x "$1/usr/local/bin/audit-analyze"
+
+      # Перезагрузка правил аудита
+      echo "Reloading audit rules..."
+      chroot "$1" auditctl -R /etc/audit/audit.rules || echo "Warning: Could not reload audit rules"
+
       echo "Audit daemon configuration completed"
       chroot "$1" auditctl -s || echo "Audit daemon status check completed"
 
       echo "Audit daemon setup completed successfully"
+      echo "System access monitoring configuration completed"

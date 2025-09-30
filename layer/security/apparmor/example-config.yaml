@@ -19,16 +19,17 @@ layer:
   container: docker-runtime
   sbom: sbom-base
 
-# Полная конфигурация AppArmor для production окружения
+# Полная конфигурация AppArmor для production окружения с Raspberry Pi 5 поддержкой
 apparmor:
   enable: y                    # Включить AppArmor
   mode: enforce                # Режим блокировки нарушений
-  rpi_optimized: y             # Raspberry Pi оптимизации
+  system_monitoring: y         # Системные оптимизации
   profiles_enable: y           # Установить кастомные профили
   initramfs_integration: y     # Интеграция с initramfs
   logging_enable: y            # Включить логирование
   container_support: y         # Поддержка контейнеров
   monitoring_support: y        # Поддержка мониторинга
+  audit_integration: n         # Интеграция с auditd (опционально)
 
 # Мониторинг системы
 monitoring:

@@ -1,0 +1,69 @@
+# Пример конфигурации общего мониторинга доступа к системе
+# Комплексный мониторинг безопасности с интеграцией AppArmor, auditd и Fail2Ban
+
+device:
+  layer: rpi5
+  hostname: secure-monitoring-server
+  user1: admin
+  user1pass: SecurePass123!
+
+image:
+  layer: image-rpios
+  name: rpi-system-monitoring
+  compression: zstd
+
+layer:
+  base: bookworm-minbase
+  security: system-monitoring  # Общий слой мониторинга вместо отдельных компонентов
+
+# Полная конфигурация общего мониторинга доступа к системе
+system_monitoring:
+  enable: y                           # Включить общий мониторинг
+
+  # Компоненты безопасности
+  apparmor_enable: y                  # AppArmor для MAC
+  auditd_enable: y                    # Auditd для системного аудита
+  fail2ban_enable: y                  # Fail2Ban для предотвращения вторжений
+
+  # Области мониторинга
+  authentication_monitoring: y        # Мониторинг аутентификации
+  file_access_monitoring: y           # Мониторинг доступа к файлам
+  privilege_monitoring: y             # Мониторинг эскалации привилегий
+  network_monitoring: y               # Мониторинг сетевой активности
+  compliance_monitoring: n            # Расширенный compliance мониторинг
+
+  # Алертинг и отчетность
+  alerting_enabled: y                 # Включить алертинг
+  log_retention_days: 90              # Хранить логи 90 дней
+
+# Дополнительные настройки компонентов (опционально)
+# apparmor:
+#   enable: y
+#   mode: enforce
+#   system_monitoring: y
+
+# auditd:
+#   enable: y
+#   compliance_monitoring: y
+
+# fail2ban:
+#   enable: y
+#   default_ban_time: 1h
+#   default_max_retry: 5
+
+# Дополнительные меры безопасности (опционально)
+# security:
+#   enable_encryption: y
+#   secure_boot: y
+
+# Мониторинг системы для алертинга
+# monitoring:
+#   prometheus: y
+#   grafana: y
+#   alertmanager: y
+
+# SBOM для аудита и compliance
+# sbom:
+#   enable: y
+#   provider: syft
+#   detailed_scan: y

@@ -36,7 +36,6 @@ Include /etc/apparmor.d/
 
 # Tunables для различных дистрибутивов
 Include /etc/apparmor.d/tunables/global
-Include /etc/apparmor.d/tunables/rpi
 
 # Базовые профили
 Include /etc/apparmor.d/sbin.init

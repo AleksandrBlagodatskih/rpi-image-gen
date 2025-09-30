@@ -1,8 +1,28 @@
-# Radxa SATA Penta HAT modules
+# Radxa SATA Penta HAT modules for Raspberry Pi 5
+# Основные модули для RP1 чипа ввода-вывода
+rpi_poe
+rpi_poe_firmware
+rpi_poe_firmware_update
+
+# PCIe модули для Raspberry Pi 5
+pcie-brcmstb
+pcie-rp1
+pci-host-generic
+
+# SATA контроллер модули для JMB585
 ahci
+ahci_platform
 libahci
 libata
 sd_mod
 scsi_mod
+
+# GPIO и управление питанием
 gpio_raspberrypi_exp
-pcie-brcmstb
+gpio_keys
+gpio_keys_polled
+
+# Дополнительные модули для стабильной работы
+scsi_transport_sata
+ata_piix
+ata_generic
