@@ -7,24 +7,24 @@ device:
   variant: industrial
 
 image:
-  layer: raid1-external
+  layer: mdraid1-external-root
   name: industrial-scada-controller
-  raid1_external_rootfs_type: ext4      # ext4 for maximum compatibility
-  raid1_external_boot_part_size: 512M   # Large boot for industrial software
-  raid1_external_root_part_size: 128G   # Massive storage for industrial data
-  raid1_external_raid_level: RAID1     # Maximum performance and redundancy
-  raid1_external_raid_devices: 2        # Full RAID1 for enterprise reliability (2 devices for RAID1)
-  raid1_external_encryption_enabled: y  # Mandatory for industrial security
-  raid1_external_sector_size: 4096      # Advanced format industrial drives
-  raid1_external_compression: zstd      # Optimized for industrial workloads
-  raid1_external_pmap: crypt           # Secure encrypted deployment
+  mdraid1_external_root_rootfs_type: ext4      # ext4 for maximum compatibility
+  mdraid1_external_root_boot_part_size: 512M   # Large boot for industrial software
+  mdraid1_external_root_root_part_size: 128G   # Massive storage for industrial data
+  mdraid1_external_root_raid_level: RAID1     # Maximum performance and redundancy
+  mdraid1_external_root_raid_devices: 2        # Full RAID1 for enterprise reliability (2 devices for RAID1)
+  mdraid1_external_root_encryption_enabled: y  # Mandatory for industrial security
+  mdraid1_external_root_sector_size: 4096      # Advanced format industrial drives
+  mdraid1_external_root_compression: zstd      # Optimized for industrial workloads
+  mdraid1_external_root_pmap: crypt           # Secure encrypted deployment
 
   # Performance optimizations for industrial use case
-  raid1_external_apt_cache: y              # Fast package installation
-  raid1_external_ccache: y                 # Cross-compilation optimization
-  raid1_external_ccache_size: 20G          # Very large cache for industrial builds
-  raid1_external_parallel_jobs: 8          # High parallel processing
-  raid1_external_image_size_optimization: y # Optimize for deployment
+  mdraid1_external_root_apt_cache: y              # Fast package installation
+  mdraid1_external_root_ccache: y                 # Cross-compilation optimization
+  mdraid1_external_root_ccache_size: 20G          # Very large cache for industrial builds
+  mdraid1_external_root_parallel_jobs: 8          # High parallel processing
+  mdraid1_external_root_image_size_optimization: y # Optimize for deployment
 
 layer:
   base: bookworm-minbase

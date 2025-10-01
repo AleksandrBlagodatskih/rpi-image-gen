@@ -7,24 +7,24 @@ device:
   variant: automotive
 
 image:
-  layer: raid1-external
+  layer: mdraid1-external-root
   name: automotive-data-logger
-  raid1_external_rootfs_type: btrfs     # Btrfs for snapshot capabilities
-  raid1_external_boot_part_size: 256M   # Larger boot for automotive software
-  raid1_external_root_part_size: 64G    # Large storage for vehicle data
-  raid1_external_raid_level: RAID1      # Data redundancy for critical logging
-  raid1_external_raid_devices: 2        # Two SSDs for automotive deployment (RAID1)
-  raid1_external_encryption_enabled: y  # Mandatory for vehicle data security
-  raid1_external_sector_size: 4096      # Advanced format drives
-  raid1_external_compression: zstd      # Optimized compression
-  raid1_external_pmap: crypt           # Secure encrypted deployment
+  mdraid1_external_root_rootfs_type: btrfs     # Btrfs for snapshot capabilities
+  mdraid1_external_root_boot_part_size: 256M   # Larger boot for automotive software
+  mdraid1_external_root_root_part_size: 64G    # Large storage for vehicle data
+  mdraid1_external_root_raid_level: RAID1      # Data redundancy for critical logging
+  mdraid1_external_root_raid_devices: 2        # Two SSDs for automotive deployment (RAID1)
+  mdraid1_external_root_encryption_enabled: y  # Mandatory for vehicle data security
+  mdraid1_external_root_sector_size: 4096      # Advanced format drives
+  mdraid1_external_root_compression: zstd      # Optimized compression
+  mdraid1_external_root_pmap: crypt           # Secure encrypted deployment
 
   # Performance optimizations for automotive use case
-  raid1_external_apt_cache: y              # Fast package installation
-  raid1_external_ccache: y                 # Cross-compilation optimization
-  raid1_external_ccache_size: 10G          # Large cache for automotive builds
-  raid1_external_parallel_jobs: 4          # Moderate parallel processing
-  raid1_external_image_size_optimization: y # Optimize for deployment
+  mdraid1_external_root_apt_cache: y              # Fast package installation
+  mdraid1_external_root_ccache: y                 # Cross-compilation optimization
+  mdraid1_external_root_ccache_size: 10G          # Large cache for automotive builds
+  mdraid1_external_root_parallel_jobs: 4          # Moderate parallel processing
+  mdraid1_external_root_image_size_optimization: y # Optimize for deployment
 
 layer:
   base: bookworm-minbase

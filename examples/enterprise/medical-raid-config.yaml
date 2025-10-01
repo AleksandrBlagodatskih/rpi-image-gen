@@ -7,24 +7,24 @@ device:
   variant: medical
 
 image:
-  layer: raid1-external
+  layer: mdraid1-external-root
   name: medical-patient-monitor
-  raid1_external_rootfs_type: ext4      # ext4 for medical reliability
-  raid1_external_boot_part_size: 512M   # Large boot for medical software
-  raid1_external_root_part_size: 256G   # Massive storage for patient data
-  raid1_external_raid_level: RAID1     # Maximum reliability for patient data
-  raid1_external_raid_devices: 2        # Full redundancy for critical data (2 devices for RAID1)
-  raid1_external_encryption_enabled: y  # HIPAA mandatory encryption
-  raid1_external_sector_size: 4096      # Advanced format medical drives
-  raid1_external_compression: zstd      # Optimized for medical data
-  raid1_external_pmap: crypt           # Secure encrypted deployment
+  mdmdraid1_external_root_root_rootfs_type: ext4      # ext4 for medical reliability
+  mdmdraid1_external_root_root_boot_part_size: 512M   # Large boot for medical software
+  mdmdraid1_external_root_root_root_part_size: 256G   # Massive storage for patient data
+  mdmdraid1_external_root_root_raid_level: RAID1     # Maximum reliability for patient data
+  mdmdraid1_external_root_root_raid_devices: 2        # Full redundancy for critical data (2 devices for RAID1)
+  mdmdraid1_external_root_root_encryption_enabled: y  # HIPAA mandatory encryption
+  mdmdraid1_external_root_root_sector_size: 4096      # Advanced format medical drives
+  mdmdraid1_external_root_root_compression: zstd      # Optimized for medical data
+  mdmdraid1_external_root_root_pmap: crypt           # Secure encrypted deployment
 
   # Performance optimizations for medical use case
-  raid1_external_apt_cache: y              # Fast package installation
-  raid1_external_ccache: y                 # Cross-compilation optimization
-  raid1_external_ccache_size: 15G          # Large cache for medical builds
-  raid1_external_parallel_jobs: 6          # Balanced parallel processing
-  raid1_external_image_size_optimization: y # Optimize for deployment
+  mdmdraid1_external_root_root_apt_cache: y              # Fast package installation
+  mdmdraid1_external_root_root_ccache: y                 # Cross-compilation optimization
+  mdmdraid1_external_root_root_ccache_size: 15G          # Large cache for medical builds
+  mdmdraid1_external_root_root_parallel_jobs: 6          # Balanced parallel processing
+  mdmdraid1_external_root_root_image_size_optimization: y # Optimize for deployment
 
 layer:
   base: bookworm-minbase

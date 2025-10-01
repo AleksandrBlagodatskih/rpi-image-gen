@@ -7,24 +7,24 @@ device:
   variant: 8G
 
 image:
-  layer: raid1-external
+  layer: mdraid1-external-root
   name: infrastructure-network-appliance
-  raid1_external_rootfs_type: btrfs     # Btrfs for advanced features
-  raid1_external_boot_part_size: 1G     # Large boot for infrastructure software
-  raid1_external_root_part_size: 512G   # Massive storage for infrastructure data
-  raid1_external_raid_level: RAID1     # Maximum availability and performance
-  raid1_external_raid_devices: 2        # Full RAID1 for infrastructure reliability (2 devices for RAID1)
-  raid1_external_encryption_enabled: y  # Mandatory for infrastructure security
-  raid1_external_sector_size: 4096      # Advanced format infrastructure drives
-  raid1_external_compression: zstd      # Optimized for infrastructure workloads
-  raid1_external_pmap: crypt           # Secure encrypted deployment
+  mdraid1_external_root_rootfs_type: btrfs     # Btrfs for advanced features
+  mdraid1_external_root_boot_part_size: 1G     # Large boot for infrastructure software
+  mdraid1_external_root_root_part_size: 512G   # Massive storage for infrastructure data
+  mdraid1_external_root_raid_level: RAID1     # Maximum availability and performance
+  mdraid1_external_root_raid_devices: 2        # Full RAID1 for infrastructure reliability (2 devices for RAID1)
+  mdraid1_external_root_encryption_enabled: y  # Mandatory for infrastructure security
+  mdraid1_external_root_sector_size: 4096      # Advanced format infrastructure drives
+  mdraid1_external_root_compression: zstd      # Optimized for infrastructure workloads
+  mdraid1_external_root_pmap: crypt           # Secure encrypted deployment
 
   # Performance optimizations for infrastructure use case
-  raid1_external_apt_cache: y              # Fast package installation
-  raid1_external_ccache: y                 # Cross-compilation optimization
-  raid1_external_ccache_size: 25G          # Very large cache for infrastructure builds
-  raid1_external_parallel_jobs: 12         # High parallel processing for large builds
-  raid1_external_image_size_optimization: y # Optimize for deployment
+  mdraid1_external_root_apt_cache: y              # Fast package installation
+  mdraid1_external_root_ccache: y                 # Cross-compilation optimization
+  mdraid1_external_root_ccache_size: 25G          # Very large cache for infrastructure builds
+  mdraid1_external_root_parallel_jobs: 12         # High parallel processing for large builds
+  mdraid1_external_root_image_size_optimization: y # Optimize for deployment
 
 layer:
   base: bookworm-minbase

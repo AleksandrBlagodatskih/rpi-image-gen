@@ -1,5 +1,5 @@
 # METABEGIN
-# X-Env-Layer-Name: raid1-external
+# X-Env-Layer-Name: mdraid1-external-root
 # X-Env-Layer-Category: image
 # X-Env-Layer-Desc: Raspberry Pi OS style image layout with MBR boot partition and
 #  GPT external drives using genimage mdraid for RAID1. SD card for boot,
