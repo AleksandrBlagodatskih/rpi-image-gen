@@ -28,7 +28,7 @@ layer:
   base: bookworm-minbase
   network: systemd-net-min
   monitoring: system-monitoring
-  security: security-hardening
+  security: system-monitoring
   sbom: sbom-base
 
 # Настройки безопасности

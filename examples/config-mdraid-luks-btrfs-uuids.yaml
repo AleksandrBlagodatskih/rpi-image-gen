@@ -23,7 +23,7 @@ layer:
   device: radxa-sata-penta-hat
   sys-apps: btrfs
   mdadm: mdadm
-  security: security-hardening
+  security: system-monitoring
   sbom: sbom-base
 
 # Radxa SATA Penta HAT configuration

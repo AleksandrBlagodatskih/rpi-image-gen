@@ -14,10 +14,8 @@ image:
 
 layer:
   base: bookworm-minbase
-  security: enterprise-security
-  monitoring: enterprise-monitoring
-  networking: advanced-networking
-  cockpit: net-misc/cockpit
+  security: system-monitoring
+  monitoring: cockpit
 
 # Enterprise безопасность для Cockpit
 security:

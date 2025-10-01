@@ -14,12 +14,9 @@ image:
 
 layer:
   base: bookworm-minbase
-  infrastructure: management-stack
-  networking: enterprise-networking
-  security: enterprise-security
-  monitoring: enterprise-monitoring
-  automation: infrastructure-automation
-  cockpit: net-misc/cockpit
+  security: system-monitoring
+  monitoring: cockpit
+  container: docker-debian-bookworm
 
 # Инфраструктура управления
 infrastructure:

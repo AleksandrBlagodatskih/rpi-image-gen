@@ -13,4 +13,4 @@ image:
 
 layer:
   base: bookworm-minbase
-  security: maximum-security
+  security: system-monitoring

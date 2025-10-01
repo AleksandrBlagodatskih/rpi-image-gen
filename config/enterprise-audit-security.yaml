@@ -12,10 +12,8 @@ image:
 
 layer:
   base: bookworm-minbase
-  security: maximum-security
-  audit: comprehensive-audit
-  monitoring: enterprise-monitoring
-  compliance: regulatory-compliance
+  security: system-monitoring
+  monitoring: cockpit
 
 # Максимальная безопасность для enterprise аудита
 security:

@@ -28,12 +28,9 @@ image:
 
 layer:
   base: bookworm-minbase
-  infrastructure: monitoring-stack
-  networking: advanced-networking
-  security: enterprise-security
-  monitoring: infrastructure-monitoring
-  deployment: automated-deployment
-  compliance: infrastructure-compliance
+  security: system-monitoring
+  monitoring: cockpit
+  container: docker-debian-bookworm
 
 infrastructure:
   monitoring_enabled: y

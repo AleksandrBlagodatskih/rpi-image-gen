@@ -12,9 +12,9 @@ image:
   compression: zstd
 
 layer:
-  server: rpi5-server-config
+  device: rpi5-server-config
   base: bookworm-minbase
-  security: security-hardening
+  security: system-monitoring
   sbom: sbom-base
 
 # Настройки серверной оптимизации
@@ -54,7 +54,7 @@ image:
   compression: zstd
 
 layer:
-  server: rpi5-server-config
+  device: rpi5-server-config
   base: bookworm-minbase
 
 # Максимальная производительность
@@ -83,9 +83,9 @@ image:
   compression: zstd
 
 layer:
-  server: rpi5-server-config
+  device: rpi5-server-config
   base: bookworm-minbase
-  security: maximum-security
+  security: system-monitoring
 
 # Максимальная безопасность
 rpi5_server:
@@ -111,7 +111,7 @@ device:
   class: pi5
 
 layer:
-  server: rpi5-server-config
+  device: rpi5-server-config
 
 # Минимальная конфигурация для тестирования
 rpi5_server:

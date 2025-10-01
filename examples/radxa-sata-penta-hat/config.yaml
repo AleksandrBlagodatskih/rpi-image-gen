@@ -19,7 +19,7 @@ layer:
   base: bookworm-minbase
   device: radxa-sata-penta-hat
   network: systemd-net-min
-  security: security-hardening
+  security: system-monitoring
   monitoring: system-monitoring
   sbom: sbom-base
 
