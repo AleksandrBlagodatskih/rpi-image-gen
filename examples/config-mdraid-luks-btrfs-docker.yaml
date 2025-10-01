@@ -19,7 +19,6 @@ image:
 layer:
   base: bookworm-minbase
   device: radxa-sata-penta-hat      # Обязателен для SATA SSD
-  sys-apps: cryptsetup              # Обязателен для LUKS шифрования
   sys-apps: btrfs                   # Обязателен для Btrfs
   mdadm: mdadm                      # Обязателен для RAID
   docker: docker-debian-bookworm    # Docker с полными Btrfs оптимизациями

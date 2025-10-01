@@ -23,7 +23,6 @@ image:
 layer:
   base: bookworm-minbase
   device: radxa-sata-penta-hat
-  sys-apps: cryptsetup
   sys-apps: btrfs
   mdadm: mdadm
   security: security-hardening

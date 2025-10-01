@@ -14,7 +14,6 @@ image:
 layer:
   base: trixie-minbase              # Debian Trixie как основа
   device: radxa-sata-penta-hat      # Обязателен для SATA SSD
-  sys-apps: cryptsetup              # Обязателен для LUKS шифрования
   sys-apps: btrfs                   # Обязателен для Btrfs
   mdadm: mdadm                      # Обязателен для RAID
   docker: docker-debian-trixie      # Docker с оптимизациями для Btrfs

@@ -1,12 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: systemd-net-min
-# X-Env-Layer-Desc: Systemd networking via networkd and resolved services
+# X-Env-Layer-Desc: Systemd networking via networkd and resolved services (requires systemd, compatible with systemd-chrony-min)
 # X-Env-Layer-Version: 2.0.0
-# X-Env-Layer-Requires: systemd-min
+# X-Env-Layer-Requires: systemd
 # METAEND
 ---
 mmdebstrap:
   packages:
+    - systemd
     - systemd-resolved
   customize-hooks:
     - $BDEBSTRAP_HOOKS/enable-units "$1" systemd-networkd

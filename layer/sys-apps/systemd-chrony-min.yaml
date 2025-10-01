@@ -1,11 +1,11 @@
 # METABEGIN
 # X-Env-Layer-Name: systemd-chrony-min
 # X-Env-Layer-Category: sys-apps
-# X-Env-Layer-Desc: Core systemd components for init, SysV compatibility and chrony NTP client instead of systemd-timesyncd
+# X-Env-Layer-Desc: Core systemd components for init, SysV compatibility and chrony NTP client (replaces systemd-timesyncd, compatible with systemd-min)
 # X-Env-Layer-Version: 1.0.0
 # X-Env-Layer-Requires: essential
 # X-Env-Layer-Provides: systemd,ntp-client,timesync
-# X-Env-Layer-Conflicts: systemd-timesyncd (provides NTP),systemd-min (overlaps systemd components)
+# X-Env-Layer-Conflicts: systemd-timesyncd (provides NTP)
 #
 # X-Env-VarPrefix: systemd_chrony
 #
@@ -42,7 +42,7 @@ mmdebstrap:
   customize-hooks:
     # Включение systemd сервисов
     - $BDEBSTRAP_HOOKS/enable-units "$1" chrony
-    - $BDEBSTRAP_HOOKS/enable-units "$1" systemd-timesyncd  # Отключить timesyncd если используется chrony
+    # systemd-timesyncd будет отключен в customize хуках ниже
 
     # Кастомная настройка chrony на основе переменных
     - |
@@ -167,6 +167,17 @@ EOF
         mkdir -p $1/var/lib/chrony
 
         echo "systemd-chrony configuration completed"
+
+        # Отключение systemd-timesyncd для предотвращения конфликтов
+        echo "Disabling systemd-timesyncd to prevent conflicts with chrony..."
+        chroot "$1" systemctl disable systemd-timesyncd 2>/dev/null || true
+        chroot "$1" systemctl stop systemd-timesyncd 2>/dev/null || true
+
+        # Удаление любых ссылок на timesyncd в multi-user.target.wants
+        rm -f "$1/etc/systemd/system/multi-user.target.wants/systemd-timesyncd.service" 2>/dev/null || true
+        rm -f "$1/etc/systemd/system/timers.target.wants/systemd-timesyncd.service" 2>/dev/null || true
+
+        echo "systemd-timesyncd disabled successfully"
       fi
 
     # Стандартная настройка systemd хуков
