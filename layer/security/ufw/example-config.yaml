@@ -1,0 +1,46 @@
+# Example configuration for UFW (Uncomplicated Firewall)
+#
+# Simple and user-friendly firewall management using iptables.
+# Provides default deny policy with explicit allow rules.
+
+---
+# Basic UFW configuration (SSH only)
+layers:
+  - ufw
+
+variables:
+  # Enable UFW
+  ufw_enable: y
+  
+  # Default policies
+  ufw_default_incoming: deny
+  ufw_default_outgoing: allow
+  ufw_default_forward: deny
+  
+  # Allow SSH
+  ufw_allow_ssh: y
+  ufw_ssh_port: 22
+  
+---
+# Web server UFW configuration
+layers:
+  - ufw
+
+variables:
+  ufw_enable: y
+  ufw_default_incoming: deny
+  ufw_default_outgoing: allow
+  
+  # Allow SSH
+  ufw_allow_ssh: y
+  ufw_ssh_port: 22
+  
+  # Allow HTTP/HTTPS
+  ufw_allow_http: y
+  ufw_allow_https: y
+  
+  # Custom rules
+  ufw_custom_rules:
+    - "allow 8080/tcp comment 'Application port'"
+    - "allow from 192.168.1.0/24 to any port 3306 comment 'Database from LAN'"
+

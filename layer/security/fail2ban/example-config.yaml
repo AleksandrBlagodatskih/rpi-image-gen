@@ -1,0 +1,43 @@
+# Example configuration for Fail2Ban Intrusion Prevention System
+#
+# Fail2Ban scans log files and bans IPs that show malicious signs.
+# Protects against brute-force attacks on SSH, web services, and more.
+
+---
+# Basic Fail2Ban configuration
+layers:
+  - fail2ban
+
+variables:
+  # Enable Fail2Ban
+  fail2ban_enable: y
+  
+  # Ban duration in seconds (default: 10 minutes)
+  fail2ban_bantime: 600
+  
+  # Find time window (default: 10 minutes)
+  fail2ban_findtime: 600
+  
+  # Maximum retries before ban
+  fail2ban_maxretry: 5
+  
+  # Enable SSH jail
+  fail2ban_ssh_enabled: y
+  
+---
+# Aggressive protection configuration
+layers:
+  - fail2ban
+
+variables:
+  fail2ban_enable: y
+  
+  # Longer ban times
+  fail2ban_bantime: 86400  # 24 hours
+  fail2ban_findtime: 1800  # 30 minutes
+  fail2ban_maxretry: 3     # 3 attempts only
+  
+  # Enable multiple jails
+  fail2ban_ssh_enabled: y
+  fail2ban_recidive_enabled: y  # Ban repeat offenders permanently
+

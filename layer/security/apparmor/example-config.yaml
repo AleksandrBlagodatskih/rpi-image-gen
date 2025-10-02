@@ -1,0 +1,22 @@
+# Example configuration for AppArmor Mandatory Access Control
+#
+# AppArmor provides Linux kernel security module implementing mandatory access control (MAC).
+# This example shows how to enable AppArmor with various enforcement modes.
+
+---
+# Basic AppArmor configuration
+layers:
+  - apparmor
+
+variables:
+  # Enable AppArmor with enforcing mode
+  apparmor_enable: y
+  apparmor_mode: enforce
+  apparmor_profile_mode: enforce
+  
+  # Enable profile management utilities
+  apparmor_utils: y
+  
+  # Install additional profiles
+  apparmor_extra_profiles: y
+

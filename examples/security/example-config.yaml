@@ -17,7 +17,7 @@ layer:
   security: fail2ban
   network: systemd-net-min
   container: docker-runtime
-  monitoring: system-monitoring
+  monitoring: security-suite
   sbom: sbom-base
 
 # Полная конфигурация Fail2Ban для enterprise окружения

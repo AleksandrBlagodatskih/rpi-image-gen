@@ -27,8 +27,8 @@ radxa_sata:
 layer:
   base: bookworm-minbase
   network: systemd-net-min
-  monitoring: system-monitoring
-  security: system-monitoring
+  monitoring: security-suite
+  security: security-suite
   sbom: sbom-base
 
 # Настройки безопасности

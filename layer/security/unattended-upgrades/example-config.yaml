@@ -1,0 +1,53 @@
+# Example configuration for Unattended Upgrades
+#
+# Automatically installs security updates to keep the system secure.
+# Configurable notification and reboot policies.
+
+---
+# Basic unattended upgrades (security only)
+layers:
+  - unattended-upgrades
+
+variables:
+  # Enable unattended upgrades
+  unattended_upgrades_enable: y
+  
+  # Only security updates
+  unattended_upgrades_origins:
+    - "Debian:stable-security"
+    - "Raspbian:stable-security"
+  
+  # Email notifications
+  unattended_upgrades_mail: root
+  unattended_upgrades_mail_on_error: y
+  
+  # Auto reboot if required
+  unattended_upgrades_auto_reboot: n
+  
+---
+# Automatic all updates with reboot
+layers:
+  - unattended-upgrades
+
+variables:
+  unattended_upgrades_enable: y
+  
+  # Security + stable updates
+  unattended_upgrades_origins:
+    - "Debian:stable-security"
+    - "Debian:stable-updates"
+    - "Raspbian:stable-security"
+    - "Raspbian:stable-updates"
+  
+  # Notification settings
+  unattended_upgrades_mail: admin@example.com
+  unattended_upgrades_mail_on_error: y
+  unattended_upgrades_mail_on_success: n
+  
+  # Automatic reboot at 3 AM if needed
+  unattended_upgrades_auto_reboot: y
+  unattended_upgrades_auto_reboot_time: "03:00"
+  
+  # Remove unused dependencies
+  unattended_upgrades_auto_remove: y
+

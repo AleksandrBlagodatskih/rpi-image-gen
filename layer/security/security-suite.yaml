@@ -1,10 +1,10 @@
 # METABEGIN
-# X-Env-Layer-Name: system-monitoring
+# X-Env-Layer-Name: security-suite
 # X-Env-Layer-Category: security
-# X-Env-Layer-Desc: Comprehensive system access monitoring combining AppArmor, auditd, and Fail2Ban
+# X-Env-Layer-Desc: Comprehensive security suite combining AppArmor, auditd, and Fail2Ban for system access monitoring
 # X-Env-Layer-Version: 1.0.0
 # X-Env-Layer-Requires: locale-base
-# X-Env-Layer-Provides: system-monitoring
+# X-Env-Layer-Provides: security-suite,system-monitoring
 #
 # X-Env-VarPrefix: system_monitoring
 #

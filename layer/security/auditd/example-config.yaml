@@ -1,0 +1,48 @@
+# Example configuration for Auditd - Linux Audit Daemon
+#
+# Auditd provides comprehensive system auditing for compliance and security monitoring.
+# Supports CIS, PCI-DSS, HIPAA, GDPR compliance requirements.
+
+---
+# Basic auditd configuration
+layers:
+  - auditd
+
+variables:
+  # Enable auditd service
+  auditd_enable: y
+  
+  # Audit rule profile (minimal, balanced, comprehensive, compliance, custom)
+  auditd_rules_profile: balanced
+  
+  # Log rotation settings
+  auditd_max_log_file: 32
+  auditd_max_log_file_action: rotate
+  auditd_num_logs: 10
+  
+  # Enable remote logging (optional)
+  auditd_enable_remote: n
+  
+---
+# Enterprise compliance configuration
+layers:
+  - auditd
+
+variables:
+  auditd_enable: y
+  auditd_rules_profile: compliance
+  
+  # Enhanced logging for compliance
+  auditd_max_log_file: 64
+  auditd_num_logs: 30
+  
+  # Enable all monitoring areas
+  auditd_monitor_auth: y
+  auditd_monitor_file_access: y
+  auditd_monitor_network: y
+  auditd_monitor_privileged: y
+  
+  # Enable remote SIEM integration
+  auditd_enable_remote: y
+  auditd_remote_server: siem.example.com
+

@@ -28,7 +28,7 @@ image:
 
 layer:
   base: bookworm-minbase
-  security: system-monitoring
+  security: security-suite
   monitoring: cockpit
   container: docker-debian-bookworm
 

@@ -12,7 +12,7 @@ image:
 
 layer:
   base: bookworm-minbase
-  security: system-monitoring
+  security: security-suite
   monitoring: cockpit
 
 # Максимальная безопасность для enterprise аудита

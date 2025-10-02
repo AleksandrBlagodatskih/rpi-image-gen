@@ -14,7 +14,7 @@ image:
 layer:
   device: rpi5-server-config
   base: bookworm-minbase
-  security: system-monitoring
+  security: security-suite
   sbom: sbom-base
 
 # Настройки серверной оптимизации
@@ -85,7 +85,7 @@ image:
 layer:
   device: rpi5-server-config
   base: bookworm-minbase
-  security: system-monitoring
+  security: security-suite
 
 # Максимальная безопасность
 rpi5_server:

@@ -1,0 +1,25 @@
+# Example configuration for PAM Hardening
+#
+# Hardens Pluggable Authentication Modules (PAM) configuration
+# for improved authentication security.
+
+---
+# Basic PAM hardening
+layers:
+  - pam-hardening
+
+variables:
+  # Enable PAM hardening
+  pam_hardening_enable: y
+  
+  # Fail delay in microseconds (1000000 = 1 second)
+  pam_hardening_fail_delay: 4000000
+  
+  # Enable password quality checking
+  pam_hardening_pwquality: y
+  
+  # Account lockout after failed attempts
+  pam_hardening_lockout: y
+  pam_hardening_deny: 5
+  pam_hardening_unlock_time: 900  # 15 minutes
+

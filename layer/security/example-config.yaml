@@ -1,0 +1,132 @@
+# Example configuration for comprehensive security suite
+#
+# This is a meta-layer (security-suite) that combines multiple security components:
+# - AppArmor (MAC), Auditd (auditing), Fail2Ban (IPS)
+# - Authentication hardening, firewall, kernel hardening
+# - Automated security updates
+#
+# Use this for a complete security solution or include individual layers.
+
+---
+# Basic security configuration (recommended minimum)
+layers:
+  - security-suite
+
+variables:
+  # Enable comprehensive system monitoring
+  system_monitoring_enable: y
+  
+  # Core components
+  system_monitoring_apparmor_enable: y
+  system_monitoring_auditd_enable: y
+  system_monitoring_fail2ban_enable: y
+  
+  # Monitoring areas
+  system_monitoring_authentication_monitoring: y
+  system_monitoring_file_access_monitoring: y
+  system_monitoring_privilege_monitoring: y
+  system_monitoring_network_monitoring: y
+  
+  # Alerting
+  system_monitoring_alerting_enabled: y
+  system_monitoring_log_retention_days: 90
+
+---
+# Enterprise security configuration (maximum hardening)
+layers:
+  - security-suite
+
+variables:
+  system_monitoring_enable: y
+  
+  # Enable all security components
+  system_monitoring_apparmor_enable: y
+  system_monitoring_auditd_enable: y
+  system_monitoring_fail2ban_enable: y
+  
+  # Enable all monitoring areas
+  system_monitoring_authentication_monitoring: y
+  system_monitoring_file_access_monitoring: y
+  system_monitoring_privilege_monitoring: y
+  system_monitoring_network_monitoring: y
+  system_monitoring_compliance_monitoring: y
+  
+  # Enhanced alerting
+  system_monitoring_alerting_enabled: y
+  system_monitoring_log_retention_days: 365
+
+---
+# Modular security (individual components)
+# Use this approach to enable only specific security features
+
+layers:
+  - apparmor          # Mandatory Access Control
+  - auditd            # System auditing
+  - fail2ban          # Intrusion prevention
+  - ufw               # Firewall
+  - pam-hardening     # Authentication hardening
+  - password-policies # Password strength enforcement
+  - sudo-logging      # Privileged operations audit
+  - sysctl-hardening  # Kernel security tuning
+  - unattended-upgrades  # Automatic security updates
+
+variables:
+  # AppArmor
+  apparmor_enable: y
+  apparmor_mode: enforce
+  
+  # Auditd
+  auditd_enable: y
+  auditd_rules_profile: balanced
+  
+  # Fail2Ban
+  fail2ban_enable: y
+  fail2ban_ssh_enabled: y
+  
+  # UFW Firewall
+  ufw_enable: y
+  ufw_allow_ssh: y
+  
+  # PAM Hardening
+  pam_hardening_enable: y
+  pam_hardening_lockout: y
+  
+  # Password Policies
+  password_policies_enable: y
+  password_policies_minlen: 12
+  
+  # Sudo Logging
+  sudo_logging_enable: y
+  sudo_logging_iolog: y
+  
+  # Sysctl Hardening
+  sysctl_hardening_enable: y
+  
+  # Unattended Upgrades
+  unattended_upgrades_enable: y
+  unattended_upgrades_auto_reboot: n
+
+---
+# Compliance-focused configuration (CIS, PCI-DSS, HIPAA, GDPR)
+layers:
+  - security-suite
+
+variables:
+  system_monitoring_enable: y
+  system_monitoring_apparmor_enable: y
+  system_monitoring_auditd_enable: y
+  system_monitoring_fail2ban_enable: y
+  
+  # Enable all monitoring
+  system_monitoring_authentication_monitoring: y
+  system_monitoring_file_access_monitoring: y
+  system_monitoring_privilege_monitoring: y
+  system_monitoring_network_monitoring: y
+  system_monitoring_compliance_monitoring: y  # Critical for compliance
+  
+  # Long retention for compliance
+  system_monitoring_log_retention_days: 730  # 2 years
+  
+  # Mandatory alerting
+  system_monitoring_alerting_enabled: y
+

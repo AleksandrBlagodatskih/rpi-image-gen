@@ -19,8 +19,8 @@ layer:
   base: bookworm-minbase
   device: radxa-sata-penta-hat
   network: systemd-net-min
-  security: system-monitoring
-  monitoring: system-monitoring
+  security: security-suite
+  monitoring: security-suite
   sbom: sbom-base
 
 # Настройки Radxa SATA Penta HAT
