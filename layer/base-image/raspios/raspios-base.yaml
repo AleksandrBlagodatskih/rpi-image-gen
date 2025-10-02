@@ -1,7 +1,7 @@
 # METABEGIN
 # X-Env-Layer-Name: raspios-base
 # X-Env-Layer-Category: base-image
-# X-Env-Layer-Desc: Download and prepare official Raspberry Pi OS images as base layer
+# X-Env-Layer-Desc: Use official Raspberry Pi OS images as base (via external script integration)
 # X-Env-Layer-Version: 1.0.0
 # X-Env-Layer-Requires: 
 # X-Env-Layer-Provides: base-image,raspios
@@ -9,247 +9,142 @@
 #
 # X-Env-VarPrefix: raspios_base
 #
-# X-Env-Var-image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
-# X-Env-Var-image_url-Desc: URL to download Raspberry Pi OS image
-# X-Env-Var-image_url-Required: y
-# X-Env-Var-image_url-Valid: url
+# X-Env-Var-image_url: 
+# X-Env-Var-image_url-Desc: URL to Raspberry Pi OS image (used by external script)
+# X-Env-Var-image_url-Required: n
 # X-Env-Var-image_url-Set: immediate
 #
 # X-Env-Var-image_sha256: 
-# X-Env-Var-image_sha256-Desc: SHA256 checksum for image verification (direct)
+# X-Env-Var-image_sha256-Desc: SHA256 checksum for verification
 # X-Env-Var-image_sha256-Required: n
-# X-Env-Var-image_sha256-Valid: sha256
 # X-Env-Var-image_sha256-Set: immediate
 #
 # X-Env-Var-image_sha256_url: 
-# X-Env-Var-image_sha256_url-Desc: URL to download SHA256 checksum file
+# X-Env-Var-image_sha256_url-Desc: URL to SHA256 checksum file
 # X-Env-Var-image_sha256_url-Required: n
-# X-Env-Var-image_sha256_url-Valid: url
 # X-Env-Var-image_sha256_url-Set: immediate
 #
 # X-Env-Var-cache_dir: ./cache
-# X-Env-Var-cache_dir-Desc: Directory for caching downloaded images
+# X-Env-Var-cache_dir-Desc: Cache directory for downloaded images
 # X-Env-Var-cache_dir-Required: n
-# X-Env-Var-cache_dir-Valid: path
 # X-Env-Var-cache_dir-Set: immediate
 #
 # X-Env-Var-verify_checksum: y
-# X-Env-Var-verify_checksum-Desc: Verify SHA256 checksum (recommended for security)
+# X-Env-Var-verify_checksum-Desc: Verify SHA256 checksum
 # X-Env-Var-verify_checksum-Required: n
 # X-Env-Var-verify_checksum-Valid: bool
 # X-Env-Var-verify_checksum-Set: immediate
-#
-# X-Env-Var-force_redownload: n
-# X-Env-Var-force_redownload-Desc: Force re-download even if image exists in cache
-# X-Env-Var-force_redownload-Required: n
-# X-Env-Var-force_redownload-Valid: bool
-# X-Env-Var-force_redownload-Set: immediate
-#
-# X-Env-Var-extract_format: auto
-# X-Env-Var-extract_format-Desc: Image compression format (auto-detect, xz, gz, zip, none)
-# X-Env-Var-extract_format-Required: n
-# X-Env-Var-extract_format-Valid: auto,xz,gz,zip,none
-# X-Env-Var-extract_format-Set: immediate
-#
-# X-Env-Var-target_device: rpi5
-# X-Env-Var-target_device-Desc: Target Raspberry Pi device (rpi3, rpi4, rpi5, rpi-cm4, rpi-cm5)
-# X-Env-Var-target_device-Required: n
-# X-Env-Var-target_device-Valid: rpi3,rpi4,rpi5,rpi-cm4,rpi-cm5,rpi-zero2
-# X-Env-Var-target_device-Set: immediate
 # METAEND
 ---
 # Raspberry Pi OS Base Image Layer
 #
-# This layer downloads and prepares official Raspberry Pi OS images
-# as a base for further customization with additional layers.
+# ============================================================================
+# IMPORTANT: Standard rpi-image-gen Pipeline Integration
+# ============================================================================
 #
-# Advantages over building from scratch:
-# - Faster (5-10 minutes vs 30-60 minutes)
-# - Official Raspberry Pi Foundation images
-# - Pre-configured and tested
-# - Regular security updates
-# - Easy to update to newer versions
+# This layer is a configuration marker for using pre-built Raspberry Pi OS
+# images with rpi-image-gen. It follows the standard pipeline architecture:
 #
-# Supported images:
-# - Raspberry Pi OS Lite (recommended)
-# - Raspberry Pi OS Desktop
-# - Raspberry Pi OS Full
-# - Legacy Bullseye/Bookworm releases
-#
-# Image sources:
-# - Official: https://www.raspberrypi.com/software/operating-systems/
-# - Downloads: https://downloads.raspberrypi.com/
-#
-# SHA256 verification:
-# - Direct checksum in raspios_base_image_sha256
-# - URL to checksum file in raspios_base_image_sha256_url
-# - Auto-download and verify (recommended)
+# Pipeline Flow:
+#   1. This layer exports configuration variables
+#   2. External script (apply-layers-to-base-image.sh) handles image download
+#   3. Additional layers are applied on top using standard rpi-image-gen
 #
 # Usage:
-#   layer:
-#     base: raspios-base
-#   raspios_base_image_url: https://...
-#   raspios_base_image_sha256_url: https://...
+#
+#   Method 1: With external script (RECOMMENDED)
+#     ./scripts/apply-layers-to-base-image.sh config.yaml
+#
+#   Method 2: Within standard build (configuration only)
+#     ./rpi-image-gen build -c config.yaml
+#     (This method only exports configuration, actual image handling is external)
+#
+# Why this approach?
+#   - mmdebstrap is designed for creating chroots from Debian packages
+#   - Pre-built images require different tooling (mount, tar, loopback)
+#   - Separating concerns: download/prepare vs layer application
+#   - Maintains compatibility with standard rpi-image-gen workflow
+#
+# Architecture:
+#   - Layer: Configuration and metadata (this file)
+#   - Script: Image download, verification, extraction
+#   - Pipeline: Standard layer application via mmdebstrap hooks
+#
+# See: https://manpages.debian.org/bullseye/mmdebstrap/mmdebstrap.1.en.html
+# See: ./scripts/apply-layers-to-base-image.sh
+# See: ./docs/RASPIOS_BASE_LAYER.md
+#
 
 mmdebstrap:
   mode: unshare
-  variant: custom
+  variant: extract
   
-  # Pre-hooks: Download and prepare base image
-  setup-hooks:
-    # Download SHA256 checksum if URL provided
-    - |
-      #!/bin/bash
-      set -e
-      
-      IMAGE_URL="${IGconf_raspios_base_image_url}"
-      IMAGE_SHA256="${IGconf_raspios_base_image_sha256:-}"
-      IMAGE_SHA256_URL="${IGconf_raspios_base_image_sha256_url:-}"
-      CACHE_DIR="${IGconf_raspios_base_cache_dir:-./cache}"
-      VERIFY="${IGconf_raspios_base_verify_checksum:-y}"
-      FORCE="${IGconf_raspios_base_force_redownload:-n}"
-      
-      if [ -z "$IMAGE_URL" ]; then
-        echo "ERROR: raspios_base_image_url is required"
-        exit 1
-      fi
-      
-      mkdir -p "$CACHE_DIR"
-      
-      FILENAME=$(basename "$IMAGE_URL")
-      CACHED_FILE="$CACHE_DIR/$FILENAME"
-      
-      echo "[raspios-base] Downloading base image..."
-      echo "[raspios-base] URL: $IMAGE_URL"
-      
-      # Download SHA256 if URL provided
-      if [ -n "$IMAGE_SHA256_URL" ] && [ -z "$IMAGE_SHA256" ]; then
-        echo "[raspios-base] Downloading SHA256 checksum..."
-        SHA256_FILE="$CACHE_DIR/$(basename "$IMAGE_SHA256_URL")"
-        
-        if [ "$FORCE" = "y" ] || [ ! -f "$SHA256_FILE" ]; then
-          if command -v curl &> /dev/null; then
-            curl -L -s -o "$SHA256_FILE" "$IMAGE_SHA256_URL"
-          elif command -v wget &> /dev/null; then
-            wget -q -O "$SHA256_FILE" "$IMAGE_SHA256_URL"
-          else
-            echo "ERROR: Neither curl nor wget found"
-            exit 1
-          fi
-        fi
-        
-        # Extract SHA256 from file
-        if [ -f "$SHA256_FILE" ]; then
-          # Try different formats
-          if grep -qE '^[a-fA-F0-9]{64}$' "$SHA256_FILE"; then
-            IMAGE_SHA256=$(cat "$SHA256_FILE")
-          elif grep -qE '^[a-fA-F0-9]{64}[[:space:]]' "$SHA256_FILE"; then
-            IMAGE_SHA256=$(grep "$FILENAME" "$SHA256_FILE" | awk '{print $1}' || head -1 "$SHA256_FILE" | awk '{print $1}')
-          elif grep -qE '[[:space:]]*[:=][[:space:]]*[a-fA-F0-9]{64}' "$SHA256_FILE"; then
-            IMAGE_SHA256=$(grep -oE '[a-fA-F0-9]{64}' "$SHA256_FILE" | head -1)
-          fi
-          
-          echo "[raspios-base] SHA256: ${IMAGE_SHA256:0:16}..."
-        fi
-      fi
-      
-      # Download image if needed
-      if [ "$FORCE" = "y" ] || [ ! -f "$CACHED_FILE" ]; then
-        echo "[raspios-base] Downloading image..."
-        if command -v curl &> /dev/null; then
-          curl -L -o "$CACHED_FILE" "$IMAGE_URL" --progress-bar
-        elif command -v wget &> /dev/null; then
-          wget -O "$CACHED_FILE" "$IMAGE_URL"
-        else
-          echo "ERROR: Neither curl nor wget found"
-          exit 1
-        fi
-        echo "[raspios-base] Download completed"
-      else
-        echo "[raspios-base] Using cached image: $CACHED_FILE"
-      fi
-      
-      # Verify SHA256 checksum
-      if [ "$VERIFY" = "y" ] && [ -n "$IMAGE_SHA256" ]; then
-        echo "[raspios-base] Verifying SHA256 checksum..."
-        ACTUAL_SHA256=$(sha256sum "$CACHED_FILE" | cut -d' ' -f1)
-        
-        if [ "$ACTUAL_SHA256" != "$IMAGE_SHA256" ]; then
-          echo "ERROR: SHA256 checksum mismatch!"
-          echo "  Expected: $IMAGE_SHA256"
-          echo "  Actual:   $ACTUAL_SHA256"
-          exit 1
-        fi
-        echo "[raspios-base] ✓ SHA256 verified"
-      elif [ "$VERIFY" = "y" ]; then
-        echo "WARN: SHA256 verification requested but no checksum provided"
-      fi
-      
-      # Extract image
-      EXTRACT_FORMAT="${IGconf_raspios_base_extract_format:-auto}"
-      EXTRACTED_FILE="${CACHED_FILE%.xz}"
-      EXTRACTED_FILE="${EXTRACTED_FILE%.gz}"
-      EXTRACTED_FILE="${EXTRACTED_FILE%.zip}"
-      
-      if [ -f "$EXTRACTED_FILE" ] && [ "$FORCE" != "y" ]; then
-        echo "[raspios-base] Using cached extracted image: $EXTRACTED_FILE"
-      else
-        echo "[raspios-base] Extracting image..."
-        
-        case "$CACHED_FILE" in
-          *.xz)
-            xz -d -k -c "$CACHED_FILE" > "$EXTRACTED_FILE"
-            ;;
-          *.gz)
-            gunzip -c "$CACHED_FILE" > "$EXTRACTED_FILE"
-            ;;
-          *.zip)
-            unzip -p "$CACHED_FILE" > "$EXTRACTED_FILE"
-            ;;
-          *)
-            # No compression or unknown format
-            if [ "$EXTRACT_FORMAT" = "none" ]; then
-              EXTRACTED_FILE="$CACHED_FILE"
-            else
-              echo "ERROR: Unknown compression format: $CACHED_FILE"
-              exit 1
-            fi
-            ;;
-        esac
-        
-        echo "[raspios-base] Extraction completed"
-      fi
-      
-      # Export path for next hooks
-      echo "export RASPIOS_BASE_IMAGE='$EXTRACTED_FILE'" > /tmp/raspios-base-env.sh
-      
-      echo "[raspios-base] Base image prepared: $EXTRACTED_FILE"
-      
-      # Show image info
-      SIZE=$(stat -c%s "$EXTRACTED_FILE" 2>/dev/null || stat -f%z "$EXTRACTED_FILE" 2>/dev/null)
-      SIZE_MB=$((SIZE / 1024 / 1024))
-      echo "[raspios-base] Image size: ${SIZE_MB} MB"
-      
-      # File type check
-      FILE_TYPE=$(file "$EXTRACTED_FILE" 2>/dev/null || echo "unknown")
-      echo "[raspios-base] Image type: $FILE_TYPE"
+  # This layer exports configuration for external tooling.
+  # It does NOT perform image download/extraction itself.
+  # Use apply-layers-to-base-image.sh for complete workflow.
   
-  # Custom hooks can be added here for image customization
   customize-hooks:
     - |
       #!/bin/bash
       set -e
       
-      # Load base image path
-      if [ -f /tmp/raspios-base-env.sh ]; then
-        source /tmp/raspios-base-env.sh
-      fi
+      echo "[raspios-base] =============================================="
+      echo "[raspios-base] Raspberry Pi OS Base Image Layer"
+      echo "[raspios-base] =============================================="
+      echo "[raspios-base]"
+      echo "[raspios-base] This layer provides configuration for using"
+      echo "[raspios-base] pre-built Raspberry Pi OS images as base."
+      echo "[raspios-base]"
+      echo "[raspios-base] Configuration:"
+      echo "[raspios-base]   Image URL: ${IGconf_raspios_base_image_url:-not configured}"
+      echo "[raspios-base]   SHA256 URL: ${IGconf_raspios_base_image_sha256_url:-not configured}"
+      echo "[raspios-base]   Cache Dir: ${IGconf_raspios_base_cache_dir:-./cache}"
+      echo "[raspios-base]   Verify: ${IGconf_raspios_base_verify_checksum:-y}"
+      echo "[raspios-base]"
       
-      echo "[raspios-base] Base image layer completed"
-      echo "[raspios-base] Image ready for additional layers"
+      # Export configuration to /etc/raspios-base/
+      mkdir -p "$1/etc/raspios-base"
       
-      # Export for next layers
-      if [ -n "$RASPIOS_BASE_IMAGE" ]; then
-        echo "export RASPIOS_BASE_IMAGE='$RASPIOS_BASE_IMAGE'" >> $1/etc/environment
-      fi
+      cat > "$1/etc/raspios-base/config" << EOF
+# Raspberry Pi OS Base Image Layer Configuration
+# Generated by rpi-image-gen
+# $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
+RASPIOS_BASE_IMAGE_URL="${IGconf_raspios_base_image_url:-}"
+RASPIOS_BASE_IMAGE_SHA256="${IGconf_raspios_base_image_sha256:-}"
+RASPIOS_BASE_IMAGE_SHA256_URL="${IGconf_raspios_base_image_sha256_url:-}"
+RASPIOS_BASE_CACHE_DIR="${IGconf_raspios_base_cache_dir:-./cache}"
+RASPIOS_BASE_VERIFY_CHECKSUM="${IGconf_raspios_base_verify_checksum:-y}"
+EOF
+      
+      echo "[raspios-base] Configuration exported to:"
+      echo "[raspios-base]   /etc/raspios-base/config"
+      echo "[raspios-base]"
+      
+      # Check if running in external script context
+      if [ -n "${RASPIOS_BASE_EXTERNAL_SCRIPT:-}" ]; then
+        echo "[raspios-base] Running in external script context"
+        echo "[raspios-base] Image preparation handled externally"
+      else
+        echo "[raspios-base] =============================================="
+        echo "[raspios-base] NOTICE: Configuration Layer Only"
+        echo "[raspios-base] =============================================="
+        echo "[raspios-base]"
+        echo "[raspios-base] This layer exports configuration but does NOT"
+        echo "[raspios-base] download or prepare Raspberry Pi OS images."
+        echo "[raspios-base]"
+        echo "[raspios-base] To use pre-built images, run:"
+        echo "[raspios-base]   ./scripts/apply-layers-to-base-image.sh config.yaml"
+        echo "[raspios-base]"
+        echo "[raspios-base] For standard rpi-image-gen builds from packages,"
+        echo "[raspios-base] use a suite layer like 'bookworm-minbase' instead."
+        echo "[raspios-base]"
+        echo "[raspios-base] Documentation:"
+        echo "[raspios-base]   - docs/RASPIOS_BASE_LAYER.md"
+        echo "[raspios-base]   - layer/base-image/raspios/README.md"
+        echo "[raspios-base]"
+      fi
+      
+      echo "[raspios-base] =============================================="
+      echo "[raspios-base] Layer processing complete"
+      echo "[raspios-base] =============================================="
