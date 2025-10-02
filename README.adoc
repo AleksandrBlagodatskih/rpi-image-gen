@@ -30,17 +30,35 @@ To install via other means, for example using https://github.com/raspberrypi/usb
 
 The rpi-image-gen link:./docs/index.adoc[technical documentation] and link:./examples[examples directory] provide customisation and usage guidance.
 
+== Raspberry Pi OS Trixie Support
+
+rpi-image-gen now supports using **official Raspberry Pi OS Trixie** images as a base instead of building from scratch:
+
+* **Faster builds** - Apply security layers to pre-built official images (5-10 minutes vs 30-60 minutes)
+* **Official base** - Based on Debian Trixie with Linux kernel 6.12.47
+* **Security hardening** - Apply comprehensive security suite on top of official images
+* **RAID support** - Combine official images with RAID1 configuration
+* **F2FS support** - Flash-optimized filesystem for SD cards and SSDs
+
+Quick start with Trixie:
+----
+./rpi-image-gen build -c examples/trixie-raid-security-simple.yaml
+----
+
+See link:./docs/TRIXIE_BASE_IMAGE.md[Trixie Base Image documentation] for details.
+
 == RAID External Layer
 
 The RAID External layer provides enterprise-grade RAID functionality for Raspberry Pi systems with external drives:
 
-* **Multiple RAID Levels**: RAID0, RAID1, RAID5, RAID10 with automatic validation
+* **Multiple RAID Levels**: RAID1 with automatic validation
 * **Enterprise Security**: LUKS2 encryption by default with comprehensive provisioning
-* **Filesystem Support**: ext4 and btrfs with advanced features
+* **Filesystem Support**: ext4, btrfs, and **f2fs** (Flash-Friendly File System)
 * **Production Ready**: Full PMAP 1.2.0 support with slotted A/B updates
 * **Enterprise Integration**: Automotive, Industrial, Medical, and Infrastructure configurations
+* **F2FS optimization** - Extends SD card lifespan by 30-50% with wear leveling and TRIM support
 
-Example configurations are available in link:./test-raid-*.yaml[test files] and link:./examples/enterprise/[enterprise examples]. Comprehensive documentation in link:./image/mbr/raid1-external/README.md[RAID1 External README].
+Example configurations are available in link:./test-raid-*.yaml[test files] and link:./examples/enterprise/[enterprise examples]. Comprehensive documentation in link:./image/mbr/mdraid1-external-root/README.md[RAID1 External README].
 
 == Why use this?
 

@@ -1,0 +1,74 @@
+# Example configuration for Cockpit Web Interface
+#
+# Cockpit provides a web-based system management interface
+# for monitoring and administering Linux systems.
+
+---
+# Basic Cockpit configuration
+layers:
+  - cockpit
+
+variables:
+  # Enable Cockpit service
+  cockpit_enable: y
+  
+  # Default port (9090)
+  cockpit_port: 9090
+  
+  # Enable SSL/TLS
+  cockpit_ssl: y
+  
+  # Auto-start on boot
+  cockpit_autostart: y
+
+---
+# Cockpit with extended modules
+layers:
+  - cockpit
+  - openssh-server
+
+variables:
+  cockpit_enable: y
+  cockpit_port: 9090
+  cockpit_ssl: y
+  
+  # Enable additional modules
+  cockpit_modules:
+    - machines        # Virtual machine management
+    - networkmanager  # Network configuration
+    - storaged        # Storage management
+    - podman          # Container management
+  
+  # SSH configuration for remote access
+  openssh_enable: y
+  openssh_port: 22
+  openssh_permit_root: n
+
+---
+# Enterprise Cockpit with monitoring
+layers:
+  - cockpit
+  - openssh-server
+
+variables:
+  cockpit_enable: y
+  cockpit_port: 9090
+  cockpit_ssl: y
+  cockpit_autostart: y
+  
+  # Full module set for enterprise
+  cockpit_modules:
+    - machines
+    - networkmanager
+    - storaged
+    - podman
+    - packagekit
+    - selinux
+  
+  # Secure SSH configuration
+  openssh_enable: y
+  openssh_port: 22
+  openssh_permit_root: n
+  openssh_password_auth: n
+  openssh_pubkey_auth: y
+

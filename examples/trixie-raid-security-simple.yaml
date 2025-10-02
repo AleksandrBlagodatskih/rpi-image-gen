@@ -1,0 +1,33 @@
+# Simple configuration for Raspberry Pi OS Trixie with RAID1 and basic security
+# Minimal setup using official Raspberry Pi OS Trixie as base
+
+device:
+  layer: rpi5
+
+image:
+  layer: mdraid1-external-root
+  name: trixie-raid1-simple
+  
+  # Use official Raspberry Pi OS Trixie Lite
+  base_image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
+  
+  # SHA256 verification (recommended for security)
+  base_image_sha256_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz.sha256
+  
+  # RAID1 with f2fs (optimal for SD cards)
+  mdraid1_external_root_rootfs_type: f2fs
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
+  mdraid1_external_root_encryption_enabled: y
+
+# Apply security suite
+layers:
+  - security-suite
+
+# Basic security settings
+security:
+  apparmor_enabled: y
+  fail2ban_enabled: y
+  ufw_enabled: y
+  unattended_upgrades_enabled: y
+

@@ -16,7 +16,7 @@ case $LABEL in
       # genimage creates the member disks with proper RAID metadata
 
       # Determine root device based on encryption flag
-      if [[ "${IGconf_raid1_external_encryption_enabled:-n}" == "y" ]]; then
+      if [[ "${IGconf_mdraid1_external_root_encryption_enabled:-n}" == "y" ]]; then
          echo "Setting up secure key management..."
          manage_encryption_key "$IMAGEMOUNTPATH/boot/firmware"
 
@@ -35,7 +35,7 @@ EOF
       fi
 
       # Setup fstab with the correct root device
-      case $IGconf_raid1_external_rootfs_type in
+      case $IGconf_mdraid1_external_root_rootfs_type in
          ext4)
             cat << EOF > $IMAGEMOUNTPATH/etc/fstab
 ${ROOT_DEVICE} /               ext4 rw,relatime,errors=remount-ro,commit=30 0 1
@@ -44,6 +44,11 @@ EOF
          btrfs)
             cat << EOF > $IMAGEMOUNTPATH/etc/fstab
 ${ROOT_DEVICE} /               btrfs defaults 0 0
+EOF
+            ;;
+         f2fs)
+            cat << EOF > $IMAGEMOUNTPATH/etc/fstab
+${ROOT_DEVICE} /               f2fs rw,relatime,lazytime,background_gc=on,discard,no_heap 0 0
 EOF
             ;;
          *)
@@ -59,7 +64,7 @@ EOF
 
       # Create RAID monitoring configuration (genimage mdraid handles array creation)
       cat << EOF > $IMAGEMOUNTPATH/etc/default/mdadm
-# mdadm defaults for RAID$IGconf_raid1_external_raid_level (genimage mdraid)
+# mdadm defaults for RAID$IGconf_mdraid1_external_root_raid_level (genimage mdraid)
 INITRDSTART='all'
 AUTOSTART=true
 AUTOCHECK=true
@@ -69,9 +74,9 @@ EOF
 
       # Add RAID devices to fstab for monitoring
       # Read UUIDs from img_uuids file
-      if [[ -f "${IGconf_raid1_external_assetdir}/img_uuids" ]]; then
+      if [[ -f "${IGconf_mdraid1_external_root_assetdir}/img_uuids" ]]; then
          for i in 1 2; do
-            ext_uuid=$(grep "^EXT${i}_UUID=" "${IGconf_raid1_external_assetdir}/img_uuids" | cut -d= -f2)
+            ext_uuid=$(grep "^EXT${i}_UUID=" "${IGconf_mdraid1_external_root_assetdir}/img_uuids" | cut -d= -f2)
             if [[ -n "$ext_uuid" ]]; then
                echo "# RAID device $i" >> $IMAGEMOUNTPATH/etc/fstab
                echo "UUID=$ext_uuid none auto 0 0" >> $IMAGEMOUNTPATH/etc/fstab
@@ -87,7 +92,7 @@ EOF
    BOOT)
       # Boot partition setup - update cmdline.txt for RAID boot
       # Use the same ROOT_DEVICE variable determined in ROOT section
-      if [[ "${IGconf_raid1_external_encryption_enabled:-n}" == "y" ]]; then
+      if [[ "${IGconf_mdraid1_external_root_encryption_enabled:-n}" == "y" ]]; then
          sed -i "s|root=\([^ ]*\)|root=/dev/mapper/cryptroot|" $IMAGEMOUNTPATH/cmdline.txt
          echo "Boot configured for encrypted RAID - using /dev/mapper/cryptroot"
       else

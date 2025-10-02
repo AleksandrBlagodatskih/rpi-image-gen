@@ -1,0 +1,96 @@
+# Example configuration for Raspberry Pi 5 Server
+#
+# Optimizes Raspberry Pi 5 for server workloads with
+# performance, thermal, and power management settings.
+
+---
+# Basic balanced server configuration
+layers:
+  - rpi5-server-config
+
+variables:
+  # Enable RPI5 server optimizations
+  rpi5_server_enable: y
+  
+  # Performance mode (performance, balanced, efficiency)
+  rpi5_server_mode: balanced
+  
+  # Cooling configuration (passive, active)
+  rpi5_server_cooling: active
+  
+  # Overclocking (not recommended for servers)
+  rpi5_server_overclock: n
+  
+  # Enable thermal monitoring
+  rpi5_server_thermal_monitor: y
+
+---
+# High-performance server configuration
+layers:
+  - rpi5-server-config
+
+variables:
+  rpi5_server_enable: y
+  
+  # Maximum performance mode
+  rpi5_server_mode: performance
+  
+  # Active cooling required for performance mode
+  rpi5_server_cooling: active
+  
+  # Moderate overclocking for performance
+  rpi5_server_overclock: y
+  rpi5_server_overclock_level: moderate  # moderate, high
+  
+  # Enhanced thermal monitoring
+  rpi5_server_thermal_monitor: y
+  rpi5_server_thermal_throttle: 75  # °C
+  
+  # Power management
+  rpi5_server_power_save: n
+
+---
+# Energy-efficient server configuration
+layers:
+  - rpi5-server-config
+
+variables:
+  rpi5_server_enable: y
+  
+  # Efficiency mode for lower power consumption
+  rpi5_server_mode: efficiency
+  
+  # Passive cooling sufficient for efficiency mode
+  rpi5_server_cooling: passive
+  
+  # No overclocking
+  rpi5_server_overclock: n
+  
+  # Enable power saving features
+  rpi5_server_power_save: y
+  
+  # Thermal monitoring
+  rpi5_server_thermal_monitor: y
+
+---
+# Enterprise server with monitoring
+layers:
+  - rpi5-server-config
+
+variables:
+  rpi5_server_enable: y
+  rpi5_server_mode: balanced
+  rpi5_server_cooling: active
+  rpi5_server_overclock: n
+  
+  # Enhanced monitoring and logging
+  rpi5_server_thermal_monitor: y
+  rpi5_server_performance_monitor: y
+  rpi5_server_logging: y
+  
+  # Watchdog for automatic recovery
+  rpi5_server_watchdog: y
+  
+  # Automatic thermal management
+  rpi5_server_auto_thermal_adjust: y
+

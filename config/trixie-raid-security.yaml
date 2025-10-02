@@ -1,0 +1,114 @@
+# Configuration for Raspberry Pi OS Trixie with RAID1 and Security Suite
+# Uses pre-built Raspberry Pi OS Trixie image as base instead of building from scratch
+# Applies security hardening layers on top of official Raspberry Pi OS
+
+# Device configuration
+device:
+  layer: rpi5
+  # For older models, use: rpi4, rpi3, rpi-cm4, etc.
+
+# Image configuration with RAID1 support
+image:
+  layer: mdraid1-external-root
+  name: trixie-raid1-security
+  
+  # Base image configuration
+  # Use official Raspberry Pi OS Trixie Lite as base
+  base_image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
+  
+  # SHA256 verification (choose one method):
+  # Method 1: Direct SHA256 checksum
+  base_image_sha256: ""  # e.g. "a1b2c3d4e5f6..."
+  
+  # Method 2: URL to SHA256 file (supports multiple formats)
+  base_image_sha256_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz.sha256
+  
+  # Supported SHA256 file formats:
+  # - Single line: "a1b2c3d4e5f6..."
+  # - With filename: "a1b2c3d4e5f6  filename.img.xz"
+  # - Multiple files: one checksum per line
+  # - JSON format: {"sha256": "a1b2c3d4e5f6..."}
+  
+  # RAID configuration
+  mdraid1_external_root_rootfs_type: f2fs  # Flash-optimized filesystem
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
+  mdraid1_external_root_encryption_enabled: y  # Enable LUKS2 encryption
+  mdraid1_external_root_sector_size: 4096
+  
+  # Performance optimization
+  mdraid1_external_root_apt_cache: y
+  mdraid1_external_root_ccache: y
+  mdraid1_external_root_ccache_size: 10G
+  mdraid1_external_root_parallel_jobs: 0  # Auto-detect
+  mdraid1_external_root_image_size_optimization: y
+  mdraid1_external_root_compression: zstd
+
+# Layer configuration - apply security suite on top of base image
+layers:
+  # Security Suite - comprehensive security monitoring
+  - security-suite
+    # Enables: AppArmor, auditd, Fail2Ban, PAM hardening, etc.
+  
+  # Individual security components (alternative to security-suite)
+  # Uncomment to use individual components instead:
+  # - apparmor              # Mandatory Access Control
+  # - auditd                # System auditing
+  # - fail2ban              # Intrusion prevention
+  # - pam-hardening         # PAM security policies
+  # - password-policies     # Strong password requirements
+  # - sudo-logging          # Sudo command logging
+  # - sysctl-hardening      # Kernel security parameters
+  # - ufw                   # Uncomplicated Firewall
+  # - unattended-upgrades   # Automatic security updates
+
+# Security configuration
+security:
+  # AppArmor configuration
+  apparmor_enabled: y
+  apparmor_enforce_mode: enforce
+  
+  # Auditd configuration
+  auditd_enabled: y
+  auditd_log_format: ENRICHED
+  auditd_max_log_file: 100
+  
+  # Fail2Ban configuration
+  fail2ban_enabled: y
+  fail2ban_bantime: 3600
+  fail2ban_maxretry: 3
+  
+  # Firewall configuration
+  ufw_enabled: y
+  ufw_default_policy: deny
+  ufw_allow_ssh: y
+  ufw_ssh_port: 22
+  
+  # Automatic updates
+  unattended_upgrades_enabled: y
+  unattended_upgrades_auto_reboot: n
+  
+  # Password policies
+  password_min_length: 12
+  password_require_uppercase: y
+  password_require_lowercase: y
+  password_require_digit: y
+  password_require_special: y
+
+# Network configuration (preserve from base image)
+network:
+  preserve_base_config: y
+  hostname: rpi-secure-raid
+
+# User configuration (preserve from base image)
+users:
+  preserve_base_users: y
+  # Force password change on first login
+  force_password_change: y
+
+# System configuration
+system:
+  timezone: UTC
+  locale: en_US.UTF-8
+  keyboard_layout: us
+

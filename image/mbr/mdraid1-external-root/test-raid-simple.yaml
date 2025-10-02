@@ -3,10 +3,10 @@ device:
   layer: rpi5
 
 image:
-  layer: raid-external
+  layer: mdraid1-external-root
   name: test-raid1
-  raid_external_raid_level: RAID1
-  raid_external_raid_devices: 2
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
 
 layer:
   base: bookworm-minbase

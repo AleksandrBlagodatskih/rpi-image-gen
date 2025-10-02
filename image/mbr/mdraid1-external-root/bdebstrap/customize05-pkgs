@@ -7,6 +7,7 @@ pkgs=(dosfstools mdadm)
 case $IGconf_image_rootfs_type in
    ext4)  pkgs+=(e2fsprogs) ;;
    btrfs) pkgs+=(btrfs-progs) ;;
+   f2fs)  pkgs+=(f2fs-tools) ;;
 esac
 
 chroot $1 apt install -y "${pkgs[@]}"

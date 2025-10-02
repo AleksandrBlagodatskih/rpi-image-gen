@@ -66,6 +66,13 @@ check_filesystem_integrity() {
                 return 1
             fi
             ;;
+        f2fs)
+            # Check f2fs filesystem
+            if ! fsck.f2fs -a "$device" >/dev/null 2>&1; then
+                echo "ERROR: f2fs filesystem check failed on $device"
+                return 1
+            fi
+            ;;
         *)
             echo "Warning: Unsupported filesystem type for integrity check: $fs_type"
             ;;
@@ -121,8 +128,8 @@ check_encryption_integrity() {
     fi
 
     # Check if encryption key is available
-    if [[ -n "$IGconf_raid_external_key_file" ]] && [[ -f "$IGconf_raid_external_key_file" ]]; then
-        if ! cryptsetup luksOpen --test-passphrase "$encrypted_device" --key-file "$IGconf_raid_external_key_file" >/dev/null 2>&1; then
+    if [[ -n "$IGconf_mdraid1_external_root_key_file" ]] && [[ -f "$IGconf_mdraid1_external_root_key_file" ]]; then
+        if ! cryptsetup luksOpen --test-passphrase "$encrypted_device" --key-file "$IGconf_mdraid1_external_root_key_file" >/dev/null 2>&1; then
             echo "ERROR: Encryption key test failed on $encrypted_device"
             return 1
         fi

@@ -14,7 +14,7 @@ setup_build_environment() {
     echo "Setting up optimized build environment..."
 
     # Set up APT caching if enabled
-    if [[ "$IGconf_raid_external_apt_cache" == "y" ]]; then
+    if [[ "$IGconf_mdraid1_external_root_apt_cache" == "y" ]]; then
         export APT_CACHE_DIR="${IGconf_sys_workroot}/apt-cache"
         mkdir -p "$APT_CACHE_DIR"
 
@@ -25,23 +25,23 @@ setup_build_environment() {
     fi
 
     # Set up ccache if enabled
-    if [[ "$IGconf_raid_external_ccache" == "y" ]]; then
+    if [[ "$IGconf_mdraid1_external_root_ccache" == "y" ]]; then
         export CCACHE_DIR="${IGconf_sys_workroot}/ccache"
-        export CCACHE_MAXSIZE="$IGconf_raid_external_ccache_size"
+        export CCACHE_MAXSIZE="$IGconf_mdraid1_external_root_ccache_size"
         mkdir -p "$CCACHE_DIR"
 
         # Configure ccache
-        ccache --set-config=max_size="$IGconf_raid_external_ccache_size"
+        ccache --set-config=max_size="$IGconf_mdraid1_external_root_ccache_size"
         ccache --set-config=compression=true
         ccache --set-config=compression_level=6
 
-        echo "ccache configured at: $CCACHE_DIR (max size: $IGconf_raid_external_ccache_size)"
+        echo "ccache configured at: $CCACHE_DIR (max size: $IGconf_mdraid1_external_root_ccache_size)"
     fi
 
     # Set up parallel jobs
-    if [[ "$IGconf_raid_external_parallel_jobs" -gt 0 ]]; then
-        export PARALLEL_JOBS="$IGconf_raid_external_parallel_jobs"
-        echo "Parallel jobs set to: $IGconf_raid_external_parallel_jobs"
+    if [[ "$IGconf_mdraid1_external_root_parallel_jobs" -gt 0 ]]; then
+        export PARALLEL_JOBS="$IGconf_mdraid1_external_root_parallel_jobs"
+        echo "Parallel jobs set to: $IGconf_mdraid1_external_root_parallel_jobs"
     else
         # Auto-detect CPU count
         export PARALLEL_JOBS=$(nproc 2>/dev/null || echo "4")
@@ -70,7 +70,7 @@ optimize_image_size() {
     fi
 
     # Remove documentation files (optional, for minimal images)
-    if [[ "$IGconf_raid_external_image_size_optimization" == "y" ]]; then
+    if [[ "$IGconf_mdraid1_external_root_image_size_optimization" == "y" ]]; then
         find "$target_dir/usr/share/doc" -type f -delete 2>/dev/null || true
         find "$target_dir/usr/share/man" -type f -delete 2>/dev/null || true
         find "$target_dir/usr/share/info" -type f -delete 2>/dev/null || true
@@ -124,11 +124,11 @@ perform_performance_optimization() {
 
     # Display optimization summary
     echo "Performance optimization completed:"
-    echo "  - APT cache: ${IGconf_raid_external_apt_cache:-disabled}"
-    echo "  - ccache: ${IGconf_raid_external_ccache:-disabled}"
+    echo "  - APT cache: ${IGconf_mdraid1_external_root_apt_cache:-disabled}"
+    echo "  - ccache: ${IGconf_mdraid1_external_root_ccache:-disabled}"
     echo "  - Parallel jobs: ${PARALLEL_JOBS:-auto}"
-    echo "  - Image size optimization: ${IGconf_raid_external_image_size_optimization:-disabled}"
-    echo "  - Compression: ${IGconf_raid_external_compression:-zstd}"
+    echo "  - Image size optimization: ${IGconf_mdraid1_external_root_image_size_optimization:-disabled}"
+    echo "  - Compression: ${IGconf_mdraid1_external_root_compression:-zstd}"
 }
 
 # ============================================================================

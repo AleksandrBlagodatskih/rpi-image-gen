@@ -1,0 +1,138 @@
+# Enterprise configuration for Raspberry Pi OS Trixie with RAID1 and full security hardening
+# Production-ready setup with comprehensive monitoring and compliance
+
+device:
+  layer: rpi-cm5
+  variant: 8G
+
+image:
+  layer: mdraid1-external-root
+  name: trixie-enterprise
+  
+  # Official Raspberry Pi OS Trixie Lite base
+  base_image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
+  
+  # SHA256 verification (mandatory for enterprise security)
+  base_image_sha256_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz.sha256
+  # Or use direct checksum:
+  # base_image_sha256: "put_actual_sha256_here"
+  
+  # Enterprise RAID configuration
+  mdraid1_external_root_rootfs_type: f2fs
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
+  mdraid1_external_root_encryption_enabled: y
+  mdraid1_external_root_sector_size: 4096
+  mdraid1_external_root_key_method: tpm  # Use TPM for key storage (when available)
+  
+  # Performance optimization for enterprise
+  mdraid1_external_root_apt_cache: y
+  mdraid1_external_root_ccache: y
+  mdraid1_external_root_ccache_size: 20G
+  mdraid1_external_root_parallel_jobs: 8
+  mdraid1_external_root_image_size_optimization: y
+  mdraid1_external_root_compression: zstd
+
+# Full security suite with additional layers
+layers:
+  - security-suite      # Comprehensive security monitoring
+  - cockpit             # Web-based system management
+  - distrobox           # Containerized environments
+
+# Enterprise security configuration
+security:
+  # AppArmor - Mandatory Access Control
+  apparmor_enabled: y
+  apparmor_enforce_mode: enforce
+  apparmor_custom_profiles: y
+  
+  # Auditd - System auditing and compliance
+  auditd_enabled: y
+  auditd_log_format: ENRICHED
+  auditd_max_log_file: 500
+  auditd_num_logs: 10
+  auditd_authentication_monitoring: y
+  auditd_file_access_monitoring: y
+  auditd_privilege_monitoring: y
+  auditd_network_monitoring: y
+  auditd_compliance_monitoring: y
+  
+  # Fail2Ban - Intrusion prevention
+  fail2ban_enabled: y
+  fail2ban_bantime: 7200
+  fail2ban_findtime: 600
+  fail2ban_maxretry: 3
+  fail2ban_destemail: security@example.com
+  fail2ban_sendername: "RPi Security"
+  fail2ban_action: "%(action_mwl)s"
+  
+  # Firewall - Strict access control
+  ufw_enabled: y
+  ufw_default_policy: deny
+  ufw_allow_ssh: y
+  ufw_ssh_port: 2222  # Non-standard SSH port
+  ufw_rate_limit_ssh: y
+  
+  # Automatic security updates
+  unattended_upgrades_enabled: y
+  unattended_upgrades_auto_reboot: y
+  unattended_upgrades_auto_reboot_time: "03:00"
+  unattended_upgrades_mail: security@example.com
+  
+  # Strong password policies
+  password_min_length: 16
+  password_require_uppercase: y
+  password_require_lowercase: y
+  password_require_digit: y
+  password_require_special: y
+  password_max_age: 90
+  password_min_age: 1
+  password_warn_age: 14
+  password_history: 10
+  
+  # PAM hardening
+  pam_faillock_enabled: y
+  pam_faillock_attempts: 3
+  pam_faillock_unlock_time: 1800
+  pam_pwquality_enabled: y
+  
+  # Sudo logging
+  sudo_log_enabled: y
+  sudo_log_input: y
+  sudo_log_output: y
+  sudo_log_path: /var/log/sudo
+  
+  # Sysctl hardening
+  sysctl_hardening_enabled: y
+  sysctl_ipv4_forwarding: n
+  sysctl_icmp_echo_ignore: y
+  sysctl_tcp_syncookies: y
+
+# Network configuration
+network:
+  preserve_base_config: y
+  hostname: rpi-enterprise-raid
+  # Add static IP if needed
+  # static_ip: 192.168.1.100
+  # gateway: 192.168.1.1
+  # dns_servers: 1.1.1.1,8.8.8.8
+
+# Monitoring and management
+monitoring:
+  # Cockpit web interface on port 9090
+  cockpit_enabled: y
+  cockpit_ssl: y
+  cockpit_port: 9090
+
+# Compliance
+compliance:
+  # Generate SBOM for compliance
+  generate_sbom: y
+  # Scan for CVEs
+  scan_vulnerabilities: y
+  # Compliance frameworks
+  cis_benchmark: y
+  pci_dss: y
+  hipaa: y
+  gdpr: y
+

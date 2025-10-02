@@ -14,24 +14,24 @@ genimg_in=$2
 echo "Validating RAID requirements..."
 
 # Validate required variables are set
-if [[ -z "$IGconf_raid1_external_raid_devices" ]]; then
-    echo "ERROR: raid1_external_raid_devices variable is not set"
+if [[ -z "$IGconf_mdraid1_external_root_raid_devices" ]]; then
+    echo "ERROR: mdraid1_external_root_raid_devices variable is not set"
     exit 1
 fi
 
-if [[ -z "$IGconf_raid1_external_raid_level" ]]; then
-    echo "ERROR: raid1_external_raid_level variable is not set"
+if [[ -z "$IGconf_mdraid1_external_root_raid_level" ]]; then
+    echo "ERROR: mdraid1_external_root_raid_level variable is not set"
     exit 1
 fi
 
-if [[ -z "$IGconf_raid1_external_rootfs_type" ]]; then
-    echo "ERROR: raid1_external_rootfs_type variable is not set"
+if [[ -z "$IGconf_mdraid1_external_root_rootfs_type" ]]; then
+    echo "ERROR: mdraid1_external_root_rootfs_type variable is not set"
     exit 1
 fi
 
 # Check RAID1 requirements
-raid_devices="$IGconf_raid1_external_raid_devices"
-raid_level="$IGconf_raid1_external_raid_level"
+raid_devices="$IGconf_mdraid1_external_root_raid_devices"
+raid_level="$IGconf_mdraid1_external_root_raid_level"
 
 if [[ "$raid_devices" -ne 2 ]]; then
     echo "ERROR: RAID1 requires exactly 2 devices, got $raid_devices"
@@ -39,12 +39,12 @@ if [[ "$raid_devices" -ne 2 ]]; then
 fi
 
 # Check filesystem support
-case "$IGconf_raid1_external_rootfs_type" in
-    ext4|btrfs)
-        echo "Filesystem $IGconf_raid1_external_rootfs_type is supported"
+case "$IGconf_mdraid1_external_root_rootfs_type" in
+    ext4|btrfs|f2fs)
+        echo "Filesystem $IGconf_mdraid1_external_root_rootfs_type is supported"
         ;;
     *)
-        echo "ERROR: Unsupported filesystem $IGconf_raid1_external_rootfs_type"
+        echo "ERROR: Unsupported filesystem $IGconf_mdraid1_external_root_rootfs_type"
         exit 1
         ;;
 esac
@@ -91,13 +91,13 @@ for var in EXT1_UUID EXT1_LABEL EXT2_UUID EXT2_LABEL; do
 done
 
 # Write genimage template
-cat genimage.cfg.in.$IGconf_raid1_external_rootfs_type | sed \
-   -e "s|<IMAGE_DIR>|$IGconf_raid1_external_assetdir|g" \
+cat genimage.cfg.in.$IGconf_mdraid1_external_root_rootfs_type | sed \
+   -e "s|<IMAGE_DIR>|$IGconf_mdraid1_external_root_assetdir|g" \
    -e "s|<IMAGE_NAME>|$IGconf_image_name|g" \
    -e "s|<IMAGE_SUFFIX>|$IGconf_image_suffix|g" \
-   -e "s|<FW_SIZE>|$IGconf_raid1_external_boot_part_size|g" \
-   -e "s|<ROOT_SIZE>|$IGconf_raid1_external_root_part_size|g" \
-   -e "s|<SECTOR_SIZE>|$IGconf_raid1_external_sector_size|g" \
+   -e "s|<FW_SIZE>|$IGconf_mdraid1_external_root_boot_part_size|g" \
+   -e "s|<ROOT_SIZE>|$IGconf_mdraid1_external_root_root_part_size|g" \
+   -e "s|<SECTOR_SIZE>|$IGconf_mdraid1_external_root_sector_size|g" \
    -e "s|<SETUP_SCRIPT>|'$(readlink -ef setup.sh)'|g" \
    -e "s|<MKE2FS_CONFIG>|'$(readlink -ef mke2fs.conf)'|g" \
    -e "s|<BOOT_LABEL>|$BOOT_LABEL|g" \
@@ -109,14 +109,14 @@ cat genimage.cfg.in.$IGconf_raid1_external_rootfs_type | sed \
 
 
 # Install provision map and set UUIDs
-if igconf isset raid1_external_pmap ; then
-   cp ./device/provisionmap-${IGconf_raid1_external_pmap}.json ${IGconf_raid1_external_assetdir}/provisionmap.json
+if igconf isset mdraid1_external_root_pmap ; then
+   cp ./device/provisionmap-${IGconf_mdraid1_external_root_pmap}.json ${IGconf_mdraid1_external_root_assetdir}/provisionmap.json
 
    # Replace basic variables
    sed -i \
       -e "s|<CRYPT_UUID>|$CRYPT_UUID|g" \
-      -e "s|<RAID_LEVEL>|$IGconf_raid1_external_raid_level|g" \
-      -e "s|<RAID_DEVICES>|$IGconf_raid1_external_raid_devices|g" ${IGconf_raid1_external_assetdir}/provisionmap.json
+      -e "s|<RAID_LEVEL>|$IGconf_mdraid1_external_root_raid_level|g" \
+      -e "s|<RAID_DEVICES>|$IGconf_mdraid1_external_root_raid_devices|g" ${IGconf_mdraid1_external_root_assetdir}/provisionmap.json
 
    # Generate external devices for RAID1 (2 devices)
    external_devices_json=", \"external1\": {\"partitions\": [{\"image\": \"raid1-disk1\"}]}, \"external2\": {\"partitions\": [{\"image\": \"raid1-disk2\"}]}"
@@ -124,33 +124,33 @@ if igconf isset raid1_external_pmap ; then
    encrypted_raid_partitions_json=", {\"image\": \"raid1-disk1\"}, {\"image\": \"raid1-disk2\"}"
 
    # Insert external devices into provision map
-   sed -i "s|\"sdcard\": {\"partitions\": \[{\"image\": \"boot\"}\]}|\"sdcard\": {\"partitions\": [{\"image\": \"boot\"}]${external_devices_json:+, $external_devices_json}}|" "${IGconf_raid1_external_assetdir}/provisionmap.json"
+   sed -i "s|\"sdcard\": {\"partitions\": \[{\"image\": \"boot\"}\]}|\"sdcard\": {\"partitions\": [{\"image\": \"boot\"}]${external_devices_json:+, $external_devices_json}}|" "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json"
 
    # Add RAID partitions to appropriate section based on encryption
-   if [[ "${IGconf_raid1_external_pmap}" == "crypt" ]]; then
+   if [[ "${IGconf_mdraid1_external_root_pmap}" == "crypt" ]]; then
        # For encrypted version, add to encrypted.partitions
-       sed -i "s|<RAID_PARTITIONS>|$raid_partitions_json|g" "${IGconf_raid1_external_assetdir}/provisionmap.json"
-       sed -i "s|<ENCRYPTED_RAID_PARTITIONS>|$encrypted_raid_partitions_json|g" "${IGconf_raid1_external_assetdir}/provisionmap.json"
+       sed -i "s|<RAID_PARTITIONS>|$raid_partitions_json|g" "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json"
+       sed -i "s|<ENCRYPTED_RAID_PARTITIONS>|$encrypted_raid_partitions_json|g" "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json"
    else
        # For clear version, add to top-level partitions
-       sed -i "s|<RAID_PARTITIONS>|$raid_partitions_json|g" "${IGconf_raid1_external_assetdir}/provisionmap.json"
-       sed -i "s|<ENCRYPTED_RAID_PARTITIONS>||g" "${IGconf_raid1_external_assetdir}/provisionmap.json"
+       sed -i "s|<RAID_PARTITIONS>|$raid_partitions_json|g" "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json"
+       sed -i "s|<ENCRYPTED_RAID_PARTITIONS>||g" "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json"
    fi
 
    # Clean up empty partitions arrays if no RAID partitions
    if [[ -z "$raid_partitions_json" ]]; then
-       sed -i 's|,\s*<RAID_PARTITIONS>||g' "${IGconf_raid1_external_assetdir}/provisionmap.json"
-       sed -i 's|<RAID_PARTITIONS>||g' "${IGconf_raid1_external_assetdir}/provisionmap.json"
+       sed -i 's|,\s*<RAID_PARTITIONS>||g' "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json"
+       sed -i 's|<RAID_PARTITIONS>||g' "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json"
    fi
 
    # Validate generated provisioning map
-   if [[ ! -f "${IGconf_raid1_external_assetdir}/provisionmap.json" ]]; then
+   if [[ ! -f "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json" ]]; then
        echo "ERROR: Failed to create provisioning map"
        exit 1
    fi
 
    # Check if provisioning map is valid JSON
-   if ! python3 -m json.tool "${IGconf_raid1_external_assetdir}/provisionmap.json" > /dev/null 2>&1; then
+   if ! python3 -m json.tool "${IGconf_mdraid1_external_root_assetdir}/provisionmap.json" > /dev/null 2>&1; then
        echo "ERROR: Generated provisioning map is not valid JSON"
        exit 1
    fi

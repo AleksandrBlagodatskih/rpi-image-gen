@@ -1,0 +1,15 @@
+# Test configuration for RAID1 external layer with f2fs
+# F2FS is optimized for flash storage (SD cards, SSDs, eMMC)
+device:
+  layer: rpi5
+
+image:
+  layer: mdraid1-external-root
+  name: test-raid1-f2fs
+  mdraid1_external_root_rootfs_type: f2fs
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
+
+layer:
+  base: bookworm-minbase
+

@@ -1,0 +1,52 @@
+# Example configuration for Distrobox
+#
+# Distrobox allows running different Linux distributions in containers
+# using Docker, Podman, or Lilipod as backend.
+
+---
+# Basic Distrobox configuration with Docker
+layers:
+  - distrobox
+
+variables:
+  # Container manager (auto, docker, podman, lilipod)
+  distrobox_container_manager: docker
+  
+  # Default container image
+  distrobox_default_image: debian:bookworm
+  
+  # Generate desktop entries for container apps
+  distrobox_generate_entry: y
+  
+  # Non-interactive mode (skip prompts)
+  distrobox_non_interactive: n
+
+---
+# Advanced Distrobox with Podman
+layers:
+  - distrobox
+
+variables:
+  distrobox_container_manager: podman
+  distrobox_default_image: ubuntu:22.04
+  distrobox_generate_entry: y
+  distrobox_non_interactive: n
+  
+---
+# Multi-distribution development environment
+layers:
+  - distrobox
+
+variables:
+  # Use Docker for best compatibility
+  distrobox_container_manager: docker
+  
+  # Debian bookworm as default
+  distrobox_default_image: debian:bookworm
+  
+  # Enable desktop integration
+  distrobox_generate_entry: y
+  
+  # Non-interactive for automation
+  distrobox_non_interactive: y
+

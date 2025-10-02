@@ -8,7 +8,7 @@ The RAID External layer provides enterprise-grade RAID1 functionality for Raspbe
 
 - **RAID1 Mirroring**: Data redundancy with automatic failover support
 - **Fixed Configuration**: Optimized for exactly 2 external drives
-- **Filesystem Support**: ext4, btrfs with advanced features
+- **Filesystem Support**: ext4, btrfs, f2fs with advanced features
 - **Enterprise Security**: LUKS2 encryption by default with secure key management
 - **Provisioning**: PMAP 1.2.0 with slotted A/B updates and partition mapping
 - **Validation**: Comprehensive requirement checking for RAID1 configuration
@@ -19,10 +19,10 @@ The RAID External layer provides enterprise-grade RAID1 functionality for Raspbe
 ### RAID1 - Data Safety
 ```yaml
 image:
-  layer: raid-external
-  raid_external_raid_level: RAID1
-  raid_external_raid_devices: 2
-  raid_external_encryption_enabled: y  # Production security
+  layer: mdraid1-external-root
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
+  mdraid1_external_root_encryption_enabled: y  # Production security
 ```
 
 **Use case**: Production systems requiring data redundancy and reliability
@@ -58,6 +58,34 @@ The layer uses different partition table types for optimal compatibility:
 - **Support for large disks** (>2TB) and multiple partitions
 - **UEFI compatibility** for modern firmware
 
+## Filesystem Support
+
+The layer supports three filesystem types optimized for different use cases:
+
+### ext4 (Default)
+- **Best for**: General-purpose systems, maximum compatibility
+- **Features**: Journaling, extended attributes, large file support
+- **Performance**: Excellent random I/O, mature and stable
+- **Use case**: Production systems requiring proven reliability
+
+### btrfs
+- **Best for**: Advanced features, snapshots, compression
+- **Features**: Copy-on-write, snapshots, subvolumes, compression, RAID support
+- **Performance**: Good for large files, built-in compression
+- **Use case**: Systems requiring snapshots or advanced data management
+
+### f2fs (Flash-Friendly File System)
+- **Best for**: Flash storage (SD cards, SSDs, eMMC)
+- **Features**: Flash-optimized, wear leveling, TRIM support, adaptive logging
+- **Performance**: Optimized for flash with reduced write amplification
+- **Mount options**: `rw,relatime,lazytime,background_gc=on,discard,no_heap`
+- **Use case**: Raspberry Pi systems with SD cards or SSDs requiring extended lifespan
+
+**Recommendation for Raspberry Pi:**
+- **SD Cards**: Use `f2fs` for optimal performance and longevity
+- **SSD/NVMe**: Use `f2fs` or `ext4` depending on workload
+- **HDD**: Use `ext4` or `btrfs`
+
 ## RAID Architecture
 
 The layer uses genimage's built-in mdraid support for RAID1 creation:
@@ -75,29 +103,29 @@ The layer uses genimage's built-in mdraid support for RAID1 creation:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `raid_external_rootfs_type` | `ext4` | Filesystem type (ext4, btrfs) |
-| `raid_external_raid_level` | `RAID1` | RAID level (RAID0, RAID1, RAID5, RAID10) |
-| `raid_external_raid_devices` | `2` | Number of external drives (2-4) |
-| `raid_external_encryption_enabled` | `y` | Enable LUKS2 encryption |
+| `mdraid1_external_root_rootfs_type` | `ext4` | Filesystem type (ext4, btrfs, f2fs) |
+| `mdraid1_external_root_raid_level` | `RAID1` | RAID level (RAID1) |
+| `mdraid1_external_root_raid_devices` | `2` | Number of external drives (2) |
+| `mdraid1_external_root_encryption_enabled` | `y` | Enable LUKS2 encryption |
 
 ### Performance Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `raid_external_apt_cache` | `y` | Enable APT package caching |
-| `raid_external_ccache` | `y` | Enable ccache for cross-compilation |
-| `raid_external_ccache_size` | `5G` | ccache maximum cache size |
-| `raid_external_parallel_jobs` | `0` | Parallel build jobs (0 = auto-detect) |
-| `raid_external_image_size_optimization` | `y` | Enable image size optimization |
+| `mdraid1_external_root_apt_cache` | `y` | Enable APT package caching |
+| `mdraid1_external_root_ccache` | `y` | Enable ccache for cross-compilation |
+| `mdraid1_external_root_ccache_size` | `5G` | ccache maximum cache size |
+| `mdraid1_external_root_parallel_jobs` | `0` | Parallel build jobs (0 = auto-detect) |
+| `mdraid1_external_root_image_size_optimization` | `y` | Enable image size optimization |
 
 ### Advanced Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `raid_external_sector_size` | `512` | Drive sector size (512, 4096) |
-| `raid_external_compression` | `zstd` | Image compression (none, zstd, gzip) |
-| `raid_external_mbr_type` | `mbr` | Partition table (mbr, gpt) |
-| `raid_external_pmap` | `crypt` | Provisioning map (clear, crypt) |
+| `mdraid1_external_root_sector_size` | `512` | Drive sector size (512, 4096) |
+| `mdraid1_external_root_compression` | `zstd` | Image compression (none, zstd, gzip) |
+| `mdraid1_external_root_mbr_type` | `mbr` | Partition table (mbr, gpt) |
+| `mdraid1_external_root_pmap` | `crypt` | Provisioning map (clear, crypt) |
 
 ## Examples
 
@@ -108,10 +136,10 @@ device:
   layer: rpi5
 
 image:
-  layer: raid-external
+  layer: mdraid1-external-root
   name: basic-raid1
-  raid_external_raid_level: RAID1
-  raid_external_raid_devices: 2
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
 
 layer:
   base: bookworm-minbase
@@ -161,19 +189,19 @@ rpi-image-gen build -c test-raid-enterprise.yaml
 ### Common Issues
 
 **"RAID1 requires exactly 2 devices"**
-- Ensure `raid_external_raid_devices = 2` for RAID1
+- Ensure `mdraid1_external_root_raid_devices = 2` for RAID1
 
 **"Unsupported filesystem"**
-- Use only `ext4` or `btrfs` for `raid_external_rootfs_type`
+- Use only `ext4`, `btrfs`, or `f2fs` for `mdraid1_external_root_rootfs_type`
 
 ### Debug Commands
 
 ```bash
 # Check layer validation
-rpi-image-gen layer --validate image/mbr/raid-external/image.yaml
+rpi-image-gen layer --validate image/mbr/mdraid1-external-root/image.yaml
 
 # Check dependencies
-rpi-image-gen layer --check raid-external
+rpi-image-gen layer --check mdraid1-external-root
 
 # View provisioning map
 pmap -f work/deploy-*/provisionmap.json --slotvars
@@ -220,12 +248,12 @@ The RAID External layer includes comprehensive performance optimizations:
 ### Configuration Example
 ```yaml
 image:
-  layer: raid-external
-  raid_external_apt_cache: y              # Enable APT caching
-  raid_external_ccache: y                 # Enable ccache
-  raid_external_ccache_size: 10G          # Large cache for enterprise
-  raid_external_parallel_jobs: 8          # Maximum parallel jobs
-  raid_external_image_size_optimization: y # Optimize for deployment
+  layer: mdraid1-external-root
+  mdraid1_external_root_apt_cache: y              # Enable APT caching
+  mdraid1_external_root_ccache: y                 # Enable ccache
+  mdraid1_external_root_ccache_size: 10G          # Large cache for enterprise
+  mdraid1_external_root_parallel_jobs: 8          # Maximum parallel jobs
+  mdraid1_external_root_image_size_optimization: y # Optimize for deployment
 ```
 
 ## Security Considerations

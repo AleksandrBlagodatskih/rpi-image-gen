@@ -1,0 +1,46 @@
+# Raspberry Pi OS Base + Cockpit Management
+#
+# Official image with web-based management interface
+
+device:
+  layer: rpi5
+
+image:
+  layer: standard
+  name: raspios-cockpit
+
+# Use Raspberry Pi OS Base Image Layer
+layer:
+  base: raspios-base
+
+# Official Raspberry Pi OS Trixie
+raspios_base_image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
+raspios_base_image_sha256_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz.sha256
+
+# Configuration
+raspios_base_cache_dir: ./cache
+raspios_base_verify_checksum: y
+
+# Layers
+layers:
+  # Security
+  - security/apparmor
+  - security/ufw
+  - security/auditd
+  
+  # Time sync
+  - sys-apps/systemd-chrony-min
+  
+  # Web management
+  - net-misc/cockpit
+
+# Cockpit configuration
+cockpit_enable: y
+cockpit_ssl_enabled: y
+cockpit_port: 9090
+cockpit_modules: all
+
+# UFW - allow Cockpit
+ufw_enable: y
+ufw_allow_ports: "22,9090"
+

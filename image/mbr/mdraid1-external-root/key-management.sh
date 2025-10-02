@@ -126,8 +126,8 @@ EOF
 # ============================================================================
 
 manage_encryption_key() {
-    local key_method="$IGconf_raid_external_key_method"
-    local key_size="$IGconf_raid_external_key_size"
+    local key_method="$IGconf_mdraid1_external_root_key_method"
+    local key_size="$IGconf_mdraid1_external_root_key_size"
     local boot_mount="$1"
 
     echo "Managing encryption key using method: $key_method"
@@ -142,18 +142,18 @@ manage_encryption_key() {
             rm -f "$temp_key_file"
             ;;
         file)
-            if [[ -z "$IGconf_raid_external_key_file" ]]; then
+            if [[ -z "$IGconf_mdraid1_external_root_key_file" ]]; then
                 echo "ERROR: Key file not specified for method=file"
                 exit 1
             fi
-            encryption_key=$(read_key_from_file "$IGconf_raid_external_key_file")
+            encryption_key=$(read_key_from_file "$IGconf_mdraid1_external_root_key_file")
             ;;
         env)
-            if [[ -z "$IGconf_raid_external_key_env" ]]; then
+            if [[ -z "$IGconf_mdraid1_external_root_key_env" ]]; then
                 echo "ERROR: Environment variable not specified for method=env"
                 exit 1
             fi
-            encryption_key=$(read_key_from_env "$IGconf_raid_external_key_env")
+            encryption_key=$(read_key_from_env "$IGconf_mdraid1_external_root_key_env")
             ;;
         tpm)
             echo "TPM key storage not yet implemented"

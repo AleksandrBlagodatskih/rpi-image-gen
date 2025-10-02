@@ -1,0 +1,95 @@
+# Пример использования SHA256 Verification
+# Демонстрирует автоматическую проверку целостности образа
+
+device:
+  layer: rpi5
+
+image:
+  layer: mdraid1-external-root
+  name: trixie-sha256-demo
+  
+  # Базовый образ
+  base_image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
+  
+  # ===============================================
+  # SHA256 Verification - выберите один из методов:
+  # ===============================================
+  
+  # Метод 1: Автоматическая загрузка SHA256 (рекомендуется для staging/dev)
+  base_image_sha256_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz.sha256
+  
+  # Метод 2: Прямое указание SHA256 (рекомендуется для production)
+  # base_image_sha256: "put_actual_checksum_here_after_verification"
+  
+  # ===============================================
+  # Что происходит при верификации:
+  # ===============================================
+  # 1. Скрипт загружает SHA256 файл (если указан URL)
+  # 2. Извлекает checksum из файла (поддерживает 5 форматов)
+  # 3. Загружает и распаковывает образ
+  # 4. Вычисляет SHA256 образа
+  # 5. Сравнивает с ожидаемым checksum
+  # 6. Либо продолжает (OK), либо останавливается (ERROR)
+  
+  # RAID configuration
+  mdraid1_external_root_rootfs_type: f2fs  # Flash-optimized
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
+  mdraid1_external_root_sector_size: 4096
+
+# Базовый слой
+layer:
+  base: bookworm-minbase
+
+# Layers для демо
+layers:
+  - security-suite/apparmor
+  - security-suite/auditd
+  - security-suite/ufw
+
+# ===============================================
+# Использование:
+# ===============================================
+# 
+# 1. С автоматической верификацией:
+#    ./scripts/apply-layers-to-base-image.sh examples/trixie-sha256-demo.yaml
+# 
+# 2. С прямым SHA256 (environment variable):
+#    export BASE_IMAGE_SHA256="actual_checksum_here"
+#    ./scripts/apply-layers-to-base-image.sh examples/trixie-sha256-demo.yaml
+# 
+# 3. С SHA256 URL (environment variable):
+#    export BASE_IMAGE_SHA256_URL="https://example.com/image.sha256"
+#    ./scripts/apply-layers-to-base-image.sh examples/trixie-sha256-demo.yaml
+# 
+# ===============================================
+# Поддерживаемые форматы SHA256 файлов:
+# ===============================================
+# 
+# Формат 1: Только checksum
+#   a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+# 
+# Формат 2: Checksum + filename
+#   a1b2c3d4e5f6...  image.img.xz
+# 
+# Формат 3: Несколько файлов
+#   a1b2c3d4e5f6...  file1.img.xz
+#   b2c3d4e5f678...  file2.img.xz
+# 
+# Формат 4: Filename: checksum
+#   image.img.xz: a1b2c3d4e5f6...
+# 
+# Формат 5: Filename = checksum
+#   image.img.xz = a1b2c3d4e5f6...
+# 
+# Скрипт автоматически определяет формат!
+# 
+# ===============================================
+# Документация:
+# ===============================================
+# 
+# Подробнее см.:
+# - docs/SHA256_VERIFICATION.md
+# - docs/TRIXIE_BASE_IMAGE.md
+# - SHA256_SUPPORT_SUMMARY.md
+

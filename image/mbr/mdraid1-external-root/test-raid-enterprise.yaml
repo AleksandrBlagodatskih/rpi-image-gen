@@ -4,12 +4,12 @@ device:
   variant: 8G
 
 image:
-  layer: raid-external
+  layer: mdraid1-external-root
   name: enterprise-raid1
-  raid_external_raid_level: RAID1
-  raid_external_raid_devices: 2
-  raid_external_sector_size: 4096
-  raid_external_encryption_enabled: y
+  mdraid1_external_root_raid_level: RAID1
+  mdraid1_external_root_raid_devices: 2
+  mdraid1_external_root_sector_size: 4096
+  mdraid1_external_root_encryption_enabled: y
 
 layer:
   base: bookworm-minbase

@@ -1,0 +1,56 @@
+# Secure Raspberry Pi OS Base Image Configuration
+#
+# Official Raspberry Pi OS Lite + Full Security Suite
+
+device:
+  layer: rpi5
+
+image:
+  layer: standard
+  name: raspios-secure
+
+# Use Raspberry Pi OS Base Image Layer
+layer:
+  base: raspios-base
+
+# Download official Raspberry Pi OS Trixie Lite
+raspios_base_image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
+
+# SHA256 verification (mandatory for security)
+raspios_base_image_sha256_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz.sha256
+
+# Cache configuration
+raspios_base_cache_dir: ./cache
+raspios_base_verify_checksum: y
+raspios_base_force_redownload: n
+raspios_base_target_device: rpi5
+
+# Full security suite
+layers:
+  - security-suite
+
+# Security configuration
+security_suite_mode: hardened
+security_suite_compliance: cis
+
+# AppArmor
+apparmor_enable: y
+apparmor_mode: enforce
+apparmor_system_monitoring: y
+
+# Auditd
+auditd_enable: y
+auditd_rules_preset: comprehensive
+
+# UFW
+ufw_enable: y
+ufw_default_policy: deny
+
+# Fail2Ban
+fail2ban_enable: y
+fail2ban_ssh_protection: y
+
+# Unattended Upgrades
+unattended_upgrades_enabled: y
+unattended_upgrades_auto_reboot: n
+

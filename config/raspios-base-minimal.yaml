@@ -1,0 +1,31 @@
+# Minimal Raspberry Pi OS Base Image Configuration
+#
+# Uses official Raspberry Pi OS Lite as base, adds minimal security
+
+device:
+  layer: rpi5
+
+image:
+  layer: standard
+  name: raspios-minimal
+
+# Use Raspberry Pi OS Base Image Layer
+layer:
+  base: raspios-base
+
+# Download official Raspberry Pi OS Trixie Lite
+raspios_base_image_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz
+
+# Auto-verify SHA256
+raspios_base_image_sha256_url: https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-10-02/2025-10-01-raspios-trixie-arm64-lite.img.xz.sha256
+
+# Optional: cache configuration
+raspios_base_cache_dir: ./cache
+raspios_base_verify_checksum: y
+raspios_base_force_redownload: n
+
+# Minimal security layers
+layers:
+  - security/ufw
+  - security/unattended-upgrades
+
