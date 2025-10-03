@@ -1,0 +1,219 @@
+= Cockpit Layer
+
+== Overview
+
+The Cockpit layer installs and configures Cockpit, a web-based graphical interface for servers. Cockpit makes it easy to administer your GNU/Linux servers via a web browser.
+
+Cockpit is perfect for headless servers, IoT devices like the Raspberry Pi, and other remote systems where you want a graphical interface without a full desktop environment.
+
+== Features
+
+* Web-based system administration interface
+* Service management (start/stop/restart services)
+* User account management
+* Network configuration
+* System monitoring (CPU, memory, disk usage)
+* Journal/log viewer
+* Firewall configuration
+* Software updates (when applicable)
+* Storage management
+* Docker/Podman container management (if installed)
+
+== Installation
+
+Add the cockpit layer to your configuration:
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  network: systemd-net-min
+  cockpit: net-misc/cockpit
+----
+
+Or for Trixie:
+
+[source,yaml]
+----
+layer:
+  base: trixie-minbase
+  network: systemd-net-min
+  cockpit: net-misc/cockpit
+----
+
+== Configuration Variables
+
+[cols="2,1,3",options="header"]
+|===
+| Variable | Default | Description
+
+| `IGconf_cockpit_port`
+| 9090
+| Port number for the Cockpit web interface
+
+| `IGconf_cockpit_allow_unprivileged`
+| n
+| Allow unprivileged (non-root) users to access Cockpit
+
+| `IGconf_cockpit_max_startup_time`
+| 120
+| Maximum time in seconds to wait for Cockpit to start
+
+| `IGconf_cockpit_login_banner`
+| "Welcome to $(hostname)"
+| Custom login banner message
+|===
+
+== Usage
+
+After building and deploying your image:
+
+1. Boot your Raspberry Pi
+2. Open a web browser
+3. Navigate to `https://<your-pi-ip>:9090`
+4. Log in with your system credentials
+
+NOTE: Cockpit uses HTTPS by default. You may need to accept the self-signed certificate.
+
+== Security Considerations
+
+* Cockpit runs as a system service and requires authentication
+* Access is restricted to configured users only
+* The web interface uses TLS encryption
+* Firewall rules are automatically configured to allow access to the Cockpit port
+* Consider changing the default port in production environments
+
+== Compatibility
+
+This layer is compatible with:
+* Debian Bookworm
+* Debian Trixie
+* Raspberry Pi devices (tested on Pi 4 and Pi 5)
+* Other Debian-based systems
+
+== Examples
+
+=== Basic Configuration
+
+[source,yaml]
+----
+device:
+  class: pi5
+  hostname: cockpit-server
+
+image:
+  layer: image-rpios
+  name: cockpit-basic
+
+layer:
+  base: bookworm-minbase
+  network: systemd-net-min
+  cockpit: net-misc/cockpit
+----
+
+=== Custom Port and Banner
+
+[source,yaml]
+----
+cockpit:
+  port: 8443
+  login_banner: "Raspberry Pi Management Console"
+
+layer:
+  cockpit: net-misc/cockpit
+----
+
+=== Allow Unprivileged Access
+
+[source,yaml]
+----
+cockpit:
+  allow_unprivileged: y
+  port: 9090
+
+layer:
+  cockpit: net-misc/cockpit
+----
+
+== Firewall Configuration
+
+The layer automatically configures the firewall to allow access to the Cockpit port. It supports:
+
+* UFW (Uncomplicated Firewall)
+* firewalld
+* Manual iptables rules (if neither UFW nor firewalld are present)
+
+== Troubleshooting
+
+=== Cannot Access Cockpit
+
+1. Check if the cockpit service is running:
+   ----
+   systemctl status cockpit.socket
+   ----
+
+2. Verify the port is open:
+   ----
+   netstat -tlnp | grep :9090
+   ----
+
+3. Check firewall rules:
+   ----
+   ufw status
+   # or
+   firewall-cmd --list-all
+   ----
+
+4. Ensure you're using HTTPS (not HTTP)
+
+=== Service Won't Start
+
+Check the cockpit logs:
+----
+journalctl -u cockpit
+----
+
+=== Permission Issues
+
+Make sure your user has sudo privileges or Cockpit is configured to allow unprivileged access.
+
+== Integration with Other Layers
+
+Cockpit works well with other management and monitoring layers:
+
+* `layer/net-misc/openssh-server` - For SSH access
+* `layer/app-container/docker-debian-bookworm` - For container management
+* `layer/security-hardening` - For enhanced security
+* Monitoring layers for extended metrics
+
+== Technical Details
+
+=== Installed Packages
+
+* `cockpit` - Main Cockpit package
+* `cockpit-ws` - WebSocket server component
+* `cockpit-bridge` - Bridge component for system access
+
+=== Systemd Services
+
+* `cockpit.socket` - Socket activation for Cockpit
+* `cockpit.service` - Main Cockpit service (started on-demand)
+
+=== Configuration Files
+
+* `/etc/cockpit/cockpit.conf` - Main configuration file
+* `/etc/systemd/system/multi-user.target.wants/cockpit.socket` - Service link
+
+=== Ports
+
+* Default: 9090/tcp
+* Configurable via `IGconf_cockpit_port`
+
+== Contributing
+
+To contribute improvements to the Cockpit layer:
+
+1. Test your changes with both Bookworm and Trixie
+2. Update this documentation if adding new features
+3. Ensure backward compatibility
+4. Test with different Raspberry Pi models if possible
