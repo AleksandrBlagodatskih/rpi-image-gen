@@ -1,2 +1,3 @@
 work/*
 site/__pycache__
+.cursor/rules/rpi-image-gen-extensions.mdc

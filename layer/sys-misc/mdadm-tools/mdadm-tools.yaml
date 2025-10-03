@@ -1,0 +1,12 @@
+# METABEGIN
+# X-Env-Layer-Name: mdadm-tools
+# X-Env-Layer-Category: sys-misc
+# X-Env-Layer-Description: Расширенные инструменты управления MDADM массивами
+# X-Env-Layer-Version: 1.0.0
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - smartmontools
+  customize-hooks:
+    - echo "Инструменты мониторинга MDADM установлены"

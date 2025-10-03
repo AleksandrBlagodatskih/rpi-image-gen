@@ -6,7 +6,7 @@
 #  external drives for RAID1 root (ext4 or btrfs). Enterprise-ready with
 #  encryption, SBOM generation, and comprehensive provisioning support.
 # X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: image-base,raid-base,mdadm-tools
+# X-Env-Layer-Requires: image-base,sys-misc-raid-base,sys-misc-mdadm-tools
 # X-Env-Layer-Provides: image
 # X-Env-Layer-Homepage: https://github.com/supernova-project/rpi-image-gen
 # X-Env-Layer-BugTracker: https://github.com/supernova-project/rpi-image-gen/issues
