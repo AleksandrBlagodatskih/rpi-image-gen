@@ -1,0 +1,102 @@
+# METABEGIN
+# X-Env-Layer-Name: pam-minimal
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: PAM with basic password quality requirements only
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: pam-hardening
+# X-Env-VarPrefix: pam
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable basic PAM password quality requirements
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+#
+# X-Env-Var-minlen: 8
+# X-Env-Var-minlen-Desc: Minimum password length
+# X-Env-Var-minlen-Required: n
+# X-Env-Var-minlen-Valid: uint
+# X-Env-Var-minlen-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - libpam-pwquality  # Only pwquality, NO faillock/tally2 conflicts
+    
+  customize-hooks:
+    - |
+      if [ "${IGconf_pam_enable:-n}" != "y" ]; then
+        echo "PAM hardening disabled by configuration"
+        exit 0
+      fi
+      
+      echo "Installing basic PAM password quality..."
+      
+      # PHASE 1: Validation
+      # Check that pwquality is installed
+      if ! chroot "$1" dpkg -l libpam-pwquality | grep -q "^ii"; then
+        echo "❌ ERROR: libpam-pwquality not installed"
+        exit 1
+      fi
+      echo "✅ libpam-pwquality validated"
+      
+      # PHASE 2: Backup
+      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+      BACKUP_DIR="/root/rpi-image-gen-backups/$TIMESTAMP"
+      mkdir -p "$1$BACKUP_DIR"
+      
+      # Backup critical PAM files
+      if [ -d "$1/etc/pam.d" ]; then
+        cp -a "$1/etc/pam.d" "$1$BACKUP_DIR/" 2>/dev/null || true
+        echo "Backup created: $BACKUP_DIR/pam.d"
+      fi
+      
+      if [ -f "$1/etc/security/pwquality.conf" ]; then
+        cp "$1/etc/security/pwquality.conf" "$1$BACKUP_DIR/" 2>/dev/null || true
+        echo "Backup created: $BACKUP_DIR/pwquality.conf"
+      fi
+      
+      # PHASE 3: Configuration (idempotent)
+      # Use environment variable or default to 8
+      MINLEN="${IGconf_pam_minlen:-8}"
+      
+      # Simple pwquality configuration with Debian-friendly defaults
+      cat > "$1/etc/security/pwquality.conf" << EOF
+# Basic password quality - Minimal configuration
+# Compatible with Debian Bookworm and Trixie
+
+# Minimum password length
+minlen = $MINLEN
+
+# Character class requirements (0 = disabled for simplicity)
+# Set to 0 to avoid overly complex passwords that users forget
+dcredit = 0
+ucredit = 0
+lcredit = 0
+ocredit = 0
+
+# Other quality checks
+minclass = 0
+maxrepeat = 3
+maxsequence = 3
+
+# Dictionary check
+dictcheck = 1
+
+# User name check
+usercheck = 1
+
+# Enforce for root
+enforce_for_root
+EOF
+
+      echo "✅ PAM password quality configured"
+      echo "   Minimum length: $MINLEN"
+      echo "   Dictionary check: enabled"
+      echo "   User name check: enabled"
+      echo ""
+      echo "Note: Only pwquality is configured (NO faillock/tally2 conflicts)"
+      echo "      To add account lockout, configure pam_faillock separately"
+      echo "      To customize: edit /etc/security/pwquality.conf after boot"
+

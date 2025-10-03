@@ -1,0 +1,43 @@
+# Example configuration for Sysctl Hardening
+#
+# Hardens Linux kernel parameters for improved security.
+# Protects against common network attacks and kernel exploits.
+
+---
+# Basic sysctl hardening
+layers:
+  - sysctl-hardening
+
+variables:
+  # Enable sysctl hardening
+  sysctl_hardening_enable: y
+  
+  # Network security
+  sysctl_hardening_ip_forward: n
+  sysctl_hardening_syn_cookies: y
+  sysctl_hardening_rp_filter: y
+  
+  # Kernel security
+  sysctl_hardening_kptr_restrict: y
+  sysctl_hardening_dmesg_restrict: y
+  
+---
+# Enterprise sysctl hardening (maximum security)
+layers:
+  - sysctl-hardening
+
+variables:
+  sysctl_hardening_enable: y
+  
+  # Maximum network hardening
+  sysctl_hardening_ip_forward: n
+  sysctl_hardening_syn_cookies: y
+  sysctl_hardening_rp_filter: y
+  sysctl_hardening_icmp_redirect: n
+  sysctl_hardening_source_routing: n
+  
+  # Maximum kernel hardening
+  sysctl_hardening_kptr_restrict: y
+  sysctl_hardening_dmesg_restrict: y
+  sysctl_hardening_ptrace_scope: y
+

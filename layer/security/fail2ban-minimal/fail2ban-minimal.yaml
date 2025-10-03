@@ -1,0 +1,47 @@
+# METABEGIN
+# X-Env-Layer-Name: fail2ban-minimal
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Fail2Ban intrusion prevention with default Debian configuration
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: fail2ban
+# X-Env-VarPrefix: fail2ban
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable Fail2Ban with default Debian configuration
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - fail2ban
+    
+  customize-hooks:
+    - |
+      if [ "${IGconf_fail2ban_enable:-n}" != "y" ]; then
+        echo "Fail2Ban disabled by configuration"
+        exit 0
+      fi
+      
+      echo "Installing Fail2Ban with default Debian configuration..."
+      
+      # Backup original configuration
+      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+      BACKUP_DIR="/root/rpi-image-gen-backups/$TIMESTAMP"
+      mkdir -p "$1$BACKUP_DIR"
+      
+      if [ -d "$1/etc/fail2ban" ]; then
+        cp -a "$1/etc/fail2ban" "$1$BACKUP_DIR/" 2>/dev/null || true
+        echo "Backup created: $BACKUP_DIR/fail2ban"
+      fi
+      
+      # Only enable service, DO NOT start during build
+      # (RULE: No service start during build)
+      chroot "$1" systemctl enable fail2ban
+      
+      echo "✅ Fail2Ban installed with default Debian configuration"
+      echo "   Will start on first boot"
+      echo "   To customize: edit /etc/fail2ban/jail.local after boot"
+

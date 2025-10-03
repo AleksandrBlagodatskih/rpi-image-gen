@@ -1,0 +1,228 @@
+= Sudo Logging Layer
+
+== Описание
+
+Sudo Logging слой настраивает комплексное логирование всех sudo команд и операций в соответствии с CIS benchmarks для аудита привилегированных действий.
+
+== Логирование sudo
+
+=== Формат логов
+
+[source]
+----
+Dec 15 10:30:45 hostname sudo[12345]: user : TTY=pts/0 ; PWD=/home/user ; USER=root ; TSID=000001 ; COMMAND=/usr/bin/apt update
+----
+
+=== Информация в логах
+
+* **Время**: Когда была выполнена команда
+* **Хост**: Имя хоста системы
+* **Пользователь**: Кто выполнил команду
+* **TTY**: Терминал, с которого была выполнена команда
+* **PWD**: Рабочая директория
+* **TARGET_USER**: Пользователь, под которым выполняется команда
+* **TSID**: ID сессии
+* **COMMAND**: Полная команда с аргументами
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: sudo-logging
+----
+
+=== Полная конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: sudo-logging
+
+sudo_logging:
+  enable: y                              # Включить логирование sudo
+  log_file: /var/log/sudo.log           # Файл для логов
+  log_format: "%h %e[%u] %t : %p ; %a : TTY=%t ; PWD=%d ; USER=%u ; TSID=%s ; COMMAND=%c"
+  syslog_enable: y                      # Дублировать в syslog
+  syslog_facility: authpriv             # Facility для syslog
+  syslog_priority: notice               # Priority для syslog
+  auth_timeout: 15                      # Таймаут аутентификации (минуты)
+  timestamp_timeout: 15                 # Таймаут timestamp (минуты)
+  passwd_timeout: 0                     # Таймаут пароля (0 = без таймаута)
+  badpass_message: "Sorry, try again."  # Сообщение при неверном пароле
+  lecture: once                         # Показывать лекцию (never, once, always)
+  insults: n                            # Включить insults
+  requiretty: n                         # Требовать TTY
+  visiblepw: n                          # Показывать пароль на экране
+  loglinelen: 0                         # Длина строки лога (0 = без ограничений)
+  compresslogs: y                       # Сжимать логи
+  maxlogsize: 0                         # Максимальный размер лога (0 = без ограничений)
+----
+
+== Использование
+
+=== Просмотр логов
+
+[source,bash]
+----
+# Просмотр последних sudo команд
+sudo tail -f /var/log/sudo.log
+
+# Поиск команд конкретного пользователя
+sudo grep "user:" /var/log/sudo.log
+
+# Поиск конкретной команды
+sudo grep "apt update" /var/log/sudo.log
+
+# Статистика по пользователям
+sudo grep "COMMAND=" /var/log/sudo.log | cut -d'=' -f2 | sort | uniq -c | sort -nr
+----
+
+=== Мониторинг в реальном времени
+
+[source,bash]
+----
+# Мониторинг всех sudo команд
+sudo tail -f /var/log/sudo.log | grep -E "(COMMAND=|authentication failure)"
+
+# Мониторинг syslog
+sudo tail -f /var/log/syslog | grep sudo
+
+# Мониторинг auth.log
+sudo tail -f /var/log/auth.log | grep sudo
+----
+
+=== Анализ логов
+
+[source,bash]
+----
+# Количество команд по пользователям
+sudo awk '/COMMAND=/ {print $6}' /var/log/sudo.log | sort | uniq -c | sort -nr
+
+# Самые частые команды
+sudo awk -F'COMMAND=' '/COMMAND=/ {print $2}' /var/log/sudo.log | cut -d' ' -f1 | sort | uniq -c | sort -nr | head -10
+
+# Неудачные попытки аутентификации
+sudo grep "authentication failure" /var/log/sudo.log | wc -l
+
+# Успешные команды за последний день
+sudo grep "$(date '+%b %e')" /var/log/sudo.log | grep "COMMAND="
+----
+
+== Производительность
+
+* **Асинхронное логирование**: Не влияет на производительность команд
+* **Буферизация**: Логи буферизируются для минимального влияния
+* **Ротация**: Автоматическая ротация предотвращает переполнение
+* **Сжатие**: Опциональное сжатие старых логов
+
+== Безопасность
+
+=== Аудит привилегированных операций
+
+* **Полный аудит**: Все sudo команды логируются с полным контекстом
+* **Независимость**: Логи не могут быть изменены после записи
+* **Долгосрочное хранение**: Ротация и сжатие для долгосрочного хранения
+* **Мониторинг**: Реальное время мониторинга подозрительной активности
+
+=== Compliance
+
+* **CIS Level 2**: Соответствует требованиям CIS benchmarks 5.2.1-5.2.5
+* **PCI DSS**: Удовлетворяет требованиям PCI DSS 10.2.2
+* **ISO 27001**: Поддержка стандартов информационной безопасности
+* **NIST**: Соответствует рекомендациям NIST SP 800-53
+
+== Устранение неисправностей
+
+=== Логи не записываются
+
+[source,bash]
+----
+# Проверка конфигурации
+sudo visudo -c
+
+# Проверка прав доступа к лог файлу
+ls -la /var/log/sudo.log
+
+# Проверка синтаксиса sudoers
+sudo visudo
+
+# Перезапуск sudo
+sudo systemctl reload sudo
+----
+
+=== Проблемы с syslog
+
+[source,bash]
+----
+# Проверка rsyslog
+sudo systemctl status rsyslog
+
+# Проверка конфигурации rsyslog
+sudo cat /etc/rsyslog.d/50-default.conf | grep sudo
+
+# Тестирование syslog
+logger -p authpriv.notice "Test sudo log message"
+----
+
+=== Проблемы с производительностью
+
+[source,bash]
+----
+# Мониторинг использования диска
+df /var/log/
+
+# Проверка размера логов
+du -sh /var/log/sudo.log*
+
+# Оптимизация ротации
+sudo logrotate -f /etc/logrotate.d/sudo
+----
+
+== Примеры конфигурации
+
+=== Минимальное логирование
+
+[source,yaml]
+----
+sudo_logging:
+  enable: y
+  log_file: /var/log/sudo.log
+  syslog_enable: n
+  auth_timeout: 5
+  lecture: never
+----
+
+=== Максимальный аудит
+
+[source,yaml]
+----
+sudo_logging:
+  enable: y
+  log_file: /var/log/sudo.log
+  log_format: "%h %e[%u] %t : %p ; %a : TTY=%t ; PWD=%d ; USER=%u ; TSID=%s ; COMMAND=%c ; ENV=%e"
+  syslog_enable: y
+  syslog_facility: authpriv
+  syslog_priority: info
+  auth_timeout: 30
+  timestamp_timeout: 30
+  passwd_timeout: 5
+  lecture: always
+  insults: y
+  requiretty: y
+  visiblepw: n
+  loglinelen: 0
+  compresslogs: y
+  maxlogsize: 100M
+----
+
+== Ссылки
+
+* https://linux.die.net/man/5/sudoers[sudoers man page]
+* https://linux.die.net/man/8/sudo[sudo man page]
+* https://www.cisecurity.org/benchmark/debian_linux[CIS Debian Benchmarks]
+* https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/configuring-basic-system-settings/logging-sudo-access_configuring-basic-system-settings[Red Hat Sudo Logging]
