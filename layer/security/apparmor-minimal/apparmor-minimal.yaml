@@ -1,0 +1,58 @@
+# METABEGIN
+# X-Env-Layer-Name: apparmor-minimal
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: AppArmor Mandatory Access Control with default Debian profiles
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: apparmor, mac-system
+# X-Env-VarPrefix: apparmor
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable AppArmor with default Debian profiles
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - apparmor
+    - apparmor-profiles
+    
+  customize-hooks:
+    - |
+      if [ "${IGconf_apparmor_enable:-n}" != "y" ]; then
+        echo "AppArmor disabled by configuration"
+        exit 0
+      fi
+      
+      echo "Installing AppArmor with default Debian profiles..."
+      
+      # Backup original configuration
+      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+      BACKUP_DIR="/root/rpi-image-gen-backups/$TIMESTAMP"
+      mkdir -p "$1$BACKUP_DIR"
+      
+      if [ -d "$1/etc/apparmor.d" ]; then
+        cp -a "$1/etc/apparmor.d" "$1$BACKUP_DIR/" 2>/dev/null || true
+        echo "Backup created: $BACKUP_DIR/apparmor.d"
+      fi
+      
+      # Enable AppArmor in kernel boot parameters (Raspberry Pi specific)
+      if [ -f "$1/boot/firmware/cmdline.txt" ]; then
+        if ! grep -q "apparmor=1" "$1/boot/firmware/cmdline.txt"; then
+          # Idempotent: add only if not present
+          sed -i 's/$/ apparmor=1 security=apparmor/' "$1/boot/firmware/cmdline.txt"
+          echo "AppArmor boot parameters added to cmdline.txt"
+        else
+          echo "AppArmor boot parameters already present"
+        fi
+      fi
+      
+      # Only enable service, DO NOT start during build
+      chroot "$1" systemctl enable apparmor
+      
+      echo "✅ AppArmor installed with default Debian profiles"
+      echo "   Will start on first boot with enforcing mode"
+      echo "   To customize: add profiles to /etc/apparmor.d/ after boot"
+

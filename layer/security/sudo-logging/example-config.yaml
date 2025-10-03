@@ -1,0 +1,42 @@
+# Example configuration for Sudo Logging
+#
+# Comprehensive logging and auditing of privileged sudo operations.
+# Records all sudo commands for security and compliance.
+
+---
+# Basic sudo logging
+layers:
+  - sudo-logging
+
+variables:
+  # Enable sudo logging
+  sudo_logging_enable: y
+  
+  # Log file location
+  sudo_logging_logfile: /var/log/sudo/sudo.log
+  
+  # Enable I/O logging (records command input/output)
+  sudo_logging_iolog: y
+  
+  # I/O log directory
+  sudo_logging_iolog_dir: /var/log/sudo/io
+  
+---
+# Enterprise sudo logging with alerts
+layers:
+  - sudo-logging
+
+variables:
+  sudo_logging_enable: y
+  sudo_logging_logfile: /var/log/sudo/sudo.log
+  sudo_logging_iolog: y
+  sudo_logging_iolog_dir: /var/log/sudo/io
+  
+  # Enable email notifications for sudo usage
+  sudo_logging_mailto: security@example.com
+  sudo_logging_mail_on_error: y
+  
+  # Syslog integration
+  sudo_logging_syslog: y
+  sudo_logging_syslog_facility: auth
+

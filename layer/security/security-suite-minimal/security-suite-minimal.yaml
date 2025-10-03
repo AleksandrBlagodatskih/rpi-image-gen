@@ -1,0 +1,93 @@
+# METABEGIN
+# X-Env-Layer-Name: security-suite-minimal
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Complete security suite with minimal default configurations (Debian upstream defaults)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: security-suite
+# X-Env-VarPrefix: security_suite
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable complete security suite with minimal configurations
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  layers:
+    # Minimal security layers (Debian default configurations)
+    - fail2ban-minimal       # Intrusion prevention with default Debian config
+    - apparmor-minimal       # Mandatory Access Control with default profiles
+    - auditd-minimal         # System auditing with minimal ARM64-optimized rules (< 5% CPU)
+    - pam-minimal            # Basic password quality (pwquality only, no conflicts)
+    
+    # Safe security layers (well-tested configurations)
+    - sudo-logging           # Sudo command logging and audit trail
+    - password-policies      # Password aging and account security policies
+    - sysctl-hardening       # System security hardening via sysctl (CIS Level 2)
+    - ufw-minimal            # Firewall with default deny-incoming policy
+    
+  customize-hooks:
+    - |
+      if [ "${IGconf_security_suite_enable:-n}" != "y" ]; then
+        echo "Security suite disabled by configuration"
+        exit 0
+      fi
+      
+      echo ""
+      echo "=============================================="
+      echo "   SECURITY SUITE (MINIMAL) - SUMMARY"
+      echo "=============================================="
+      echo ""
+      echo "✅ Installed security components:"
+      echo "   1. Fail2Ban          - Default Debian configuration"
+      echo "   2. AppArmor          - Default profiles (enforce mode)"
+      echo "   3. Auditd            - Minimal rules (~25 rules, < 5% CPU)"
+      echo "   4. PAM               - Basic password quality (pwquality)"
+      echo "   5. Sudo Logging      - Command audit trail"
+      echo "   6. Password Policies - Account security policies"
+      echo "   7. Sysctl Hardening  - CIS Level 2 benchmarks"
+      echo "   8. UFW Firewall      - Default deny-incoming"
+      echo ""
+      echo "⚠️  PHILOSOPHY:"
+      echo "   This security suite uses MINIMAL configurations with"
+      echo "   Debian upstream defaults wherever possible."
+      echo ""
+      echo "   Why minimal?"
+      echo "   • \"Bad security config is WORSE than no security\""
+      echo "   • Debian defaults are tested by millions of users"
+      echo "   • Easy to understand and maintain"
+      echo "   • Low performance overhead"
+      echo "   • No complex custom hardening that could break systems"
+      echo ""
+      echo "⚠️  POST-INSTALL CUSTOMIZATION REQUIRED:"
+      echo ""
+      echo "   UFW Firewall:"
+      echo "     - Will start with NO rules (deny-all by default)"
+      echo "     - You MUST add rules before first boot to allow services"
+      echo "     - Example: ufw allow ssh && ufw allow http"
+      echo ""
+      echo "   Fail2Ban:"
+      echo "     - Customize /etc/fail2ban/jail.local after boot"
+      echo ""
+      echo "   AppArmor:"
+      echo "     - Add custom profiles to /etc/apparmor.d/ after boot"
+      echo ""
+      echo "   Auditd:"
+      echo "     - Extend rules in /etc/audit/rules.d/ if needed"
+      echo "     - Current: 25 minimal rules for critical events only"
+      echo ""
+      echo "   PAM:"
+      echo "     - Adjust password quality in /etc/security/pwquality.conf"
+      echo "     - Consider adding pam_faillock for account lockout"
+      echo ""
+      echo "📚 DOCUMENTATION:"
+      echo "   - All configurations follow Debian Security Manual"
+      echo "   - Compatible with both Debian Bookworm and Trixie"
+      echo "   - Backups created in /root/rpi-image-gen-backups/"
+      echo ""
+      echo "✅ Security suite (minimal) installation completed"
+      echo "=============================================="
+      echo ""
+

@@ -1,0 +1,228 @@
+= Password Policies Layer
+
+== Описание
+
+Password Policies слой настраивает политики старения паролей и безопасности учетных записей в соответствии с CIS benchmarks для предотвращения компрометации учетных данных.
+
+== Политики паролей
+
+=== Старение паролей
+
+[source,ini]
+----
+PASS_MAX_DAYS   90    # Максимальный возраст пароля (дни)
+PASS_MIN_DAYS   7     # Минимальный возраст пароля (дни)
+PASS_WARN_AGE   7     # Предупреждение за N дней до истечения
+----
+
+=== Блокировка неактивных аккаунтов
+
+[source,ini]
+----
+INACTIVE        30    # Дней после истечения пароля до блокировки
+ACCOUNT_EXPIRY  365   # Срок действия аккаунта (дни)
+----
+
+=== История паролей
+
+[source,ini]
+----
+remember = 5          # Запоминать последние 5 паролей
+----
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: password-policies
+----
+
+=== Полная конфигурация
+
+[source,yaml]
+----
+layer:
+  base: bookworm-minbase
+  security: password-policies
+
+password_policies:
+  enable: y                            # Включить политики паролей
+  pass_max_days: 90                    # Максимальный возраст пароля
+  pass_min_days: 7                     # Минимальный возраст пароля
+  pass_warn_age: 7                     # Предупреждение за 7 дней
+  inactive: 30                         # Блокировать после 30 дней неактивности
+  account_expiry: 365                  # Срок действия аккаунта 1 год
+  root_password_expiry: 0              # Root пароль не истекает
+  lock_inactive_users: y               # Блокировать неактивных пользователей
+  password_history_remember: 5         # Запоминать 5 паролей
+  password_consecutive_characters: 3   # Максимум 3 подряд одинаковых символа
+  password_max_sequential_characters: 3 # Максимум 3 подряд последовательных
+  password_last_change_past: 30        # Принудительная смена через 30 дней
+  password_failed_lockout: 5           # Блокировка после 5 неудачных попыток
+  password_unlock_time: 600            # Время блокировки (10 минут)
+----
+
+== Использование
+
+=== Проверка политик
+
+[source,bash]
+----
+# Проверка старения пароля для пользователя
+chage -l username
+
+# Проверка всех пользователей
+for user in $(awk -F: '$3 >= 1000 {print $1}' /etc/passwd); do
+    echo "=== $user ==="
+    chage -l "$user"
+done
+
+# Проверка истории паролей
+sudo cat /etc/security/opasswd 2>/dev/null || echo "Password history not configured"
+----
+
+=== Управление пользователями
+
+[source,bash]
+----
+# Принудительная смена пароля
+sudo chage -d 0 username
+
+# Разблокировка аккаунта
+sudo chage -E -1 username
+sudo usermod -U username
+
+# Установка срока действия аккаунта
+sudo chage -E 2024-12-31 username
+
+# Проверка неактивных пользователей
+sudo /usr/local/bin/lock-inactive-users
+----
+
+=== Мониторинг
+
+[source,bash]
+----
+# Проверка заблокированных аккаунтов
+sudo awk -F: '$2 ~ /^\!/ {print $1}' /etc/shadow
+
+# Проверка истекших аккаунтов
+sudo awk -F: '$8 < $(date +%s) && $8 != "" {print $1}' /etc/shadow
+
+# Логи аутентификации
+sudo tail -f /var/log/auth.log | grep -E "(authentication failure|session opened|session closed)"
+----
+
+== Производительность
+
+* **Асинхронная обработка**: Проверки выполняются асинхронно
+* **Кеширование**: Результаты проверок кешируются
+* **Оптимизация**: Настройки оптимизированы для Raspberry Pi
+* **Автоматизация**: Ежедневная проверка неактивных пользователей
+
+== Безопасность
+
+=== Защита от атак
+
+* **Password reuse**: Предотвращение повторного использования старых паролей
+* **Brute force**: Блокировка аккаунтов при множественных неудачных попытках
+* **Aging**: Принудительная смена паролей
+* **Account expiry**: Автоматическая блокировка старых аккаунтов
+
+=== Compliance
+
+* **CIS Level 2**: Соответствует требованиям CIS benchmarks
+* **PCI DSS**: Удовлетворяет требованиям PCI DSS 8.2.4
+* **ISO 27001**: Поддержка стандартов информационной безопасности
+* **NIST**: Соответствует рекомендациям NIST SP 800-53
+
+== Устранение неисправностей
+
+=== Проблемы с chage
+
+[source,bash]
+----
+# Проверка доступности команды
+which chage
+
+# Проверка синтаксиса shadow файла
+sudo pwck /etc/shadow
+
+# Ручная установка политик
+sudo chage -M 90 -m 7 -W 7 -I 30 username
+----
+
+=== Проблемы с блокировкой
+
+[source,bash]
+----
+# Проверка блокировки
+sudo passwd -S username
+
+# Разблокировка
+sudo usermod -U username
+
+# Проверка логов
+sudo journalctl | grep -i "account.*lock\|unlock"
+----
+
+=== Проблемы с историей паролей
+
+[source,bash]
+----
+# Проверка конфигурации
+sudo cat /etc/security/pwhistory.conf
+
+# Проверка файла истории
+sudo ls -la /etc/security/opasswd
+
+# Пересоздание файла истории
+sudo touch /etc/security/opasswd
+sudo chmod 600 /etc/security/opasswd
+----
+
+== Примеры конфигурации
+
+=== Минимальная безопасность
+
+[source,yaml]
+----
+password_policies:
+  enable: y
+  pass_max_days: 90
+  pass_min_days: 1
+  pass_warn_age: 7
+  inactive: 30
+----
+
+=== Максимальная безопасность
+
+[source,yaml]
+----
+password_policies:
+  enable: y
+  pass_max_days: 60
+  pass_min_days: 7
+  pass_warn_age: 14
+  inactive: 15
+  account_expiry: 180
+  root_password_expiry: 30
+  lock_inactive_users: y
+  password_history_remember: 10
+  password_consecutive_characters: 2
+  password_max_sequential_characters: 2
+  password_last_change_past: 15
+  password_failed_lockout: 3
+  password_unlock_time: 300
+----
+
+== Ссылки
+
+* https://linux.die.net/man/5/login.defs[login.defs man page]
+* https://linux.die.net/man/1/chage[chage man page]
+* https://www.cisecurity.org/benchmark/debian_linux[CIS Debian Benchmarks]
+* https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/configuring-basic-system-settings/managing-user-accounts_configuring-basic-system-settings[Red Hat Account Management]

@@ -1,0 +1,50 @@
+# Example configuration for Password Policies
+#
+# Enforces strong password policies system-wide.
+# Implements password complexity, aging, and history requirements.
+
+---
+# Basic password policies
+layers:
+  - password-policies
+
+variables:
+  # Enable password policies
+  password_policies_enable: y
+  
+  # Minimum password length
+  password_policies_minlen: 12
+  
+  # Password complexity requirements
+  password_policies_dcredit: -1  # At least 1 digit
+  password_policies_ucredit: -1  # At least 1 uppercase
+  password_policies_lcredit: -1  # At least 1 lowercase
+  password_policies_ocredit: -1  # At least 1 special char
+  
+  # Password aging
+  password_policies_maxdays: 90
+  password_policies_mindays: 1
+  password_policies_warnage: 14
+  
+---
+# Enterprise-grade password policies
+layers:
+  - password-policies
+
+variables:
+  password_policies_enable: y
+  
+  # Stronger requirements
+  password_policies_minlen: 16
+  password_policies_dcredit: -2
+  password_policies_ucredit: -2
+  password_policies_lcredit: -2
+  password_policies_ocredit: -2
+  
+  # Shorter expiration
+  password_policies_maxdays: 60
+  password_policies_warnage: 7
+  
+  # Enable password history
+  password_policies_remember: 12
+
