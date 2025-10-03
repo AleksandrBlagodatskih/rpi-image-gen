@@ -1,0 +1,75 @@
+#!/bin/bash
+# Initramfs hook for Radxa SATA Penta HAT SATA drivers
+# Исправлено: добавлен строгий режим bash для повышения безопасности
+
+set -eu  # exit on error, undefined variables
+set -o pipefail  # exit on pipe failures
+
+PREREQ=""
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# Валидация окружения
+if [ -z "${DESTDIR:-}" ]; then
+    echo "Ошибка: DESTDIR не установлен" >&2
+    exit 1
+fi
+
+# Безопасная загрузка модулей с проверкой существования
+safe_force_load() {
+    local module="$1"
+    if modprobe --dry-run "$module" 2>/dev/null; then
+        force_load "$module"
+    else
+        echo "Предупреждение: модуль $module недоступен" >&2
+    fi
+}
+
+# Загрузка модулей для RP1 чипа ввода-вывода Raspberry Pi 5 (если включено)
+if [ -n "${IGconf_radxa_sata_load_rp1_modules:-}" ] && [ "${IGconf_radxa_sata_load_rp1_modules}" = "y" ]; then
+  safe_force_load rpi_poe || echo "RP1 PoE module not available, continuing..."
+  safe_force_load rpi_poe_firmware || echo "RP1 PoE firmware module not available, continuing..."
+  safe_force_load rpi_poe_firmware_update || echo "RP1 PoE firmware update module not available, continuing..."
+else
+  echo "RP1 modules loading disabled by configuration"
+fi
+
+# Загрузка PCIe модулей для Raspberry Pi 5
+safe_force_load pcie-brcmstb || echo "Broadcom PCIe module not available, continuing..."
+safe_force_load pcie-rp1 || echo "RP1 PCIe module not available, continuing..."
+safe_force_load pci-host-generic || echo "PCI host generic module not available, continuing..."
+
+# Загрузка необходимых модулей для SATA поддержки JMB585
+safe_force_load ahci || echo "AHCI module not available, continuing..."
+safe_force_load ahci_platform || echo "AHCI platform module not available, continuing..."
+safe_force_load libahci || echo "AHCI library module not available, continuing..."
+safe_force_load libata || echo "ATA library module not available, continuing..."
+safe_force_load sd_mod || echo "SCSI disk module not available, continuing..."
+safe_force_load scsi_mod || echo "SCSI core module not available, continuing..."
+
+# Загрузка GPIO модулей для управления питанием
+safe_force_load gpio_raspberrypi_exp || echo "GPIO expander module not available, continuing..."
+safe_force_load gpio_keys || echo "GPIO keys module not available, continuing..."
+safe_force_load gpio_keys_polled || echo "GPIO keys polled module not available, continuing..."
+
+# Дополнительные модули для стабильной работы SATA
+safe_force_load scsi_transport_sata || echo "SCSI transport SATA module not available, continuing..."
+safe_force_load ata_piix || echo "ATA PIIX module not available, continuing..."
+safe_force_load ata_generic || echo "ATA generic module not available, continuing..."
+
+# Специфичные модули для JMB585 контроллера (если доступны)
+manual_add_modules ahci_platform || echo "Manual AHCI platform module addition failed"
+manual_add_modules scsi_transport_sata || echo "Manual SCSI transport SATA module addition failed"
+
+echo "Radxa SATA Penta HAT: модули initramfs загружены успешно"

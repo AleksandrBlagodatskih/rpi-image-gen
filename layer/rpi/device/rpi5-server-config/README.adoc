@@ -1,0 +1,117 @@
+= rpi5-server-config
+
+Raspberry Pi 5 оптимизированная конфигурация для серверного использования.
+
+== Описание
+
+Этот слой настраивает `config.txt` для Raspberry Pi 5 в серверном сценарии использования.
+Оптимизации включают:
+
+* Отключение HDMI для экономии энергии
+* Максимальная производительность PCIe (NVMe SSD)
+* USB 3.0 high-performance режим
+* Отключение ненужных интерфейсов (WiFi, Bluetooth, Audio)
+* Оптимизации производительности и энергосбережения
+
+== Использование
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+
+layer:
+  server: rpi5-server-config
+----
+
+== Переменные конфигурации
+
+* `rpi5_server_disable_hdmi`: Отключить HDMI (по умолчанию: y)
+* `rpi5_server_disable_wifi`: Отключить WiFi (по умолчанию: y)
+* `rpi5_server_disable_bluetooth`: Отключить Bluetooth (по умолчанию: y)
+* `rpi5_server_disable_audio`: Отключить аудио (по умолчанию: y)
+* `rpi5_server_pcie_max_speed`: PCIe Gen 3.0 для NVMe (по умолчанию: y)
+* `rpi5_server_usb_max_performance`: USB 3.0 high-performance (по умолчанию: y)
+* `rpi5_server_disable_unused_interfaces`: Отключить SPI/I2C/I2S (по умолчанию: y)
+
+== Enterprise интеграция
+
+=== Kubernetes Integration
+
+[source,yaml]
+----
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rpi5-server-pod
+spec:
+  containers:
+  - name: rpi5-server
+    image: rpi5-server-optimized:latest
+    ports:
+    - containerPort: 80
+      name: http
+    - containerPort: 443
+      name: https
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+----
+
+=== Prometheus мониторинг
+
+[source,yaml]
+----
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'rpi5-servers'
+    static_configs:
+      - targets: ['rpi5-server-01:9090', 'rpi5-server-02:9090']
+    metrics_path: /metrics
+    scrape_interval: 30s
+----
+
+=== Ansible автоматизация
+
+[source,yaml]
+----
+- name: Deploy rpi5-server-config
+  hosts: rpi5_servers
+  become: yes
+
+  tasks:
+    - name: Copy optimized config.txt
+      copy:
+        src: /boot/firmware/config.txt
+        dest: /boot/firmware/config.txt.rpi5-server-config
+        backup: yes
+
+    - name: Apply rpi5-server-config optimizations
+      template:
+        src: config-rpi5-server.j2
+        dest: /boot/firmware/config.txt
+      notify: reboot rpi5
+
+    - name: Verify configuration
+      command: rpi-image-gen layer --validate rpi5-server-config
+      register: config_check
+
+    - name: Fail if configuration invalid
+      fail:
+        msg: "Configuration validation failed"
+      when: config_check.rc != 0
+----
+
+== Ссылки
+
+* https://www.raspberrypi.com/documentation/computers/config_txt.html[Raspberry Pi config.txt documentation]
+* https://www.raspberrypi.com/documentation/computers/raspberry-pi-5.html[Raspberry Pi 5 documentation]
+* https://kubernetes.io/docs/concepts/workloads/controllers/deployment/[Kubernetes Deployment]
+* https://prometheus.io/docs/introduction/overview/[Prometheus Monitoring]
+* https://docs.ansible.com/ansible/latest/playbooks_intro.html[Ansible Playbooks]
