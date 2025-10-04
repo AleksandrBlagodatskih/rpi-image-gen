@@ -105,9 +105,6 @@ image raid1-disk1.f2fs {
       disk-uuid = "<DISK1_UUID>"
       role = 0
       image = "root.f2fs"
-      # Оптимизация для RAID1 производительности
-      chunk-size = 512K
-      layout = "left-symmetric"
    }
    exec-pre = "<SETUP> RAID <BOOT_UUID> <ROOT_UUID>"
 }
@@ -127,9 +124,10 @@ image raid1-disk2.f2fs {
 image root.f2fs {
    f2fs {
       label = "root"
-      fs-type = "f2fs"  # Используем флеш-оптимизированные настройки
-      mountpoint = "/"
+      extraargs = "-O extra_attr,inode_checksum,sb_checksum,compression"
    }
+   size = "<ROOT_SIZE>"
+   mountpoint = "/"
    exec-pre = "<SETUP> ROOT <BOOT_UUID> <ROOT_UUID>"
 }
 

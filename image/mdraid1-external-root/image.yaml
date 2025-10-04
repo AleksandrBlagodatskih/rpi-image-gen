@@ -1,149 +1,150 @@
 # METABEGIN
-# X-Env-Layer-Name: mdraid1-external-root
+# X-Env-Layer-Name: image-raid
 # X-Env-Layer-Category: image
 # X-Env-Layer-Desc: Raspberry Pi OS style image layout with MBR boot partition and
 #  GPT external drives using genimage mdraid for RAID1. SD card for boot,
-#  external drives for RAID1 root (ext4 or btrfs). Enterprise-ready with
-#  encryption, SBOM generation, and comprehensive provisioning support.
+#  external drives for RAID1 root (ext4, btrfs, or f2fs). Enterprise-ready with
+#  encryption, SBOM generation, performance optimization, and comprehensive
+#  provisioning support.
 # X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: image-base,device-base,locale-base,sys-misc-raid-base,sys-misc-mdadm-tools
-# X-Env-Layer-Provides: image
+# X-Env-Layer-Requires: image-base,device-base,artefact-base,locale-base,target-config,raid-base,sys-misc-mdadm-tools
+# X-Env-Layer-Provides: image,raid,encryption,performance-optimization
 #
 # X-Env-VarRequires: IGconf_artefact_target_name,IGconf_artefact_version,IGconf_locale_timezone,IGconf_locale_default,IGconf_locale_keyboard_layout,IGconf_locale_keyboard_keymap
 #
-# X-Env-VarPrefix: raid1_external
+# X-Env-VarPrefix: image
 #
-# X-Env-Var-mdraid1_external_root_rootfs_type: ext4
-# X-Env-Var-mdraid1_external_root_rootfs_type-Desc: Root filesystem type for RAID array
-# X-Env-Var-mdraid1_external_root_rootfs_type-Required: n
-# X-Env-Var-mdraid1_external_root_rootfs_type-Valid: ext4,btrfs,f2fs
-# X-Env-Var-mdraid1_external_root_rootfs_type-Set: y
+# X-Env-Var-rootfs_type: ext4
+# X-Env-Var-rootfs_type-Desc: Root filesystem type for RAID array
+# X-Env-Var-rootfs_type-Required: n
+# X-Env-Var-rootfs_type-Valid: ext4,btrfs,f2fs
+# X-Env-Var-rootfs_type-Set: y
 #
-# X-Env-Var-mdraid1_external_root_boot_part_size: 100%
-# X-Env-Var-mdraid1_external_root_boot_part_size-Desc: Boot partition size on SD card
-# X-Env-Var-mdraid1_external_root_boot_part_size-Required: n
-# X-Env-Var-mdraid1_external_root_boot_part_size-Valid: size
-# X-Env-Var-mdraid1_external_root_boot_part_size-Set: y
+# X-Env-Var-boot_part_size: 200M
+# X-Env-Var-boot_part_size-Desc: Boot partition size on SD card
+# X-Env-Var-boot_part_size-Required: n
+# X-Env-Var-boot_part_size-Valid: size
+# X-Env-Var-boot_part_size-Set: y
 #
-# X-Env-Var-mdraid1_external_root_root_part_size: 100%
-# X-Env-Var-mdraid1_external_root_root_part_size-Desc: Total root partition size for all RAID devices
-# X-Env-Var-mdraid1_external_root_root_part_size-Required: n
-# X-Env-Var-mdraid1_external_root_root_part_size-Valid: size
-# X-Env-Var-mdraid1_external_root_root_part_size-Set: y
+# X-Env-Var-root_part_size: auto
+# X-Env-Var-root_part_size-Desc: Root filesystem size (auto for RAID, size for single partitions)
+# X-Env-Var-root_part_size-Required: n
+# X-Env-Var-root_part_size-Valid: auto,size
+# X-Env-Var-root_part_size-Set: y
 #
-# X-Env-Var-mdraid1_external_root_raid_level: RAID1
-# X-Env-Var-mdraid1_external_root_raid_level-Desc: RAID level for external drives.
+# X-Env-Var-raid_level: RAID1
+# X-Env-Var-raid_level-Desc: RAID level for external drives.
 #  RAID1: Mirroring (redundancy, data safety) using genimage mdraid
-# X-Env-Var-mdraid1_external_root_raid_level-Required: n
-# X-Env-Var-mdraid1_external_root_raid_level-Valid: keywords:RAID1
-# X-Env-Var-mdraid1_external_root_raid_level-Set: y
+# X-Env-Var-raid_level-Required: n
+# X-Env-Var-raid_level-Valid: keywords:RAID1
+# X-Env-Var-raid_level-Set: y
 #
-# X-Env-Var-mdraid1_external_root_raid_devices: 2
-# X-Env-Var-mdraid1_external_root_raid_devices-Desc: Number of external drives for RAID1 array.
+# X-Env-Var-raid_devices: 2
+# X-Env-Var-raid_devices-Desc: Number of external drives for RAID1 array.
 #  2: Required for RAID1 configuration (fixed)
-# X-Env-Var-mdraid1_external_root_raid_devices-Required: n
-# X-Env-Var-mdraid1_external_root_raid_devices-Valid: keywords:2
-# X-Env-Var-mdraid1_external_root_raid_devices-Set: y
+# X-Env-Var-raid_devices-Required: n
+# X-Env-Var-raid_devices-Valid: keywords:2
+# X-Env-Var-raid_devices-Set: y
 #
-# X-Env-Var-mdraid1_external_root_encryption_enabled: y
-# X-Env-Var-mdraid1_external_root_encryption_enabled-Desc: Enable encryption for RAID array.
+# X-Env-Var-encryption_enabled: n
+# X-Env-Var-encryption_enabled-Desc: Enable encryption for RAID array.
 #  y: LUKS2 encryption with secure key management (recommended for production)
 #  n: Unencrypted deployment (development/testing only)
-# X-Env-Var-mdraid1_external_root_encryption_enabled-Required: n
-# X-Env-Var-mdraid1_external_root_encryption_enabled-Valid: y,n
-# X-Env-Var-mdraid1_external_root_encryption_enabled-Set: y
+# X-Env-Var-encryption_enabled-Required: n
+# X-Env-Var-encryption_enabled-Valid: y,n
+# X-Env-Var-encryption_enabled-Set: y
 #
-# X-Env-Var-mdraid1_external_root_sector_size: 512
-# X-Env-Var-mdraid1_external_root_sector_size-Desc: Sector size for external drives
-# X-Env-Var-mdraid1_external_root_sector_size-Required: n
-# X-Env-Var-mdraid1_external_root_sector_size-Valid: 512,4096
-# X-Env-Var-mdraid1_external_root_sector_size-Set: y
+# X-Env-Var-sector_size: 512
+# X-Env-Var-sector_size-Desc: Sector size for external drives
+# X-Env-Var-sector_size-Required: n
+# X-Env-Var-sector_size-Valid: 512,4096
+# X-Env-Var-sector_size-Set: y
 #
-# X-Env-Var-mdraid1_external_root_compression: zstd
-# X-Env-Var-mdraid1_external_root_compression-Desc: Compression type for RAID images.
+# X-Env-Var-compression: zstd
+# X-Env-Var-compression-Desc: Compression type for RAID images.
 #  zstd: Best compression ratio and speed (recommended)
 #  gzip: Good compatibility, slower than zstd
 #  none: No compression for maximum speed
-# X-Env-Var-mdraid1_external_root_compression-Required: n
-# X-Env-Var-mdraid1_external_root_compression-Valid: none,zstd,gzip
-# X-Env-Var-mdraid1_external_root_compression-Set: y
+# X-Env-Var-compression-Required: n
+# X-Env-Var-compression-Valid: none,zstd,gzip,xz
+# X-Env-Var-compression-Set: y
 #
-# X-Env-Var-mdraid1_external_root_apt_cache: y
-# X-Env-Var-mdraid1_external_root_apt_cache-Desc: Enable APT package caching for faster builds
-# X-Env-Var-mdraid1_external_root_apt_cache-Required: n
-# X-Env-Var-mdraid1_external_root_apt_cache-Valid: y,n
-# X-Env-Var-mdraid1_external_root_apt_cache-Set: y
+# X-Env-Var-apt_cache: n
+# X-Env-Var-apt_cache-Desc: Enable APT package caching for faster builds
+# X-Env-Var-apt_cache-Required: n
+# X-Env-Var-apt_cache-Valid: y,n
+# X-Env-Var-apt_cache-Set: y
 #
-# X-Env-Var-mdraid1_external_root_ccache: y
-# X-Env-Var-mdraid1_external_root_ccache-Desc: Enable ccache for faster cross-compilation
-# X-Env-Var-mdraid1_external_root_ccache-Required: n
-# X-Env-Var-mdraid1_external_root_ccache-Valid: y,n
-# X-Env-Var-mdraid1_external_root_ccache-Set: y
+# X-Env-Var-ccache: n
+# X-Env-Var-ccache-Desc: Enable ccache for faster cross-compilation
+# X-Env-Var-ccache-Required: n
+# X-Env-Var-ccache-Valid: y,n
+# X-Env-Var-ccache-Set: y
 #
-# X-Env-Var-mdraid1_external_root_ccache_size: 5G
-# X-Env-Var-mdraid1_external_root_ccache_size-Desc: ccache maximum cache size
-# X-Env-Var-mdraid1_external_root_ccache_size-Required: n
-# X-Env-Var-mdraid1_external_root_ccache_size-Valid: size
-# X-Env-Var-mdraid1_external_root_ccache_size-Set: y
+# X-Env-Var-ccache_size: 5G
+# X-Env-Var-ccache_size-Desc: ccache maximum cache size
+# X-Env-Var-ccache_size-Required: n
+# X-Env-Var-ccache_size-Valid: size
+# X-Env-Var-ccache_size-Set: y
 #
-# X-Env-Var-mdraid1_external_root_parallel_jobs: 0
-# X-Env-Var-mdraid1_external_root_parallel_jobs-Desc: Number of parallel build jobs (0 = auto-detect)
-# X-Env-Var-mdraid1_external_root_parallel_jobs-Required: n
-# X-Env-Var-mdraid1_external_root_parallel_jobs-Valid: int
-# X-Env-Var-mdraid1_external_root_parallel_jobs-Set: y
+# X-Env-Var-parallel_jobs: 0
+# X-Env-Var-parallel_jobs-Desc: Number of parallel build jobs (0 = auto-detect)
+# X-Env-Var-parallel_jobs-Required: n
+# X-Env-Var-parallel_jobs-Valid: int
+# X-Env-Var-parallel_jobs-Set: y
 #
-# X-Env-Var-mdraid1_external_root_image_size_optimization: y
-# X-Env-Var-mdraid1_external_root_image_size_optimization-Desc: Enable image size optimization techniques
-# X-Env-Var-mdraid1_external_root_image_size_optimization-Required: n
-# X-Env-Var-mdraid1_external_root_image_size_optimization-Valid: y,n
-# X-Env-Var-mdraid1_external_root_image_size_optimization-Set: y
+# X-Env-Var-image_size_optimization: n
+# X-Env-Var-image_size_optimization-Desc: Enable image size optimization techniques
+# X-Env-Var-image_size_optimization-Required: n
+# X-Env-Var-image_size_optimization-Valid: y,n
+# X-Env-Var-image_size_optimization-Set: y
 #
-# X-Env-Var-mdraid1_external_root_mbr_type: mbr
-# X-Env-Var-mdraid1_external_root_mbr_type-Desc: Partition table type for external drives
-# X-Env-Var-mdraid1_external_root_mbr_type-Required: n
-# X-Env-Var-mdraid1_external_root_mbr_type-Valid: mbr,gpt
-# X-Env-Var-mdraid1_external_root_mbr_type-Set: y
+# X-Env-Var-mbr_type: mbr
+# X-Env-Var-mbr_type-Desc: Partition table type for external drives
+# X-Env-Var-mbr_type-Required: n
+# X-Env-Var-mbr_type-Valid: mbr,gpt
+# X-Env-Var-mbr_type-Set: y
 #
-# X-Env-Var-mdraid1_external_root_assetdir: ${DIRECTORY}
-# X-Env-Var-mdraid1_external_root_assetdir-Desc: Image specific asset directory
-# X-Env-Var-mdraid1_external_root_assetdir-Required: n
-# X-Env-Var-mdraid1_external_root_assetdir-Valid: string
-# X-Env-Var-mdraid1_external_root_assetdir-Set: y
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Image specific asset directory
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: string
+# X-Env-Var-assetdir-Set: y
 #
-# X-Env-Var-mdraid1_external_root_pmap: crypt
-# X-Env-Var-mdraid1_external_root_pmap-Desc: Provisioning Map identifier for this image layout.
+# X-Env-Var-pmap: clear
+# X-Env-Var-pmap-Desc: Provisioning Map identifier for this image layout.
 #  All partitions will be provisioned encrypted (crypt) by default.
 #  Use 'clear' for unencrypted deployment.
-# X-Env-Var-mdraid1_external_root_pmap-Required: n
-# X-Env-Var-mdraid1_external_root_pmap-Valid: clear,crypt
-# X-Env-Var-mdraid1_external_root_pmap-Set: y
+# X-Env-Var-pmap-Required: n
+# X-Env-Var-pmap-Valid: clear,crypt
+# X-Env-Var-pmap-Set: force
 #
-# X-Env-Var-mdraid1_external_root_key_method: random
-# X-Env-Var-mdraid1_external_root_key_method-Desc: Method for generating encryption keys
+# X-Env-Var-key_method: random
+# X-Env-Var-key_method-Desc: Method for generating encryption keys
 #  random: Generate random key (default)
 #  file: Read key from file
 #  env: Read key from environment variable
 #  tpm: Use TPM for key storage (future feature)
-# X-Env-Var-mdraid1_external_root_key_method-Required: n
-# X-Env-Var-mdraid1_external_root_key_method-Valid: random,file,env,tpm
-# X-Env-Var-mdraid1_external_root_key_method-Set: y
+# X-Env-Var-key_method-Required: n
+# X-Env-Var-key_method-Valid: random,file,env,tpm
+# X-Env-Var-key_method-Set: y
 #
-# X-Env-Var-mdraid1_external_root_key_file: /boot/luks-key
-# X-Env-Var-mdraid1_external_root_key_file-Desc: Path to encryption key file (when method=file)
-# X-Env-Var-mdraid1_external_root_key_file-Required: n
-# X-Env-Var-mdraid1_external_root_key_file-Valid: string
-# X-Env-Var-mdraid1_external_root_key_file-Set: y
+# X-Env-Var-key_file: /boot/luks-key
+# X-Env-Var-key_file-Desc: Path to encryption key file (when method=file)
+# X-Env-Var-key_file-Required: n
+# X-Env-Var-key_file-Valid: string
+# X-Env-Var-key_file-Set: y
 #
-# X-Env-Var-mdraid1_external_root_key_env: LUKS_KEY
-# X-Env-Var-mdraid1_external_root_key_env-Desc: Environment variable containing encryption key (when method=env)
-# X-Env-Var-mdraid1_external_root_key_env-Required: n
-# X-Env-Var-mdraid1_external_root_key_env-Valid: string
-# X-Env-Var-mdraid1_external_root_key_env-Set: y
+# X-Env-Var-key_env: LUKS_KEY
+# X-Env-Var-key_env-Desc: Environment variable containing encryption key (when method=env)
+# X-Env-Var-key_env-Required: n
+# X-Env-Var-key_env-Valid: string
+# X-Env-Var-key_env-Set: y
 #
-# X-Env-Var-mdraid1_external_root_key_size: 512
-# X-Env-Var-mdraid1_external_root_key_size-Desc: Encryption key size in bits
-# X-Env-Var-mdraid1_external_root_key_size-Required: n
-# X-Env-Var-mdraid1_external_root_key_size-Valid: 256,512,1024
-# X-Env-Var-mdraid1_external_root_key_size-Set: y
+# X-Env-Var-key_size: 512
+# X-Env-Var-key_size-Desc: Encryption key size in bits
+# X-Env-Var-key_size-Required: n
+# X-Env-Var-key_size-Valid: 256,512,1024
+# X-Env-Var-key_size-Set: y
 # METAEND
 ---

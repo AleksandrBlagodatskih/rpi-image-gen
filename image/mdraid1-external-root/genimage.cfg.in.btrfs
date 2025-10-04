@@ -42,7 +42,7 @@ image external2.img {
    partition raid1 {
       in-partition-table = true
       partition-type-uuid = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
-      image = raid1-disk1.btrfs
+      image = raid1-disk2.btrfs
    }
 }
 
@@ -79,9 +79,9 @@ image raid1-disk2.btrfs.sparse {
    }
 }
 
-image raid1.btrfs.sparse {
+image root.btrfs.sparse {
    android-sparse {
-      image = raid1.btrfs
+      image = root.btrfs
    }
 }
 
@@ -105,10 +105,7 @@ image raid1-disk1.btrfs {
       raid-uuid = "<ROOT_UUID>"
       disk-uuid = "<DISK1_UUID>"
       role = 0
-      image = "raid1.btrfs"
-      # Оптимизация для RAID1 производительности
-      chunk-size = 512K
-      layout = "left-symmetric"
+      image = "root.btrfs"
    }
    exec-pre = "<SETUP> RAID <BOOT_UUID> <ROOT_UUID>"
 }
@@ -124,11 +121,12 @@ image raid1-disk2.btrfs {
 }
 
 # Root filesystem image (mounted on assembled RAID1 array)
-image raid1.btrfs {
+image root.btrfs {
    btrfs {
       label = "root"
-      fs-type = "btrfs"  # Используем SSD-оптимизированные настройки
-      mountpoint = "/"
+      extraargs = "-m raid1 -d single --ssd --compress=zstd"
    }
+   size = "<ROOT_SIZE>"
+   mountpoint = "/"
    exec-pre = "<SETUP> ROOT <BOOT_UUID> <ROOT_UUID>"
 }

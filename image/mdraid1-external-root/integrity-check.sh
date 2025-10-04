@@ -135,8 +135,8 @@ check_encryption_integrity() {
     fi
 
     # Check if encryption key is available
-    if [[ -n "${IGconf_mdraid1_external_root_key_file:-}" ]] && [[ -f "${IGconf_mdraid1_external_root_key_file}" ]]; then
-        if ! cryptsetup luksOpen --test-passphrase "$encrypted_device" --key-file "${IGconf_mdraid1_external_root_key_file}" >/dev/null 2>&1; then
+    if [[ -n "${IGconf_image_key_file:-}" ]] && [[ -f "${IGconf_image_key_file}" ]]; then
+        if ! cryptsetup luksOpen --test-passphrase "$encrypted_device" --key-file "${IGconf_image_key_file}" >/dev/null 2>&1; then
             echo "ERROR: Encryption key test failed on $encrypted_device"
             return 1
         fi

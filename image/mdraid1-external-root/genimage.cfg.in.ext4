@@ -105,9 +105,6 @@ image raid1-disk1.ext4 {
       disk-uuid = "<DISK1_UUID>"
       role = 0
       image = "root.ext4"
-      # Оптимизация для RAID1 производительности
-      chunk-size = 512K
-      layout = "left-symmetric"
    }
    exec-pre = "<SETUP> RAID <BOOT_UUID> <ROOT_UUID>"
 }
@@ -127,9 +124,9 @@ image root.ext4 {
    ext4 {
       label = "root"
       use-mke2fs = true
-      mke2fs-conf = "../mke2fs.conf"
-      fs-type = "raid1"  # Используем RAID-оптимизированные настройки
-      mountpoint = "/"
+      mke2fs-conf = "<MKE2FS_CONFIG>"
    }
+   size = "<ROOT_SIZE>"
+   mountpoint = "/"
    exec-pre = "<SETUP> ROOT <BOOT_UUID> <ROOT_UUID>"
 }

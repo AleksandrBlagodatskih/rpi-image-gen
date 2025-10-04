@@ -15,12 +15,12 @@ mmdebstrap:
   customize-hooks:
     - |
       # Настройка мониторинга RAID массивов
-      mkdir -p /usr/local/bin
-      cat > /usr/local/bin/raid-monitor.sh << 'EOF'
+      mkdir -p $1/usr/local/bin
+      cat > $1/usr/local/bin/raid-monitor.sh << 'EOF'
       #!/bin/bash
       # Мониторинг состояния RAID массивов
       mdadm --detail --scan > /dev/null 2>&1 || exit 1
       cat /proc/mdstat
       EOF
-      chmod +x /usr/local/bin/raid-monitor.sh
+      chmod +x $1/usr/local/bin/raid-monitor.sh
     - echo "Расширенные инструменты MDADM настроены"
