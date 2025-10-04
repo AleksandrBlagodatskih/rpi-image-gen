@@ -1,37 +1,45 @@
 #!/bin/bash
 #
-# pre-image.sh - подготовка образов для RAID external
-# Валидация требований RAID и генерация конфигурации genimage
+# pre-image.sh - RAID external image preparation
+# Validates RAID requirements and generates genimage configuration
+#
+# Parameters:
+#   $1 - fs: Filesystem path
+#   $2 - genimg_in: Genimage output directory
+#
+# Returns:
+#   0 - success
+#   1 - validation error
 #
 
 set -eu
 
-# Параметры скрипта
-fs=$1        # Путь к файловой системе
-genimg_in=$2 # Директория для выходных файлов genimage
+# Script parameters
+fs=$1        # Filesystem path
+genimg_in=$2 # Genimage output directory
 
-# Проверка существования файловой системы
+# Check filesystem existence
 [[ -d "$fs" ]] || exit 0
 
 # ============================================================================
-# Валидация требований RAID
+# Validate RAID requirements
 # ============================================================================
 
-echo "Валидация требований RAID..."
+echo "Validating RAID requirements..."
 
-# Валидация обязательных переменных
+# Validate mandatory variables
 if [[ -z "$IGconf_image_raid_devices" ]]; then
-    echo "ОШИБКА: Переменная image_raid_devices не установлена"
+    echo "ERROR: Variable image_raid_devices is not set"
     exit 1
 fi
 
 if [[ -z "$IGconf_image_raid_level" ]]; then
-    echo "ОШИБКА: Переменная image_raid_level не установлена"
+    echo "ERROR: Variable image_raid_level is not set"
     exit 1
 fi
 
 if [[ -z "$IGconf_image_rootfs_type" ]]; then
-    echo "ОШИБКА: Переменная image_rootfs_type не установлена"
+    echo "ERROR: Variable image_rootfs_type is not set"
     exit 1
 fi
 
@@ -58,16 +66,16 @@ esac
 echo "RAID validation completed successfully"
 
 # ============================================================================
-# Автоматический выбор provision map на основе настроек шифрования
+# Auto-select provision map based on encryption settings
 # ============================================================================
 
-# Автоматический выбор provision map на основе шифрования
+# Auto-select provision map based on encryption
 if [[ "${IGconf_image_encryption_enabled:-n}" == "y" ]]; then
     IGconf_image_pmap="crypt"
-    echo "Шифрование включено - выбран provision map: crypt"
+    echo "Encryption enabled - selected provision map: crypt"
 else
     IGconf_image_pmap="clear"
-    echo "Шифрование отключено - выбран provision map: clear"
+    echo "Encryption disabled - selected provision map: clear"
 fi
 
 # ============================================================================
@@ -138,58 +146,58 @@ cp "$(readlink -ef mke2fs.conf)" "${genimg_in}/"
 
 # Write genimage template
 cat genimage.cfg.in.$IGconf_image_rootfs_type | sed \
-   -e "s|<IMAGE_DIR>|$IGconf_image_assetdir|g" \
-   -e "s|<IMAGE_NAME>|$IGconf_image_name|g" \
-   -e "s|<IMAGE_SUFFIX>|$IGconf_image_suffix|g" \
-   -e "s|<FW_SIZE>|$IGconf_image_boot_part_size|g" \
-   -e "s|<ROOT_SIZE>|$ROOT_SIZE_MB|g" \
-   -e "s|<SECTOR_SIZE>|$IGconf_image_sector_size|g" \
-   -e "s|<SETUP>|'$(readlink -ef setup.sh)'|g" \
-   -e "s|<MKE2FS_CONFIG>|$(readlink -ef mke2fs.conf)|g" \
-   -e "s|<BOOT_LABEL>|$BOOT_LABEL|g" \
-   -e "s|<BOOT_UUID>|$BOOT_UUID|g" \
-   -e "s|<ROOT_UUID>|$ROOT_UUID|g" \
-   -e "s|<DISK1_UUID>|$DISK1_UUID|g" \
-   -e "s|<DISK2_UUID>|$DISK2_UUID|g" \
-   > ${genimg_in}/genimage.cfg
+    -e "s|<IMAGE_DIR>|$IGconf_image_assetdir|g" \
+    -e "s|<IMAGE_NAME>|$IGconf_image_name|g" \
+    -e "s|<IMAGE_SUFFIX>|$IGconf_image_suffix|g" \
+    -e "s|<FW_SIZE>|$IGconf_image_boot_part_size|g" \
+    -e "s|<ROOT_SIZE>|$ROOT_SIZE_MB|g" \
+    -e "s|<SECTOR_SIZE>|$IGconf_image_sector_size|g" \
+    -e "s|<SETUP>|'$(readlink -ef setup.sh)'|g" \
+    -e "s|<MKE2FS_CONFIG>|$(readlink -ef mke2fs.conf)|g" \
+    -e "s|<BOOT_LABEL>|$BOOT_LABEL|g" \
+    -e "s|<BOOT_UUID>|$BOOT_UUID|g" \
+    -e "s|<ROOT_UUID>|$ROOT_UUID|g" \
+    -e "s|<DISK1_UUID>|$DISK1_UUID|g" \
+    -e "s|<DISK2_UUID>|$DISK2_UUID|g" \
+    > ${genimg_in}/genimage.cfg
 
 
 # Install provision map and set UUIDs
 if [[ -n "${IGconf_image_pmap:-}" ]]; then
-   echo "Setting up provisioning map: ${IGconf_image_pmap}"
+    echo "Setting up provisioning map: ${IGconf_image_pmap}"
 
-   # Copy the appropriate provision map
-   pmap_source="./device/provisionmap-${IGconf_image_pmap}.json"
-   if [[ ! -f "$pmap_source" ]]; then
-       echo "ERROR: Provision map not found: $pmap_source"
-       exit 1
-   fi
+    # Copy the appropriate provision map
+    pmap_source="./device/provisionmap-${IGconf_image_pmap}.json"
+    if [[ ! -f "$pmap_source" ]]; then
+        echo "ERROR: Provision map not found: $pmap_source"
+        exit 1
+    fi
 
-   cp "$pmap_source" "${IGconf_image_outputdir}/provisionmap.json"
+    cp "$pmap_source" "${IGconf_image_outputdir}/provisionmap.json"
 
-   # Replace basic variables
-   sed -i \
-      -e "s|<CRYPT_UUID>|$CRYPT_UUID|g" \
-      -e "s|<RAID_LEVEL>|$IGconf_image_raid_level|g" \
-      -e "s|<RAID_DEVICES>|$IGconf_image_raid_devices|g" \
-      -e "s|<BOOT_UUID>|$BOOT_UUID|g" \
-      -e "s|<ROOT_UUID>|$ROOT_UUID|g" \
-      -e "s|<DISK1_UUID>|$DISK1_UUID|g" \
-      -e "s|<DISK2_UUID>|$DISK2_UUID|g" \
-      "${IGconf_image_outputdir}/provisionmap.json"
+    # Replace basic variables
+    sed -i \
+        -e "s|<CRYPT_UUID>|$CRYPT_UUID|g" \
+        -e "s|<RAID_LEVEL>|$IGconf_image_raid_level|g" \
+        -e "s|<RAID_DEVICES>|$IGconf_image_raid_devices|g" \
+        -e "s|<BOOT_UUID>|$BOOT_UUID|g" \
+        -e "s|<ROOT_UUID>|$ROOT_UUID|g" \
+        -e "s|<DISK1_UUID>|$DISK1_UUID|g" \
+        -e "s|<DISK2_UUID>|$DISK2_UUID|g" \
+        "${IGconf_image_outputdir}/provisionmap.json"
 
-   # Validate generated provisioning map
-   if [[ ! -f "${IGconf_image_outputdir}/provisionmap.json" ]]; then
-       echo "ERROR: Failed to create provisioning map"
-       exit 1
-   fi
+    # Validate generated provisioning map
+    if [[ ! -f "${IGconf_image_outputdir}/provisionmap.json" ]]; then
+        echo "ERROR: Failed to create provisioning map"
+        exit 1
+    fi
 
-   # Check if provisioning map is valid JSON
-   if ! python3 -m json.tool "${IGconf_image_outputdir}/provisionmap.json" > /dev/null 2>&1; then
-       echo "ERROR: Generated provisioning map is not valid JSON"
-       python3 -m json.tool "${IGconf_image_outputdir}/provisionmap.json" || true
-       exit 1
-   fi
+    # Check if provisioning map is valid JSON
+    if ! python3 -m json.tool "${IGconf_image_outputdir}/provisionmap.json" > /dev/null 2>&1; then
+        echo "ERROR: Generated provisioning map is not valid JSON"
+        python3 -m json.tool "${IGconf_image_outputdir}/provisionmap.json" || true
+        exit 1
+    fi
 
-   echo "Provisioning map configured successfully"
+    echo "Provisioning map configured successfully"
 fi

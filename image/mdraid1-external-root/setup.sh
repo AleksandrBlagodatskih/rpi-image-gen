@@ -1,80 +1,89 @@
 #!/bin/bash
 #
-# setup.sh - настройка разделов для RAID external
-# Конфигурирует файловые системы и точки монтирования для RAID массивов
+# setup.sh - RAID external partition setup
+# Configures filesystems and mount points for RAID arrays
+#
+# Parameters:
+#   $1 - LABEL: Partition label (ROOT, RAID, BOOT)
+#   $2 - BOOTUUID: Boot partition UUID
+#   $3 - ROOTUUID: Root partition UUID
+#
+# Returns:
+#   0 - success
+#   1 - error
 #
 
 set -eu
 
-# Параметры скрипта
-LABEL="$1"      # Метка раздела (ROOT, RAID, BOOT)
-BOOTUUID="$2"   # UUID загрузочного раздела
-ROOTUUID="$3"   # UUID корневого раздела
+# Script parameters
+LABEL="$1"      # Partition label (ROOT, RAID, BOOT)
+BOOTUUID="$2"   # Boot partition UUID
+ROOTUUID="$3"   # Root partition UUID
 
-# Загрузка функций управления ключами шифрования
+# Load encryption key management functions
 source "$(dirname "$0")/key-management.sh"
 
 case $LABEL in
-   ROOT)
-      # Настройка корневой файловой системы RAID1
-      # Массив RAID собирается Linux из двух дисков-участников RAID
-      # genimage создает диски-участники с правильными метаданными RAID
+    ROOT)
+        # Configure RAID1 root filesystem
+        # RAID array is assembled by Linux from two member disks
+        # genimage creates member disks with proper RAID metadata
 
-      # Determine root device based on encryption flag
-      if [[ "${IGconf_image_encryption_enabled:-n}" == "y" ]]; then
-         echo "Setting up secure key management..."
-         # Note: manage_encryption_key function should be called from key-management.sh
+        # Determine root device based on encryption flag
+        if [[ "${IGconf_image_encryption_enabled:-n}" == "y" ]]; then
+            echo "Setting up secure key management..."
+            # Note: manage_encryption_key function should be called from key-management.sh
 
-         # Configure crypttab for encrypted RAID with optimized options
-         echo "Настройка crypttab для зашифрованного RAID массива..."
-         cat << EOF > $IMAGEMOUNTPATH/etc/crypttab
+            # Configure crypttab for encrypted RAID with optimized options
+            echo "Configuring crypttab for encrypted RAID array..."
+            cat << EOF > $IMAGEMOUNTPATH/etc/crypttab
 # Encrypted RAID1 root filesystem - optimized for security and performance
 cryptroot /dev/md0 none luks,discard,initramfs,keyscript=/bin/manage-encryption-key,timeout=30,retry=3
 EOF
 
-         # For encrypted RAID, we mount the LUKS device
-         ROOT_DEVICE="/dev/mapper/cryptroot"
-      else
-         # For unencrypted RAID, mount the RAID array directly
-         ROOT_DEVICE="/dev/md0"
-      fi
+            # For encrypted RAID, we mount the LUKS device
+            ROOT_DEVICE="/dev/mapper/cryptroot"
+        else
+            # For unencrypted RAID, mount the RAID array directly
+            ROOT_DEVICE="/dev/md0"
+        fi
 
-      # Setup fstab with RAID-optimized options
-      case $IGconf_image_rootfs_type in
-         ext4)
-            cat << EOF > $IMAGEMOUNTPATH/etc/fstab
+        # Setup fstab with RAID-optimized options
+        case $IGconf_image_rootfs_type in
+            ext4)
+                cat << EOF > $IMAGEMOUNTPATH/etc/fstab
 # RAID1 root filesystem - optimized for reliability and performance
 # Uses RAID-optimized mke2fs.conf settings (stride=128, stripe-width=128)
 ${ROOT_DEVICE} /               ext4 rw,relatime,errors=remount-ro,commit=30,data=ordered,barrier=1 0 1
 EOF
-            ;;
-         btrfs)
-            cat << EOF > $IMAGEMOUNTPATH/etc/fstab
+                ;;
+            btrfs)
+                cat << EOF > $IMAGEMOUNTPATH/etc/fstab
 # RAID1 root filesystem - optimized for reliability and performance
 # Uses SSD-optimized mke2fs.conf settings with compression
 ${ROOT_DEVICE} /               btrfs rw,relatime,compress=zstd,space_cache=v2,autodefrag,ssd 0 0
 EOF
-            ;;
-         f2fs)
-            cat << EOF > $IMAGEMOUNTPATH/etc/fstab
+                ;;
+            f2fs)
+                cat << EOF > $IMAGEMOUNTPATH/etc/fstab
 # RAID1 root filesystem - optimized for flash storage and reliability
 # Uses flash-optimized mke2fs.conf settings with background GC
 ${ROOT_DEVICE} /               f2fs rw,relatime,lazytime,background_gc=on,discard,no_heap,checkpoint=disable 0 0
 EOF
-            ;;
-         *)
-            ;;
-      esac
+                ;;
+            *)
+                ;;
+        esac
 
-      # Add boot partition
-      cat << EOF >> $IMAGEMOUNTPATH/etc/fstab
+        # Add boot partition
+        cat << EOF >> $IMAGEMOUNTPATH/etc/fstab
 UUID=${BOOTUUID} /boot/firmware  vfat defaults,rw,noatime,errors=remount-ro 0 2
 EOF
 
-      # Note: cmdline.txt is updated in BOOT case for both encrypted and unencrypted RAID
+        # Note: cmdline.txt is updated in BOOT case for both encrypted and unencrypted RAID
 
-      # Create optimized RAID monitoring configuration
-      cat << EOF > $IMAGEMOUNTPATH/etc/default/mdadm
+        # Create optimized RAID monitoring configuration
+        cat << EOF > $IMAGEMOUNTPATH/etc/default/mdadm
 # Optimized mdadm configuration for RAID${IGconf_image_raid_level:-1}
 # Generated by image-raid extension
 
@@ -103,8 +112,8 @@ BITMAP_POLL_INTERVAL=300
 REBUILD_RESYNC_PRIORITY=high
 EOF
 
-      # Create detailed mdadm configuration
-      cat << EOF > $IMAGEMOUNTPATH/etc/mdadm/mdadm.conf
+        # Create detailed mdadm configuration
+        cat << EOF > $IMAGEMOUNTPATH/etc/mdadm/mdadm.conf
 # Generated mdadm.conf for RAID1 external root
 # Optimized configuration for reliability and monitoring
 
@@ -120,23 +129,23 @@ MAILADDR root
 # Monitoring and alerting
 PROGRAM /usr/sbin/mdadm-wait
 EOF
-      ;;
-   RAID)
-      # RAID member disks created by genimage mdraid
-      # No additional setup needed - Linux will assemble the array
-      echo "RAID member disk configured by genimage mdraid"
-      ;;
-   BOOT)
-      # Boot partition setup - update cmdline.txt for RAID boot
-      # Use the same ROOT_DEVICE variable determined in ROOT section
-      if [[ "${IGconf_image_encryption_enabled:-n}" == "y" ]]; then
-         sed -i "s|root=\([^ ]*\)|root=/dev/mapper/cryptroot|" "$IMAGEMOUNTPATH/cmdline.txt"
-         echo "Boot configured for encrypted RAID - using /dev/mapper/cryptroot"
-      else
-         sed -i "s|root=\([^ ]*\)|root=/dev/md0|" "$IMAGEMOUNTPATH/cmdline.txt"
-         echo "Boot configured for unencrypted RAID - using /dev/md0"
-      fi
-      ;;
-   *)
-      ;;
+        ;;
+    RAID)
+        # RAID member disks created by genimage mdraid
+        # No additional setup needed - Linux will assemble the array
+        echo "RAID member disk configured by genimage mdraid"
+        ;;
+    BOOT)
+        # Boot partition setup - update cmdline.txt for RAID boot
+        # Use the same ROOT_DEVICE variable determined in ROOT section
+        if [[ "${IGconf_image_encryption_enabled:-n}" == "y" ]]; then
+            sed -i "s|root=\([^ ]*\)|root=/dev/mapper/cryptroot|" "$IMAGEMOUNTPATH/cmdline.txt"
+            echo "Boot configured for encrypted RAID - using /dev/mapper/cryptroot"
+        else
+            sed -i "s|root=\([^ ]*\)|root=/dev/md0|" "$IMAGEMOUNTPATH/cmdline.txt"
+            echo "Boot configured for unencrypted RAID - using /dev/md0"
+        fi
+        ;;
+    *)
+        ;;
 esac

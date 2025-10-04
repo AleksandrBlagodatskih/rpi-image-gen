@@ -1,5 +1,5 @@
 # Multi-image configuration for RAID external layer using genimage mdraid
-# Generates: SD card image (boot) + External drive images with RAID1 arrays
+# Generates: SD card image (boot) + External drive images with RAID1 arrays (ext4)
 
 # SD Card Image (Boot partition only)
 image sdcard.img {
