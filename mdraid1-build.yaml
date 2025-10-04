@@ -1,0 +1,19 @@
+# Конфигурация для сборки образа с mdraid1-external-root расширением
+# Создает образ с RAID1 на внешних дисках и загрузкой с SD карты
+
+device:
+  layer: rpi4
+  hostname: rpi4-mdraid1
+
+image:
+  layer: mdraid1-external-root
+
+layer:
+  base: debian-bookworm-arm64-slim
+  extension: image-base device-base locale-base sys-misc-raid-base sys-misc-mdadm-tools mdraid1-external-root
+
+# Настройка артефактов (переменные будут установлены через зависимости слоев)
+# artefact_target_name и artefact_version устанавливаются через X-Env-VarRequires
+
+# Региональные настройки (переменные будут установлены через зависимости слоев)
+# locale_* переменные устанавливаются через X-Env-VarRequires

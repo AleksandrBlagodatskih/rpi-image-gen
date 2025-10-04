@@ -1,0 +1,14 @@
+# METABEGIN
+# X-Env-Layer-Name: raid-base
+# X-Env-Layer-Category: foundation
+# X-Env-Layer-Desc: Simple base utilities for RAID array management
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires:
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - mdadm
+    - lvm2
+  customize-hooks:
+    - echo "Basic RAID utilities installed"

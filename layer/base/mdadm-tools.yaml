@@ -1,21 +1,21 @@
 # METABEGIN
 # X-Env-Layer-Name: sys-misc-mdadm-tools
-# X-Env-Layer-Category: sys-misc
-# X-Env-Layer-Description: Расширенные инструменты управления MDADM массивами и мониторинга
+# X-Env-Layer-Category: foundation
+# X-Env-Layer-Desc: Extended MDADM array management tools and monitoring
 # X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: sys-misc-raid-base
+# X-Env-Layer-Requires: raid-base
 # METAEND
 ---
 mmdebstrap:
   packages:
     - smartmontools
-    - mdadm-extras
     - lsscsi
   setup-hooks:
     - echo "Настройка расширенных инструментов MDADM"
   customize-hooks:
     - |
       # Настройка мониторинга RAID массивов
+      mkdir -p /usr/local/bin
       cat > /usr/local/bin/raid-monitor.sh << 'EOF'
       #!/bin/bash
       # Мониторинг состояния RAID массивов

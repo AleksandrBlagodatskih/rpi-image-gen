@@ -1,8 +1,13 @@
-# Слой mdraid1-external-root - RAID1 с внешними дисками
+# Слой image-raid (mdraid1-external-root) - RAID1 с внешними дисками
 
 ## Описание
 
 Этот слой создает образ Raspberry Pi с поддержкой RAID1 на внешних дисках. SD карта используется только для загрузки, а корневая файловая система размещается на RAID1 массиве из внешних дисков.
+
+**Имя слоя:** `image-raid`  
+**Путь:** `image/mbr/mdraid1-external-root/`  
+**Категория:** `image`  
+**Версия:** `1.0.0`
 
 ## Архитектура
 
@@ -14,14 +19,12 @@
 ## Требования
 
 ### Обязательные зависимости
-- `artefact-base` - управление артефактами сборки
-- `sys-build-base` - инструменты сборки
-- `target-config` - конфигурация цели сборки
-- `locale-base` - локаль и региональные настройки
-- `deploy-base` - развертывание артефактов
-- `sbom-base` - генерация SBOM (Software Bill of Materials)
+- `image-base` - базовые компоненты для образов
 - `device-base` - базовые настройки устройств
-- `sys-misc-raid-base` - базовая поддержка RAID
+- `artefact-base` - управление артефактами сборки
+- `locale-base` - локаль и региональные настройки
+- `target-config` - конфигурация цели сборки
+- `raid-base` - базовая поддержка RAID
 - `sys-misc-mdadm-tools` - инструменты mdadm
 
 ### Рекомендуемые зависимости
@@ -32,88 +35,123 @@
 
 ### Основные переменные
 
+**Префикс переменных:** `IGconf_image_`
+
 | Переменная | Описание | Значение по умолчанию | Обязательна |
 |---|----|---|----|
-| `mdraid1_external_root_rootfs_type` | Тип файловой системы RAID | `ext4` | Да |
-| `mdraid1_external_root_raid_level` | Уровень RAID | `RAID1` | Да |
-| `mdraid1_external_root_raid_devices` | Количество устройств в RAID | `2` | Да |
-| `mdraid1_external_root_encryption_enabled` | Включить шифрование | `n` | Нет |
-| `mdraid1_external_root_pmap` | Тип provisioning map | `clear` | Нет |
+| `IGconf_image_rootfs_type` | Тип файловой системы RAID | `ext4` | Да |
+| `IGconf_image_raid_level` | Уровень RAID | `RAID1` | Да |
+| `IGconf_image_raid_devices` | Количество устройств в RAID | `2` | Да |
+| `IGconf_image_encryption_enabled` | Включить шифрование | `n` | Нет |
+| `IGconf_image_pmap` | Тип provisioning map | `clear` | Нет |
+| `IGconf_image_boot_part_size` | Размер загрузочного раздела | `200M` | Нет |
+| `IGconf_image_root_part_size` | Размер корневого раздела | `100%` | Нет |
 
 ### Типы provisioning map
 
 - `clear` - нешифрованный RAID массив
 - `crypt` - шифрованный RAID массив с LUKS
 
-### Размеры разделов
+### Дополнительные переменные
 
 | Переменная | Описание | Значение по умолчанию |
 |---|----|---|
-| `mdraid1_external_root_boot_part_size` | Размер загрузочного раздела | `200M` |
-| `mdraid1_external_root_root_part_size` | Размер корневого раздела | `100%` |
-| `mdraid1_external_root_sector_size` | Размер сектора | `512` |
+| `IGconf_image_sector_size` | Размер сектора | `512` |
+| `IGconf_image_compression` | Тип сжатия образа | `zstd` |
+| `IGconf_image_apt_cache` | Кэширование APT пакетов | `n` |
+| `IGconf_image_ccache` | Кэширование компиляции | `n` |
+| `IGconf_image_ccache_size` | Размер ccache кэша | `5G` |
+| `IGconf_image_parallel_jobs` | Параллельные задачи сборки | `0` (авто) |
+| `IGconf_image_image_size_optimization` | Оптимизация размера образа | `n` |
 
 ## Использование
 
 ### Базовая конфигурация
 
 ```yaml
+# Базовая конфигурация для тестирования
 device:
-  layer: pi5
-  hostname: rpi5-raid
+  layer: rpi5
+  hostname: rpi5-raid1-test
+  user: pi
 
 image:
-  layer: mdraid1-external-root
+  layer: image-raid
+  boot_part_size: 200M
+  root_part_size: 100%
+  name: rpi5-raid1-image
+  compression: zstd
+  
+  # RAID конфигурация
+  raid_level: RAID1
+  raid_devices: 2
+  rootfs_type: ext4
+  encryption_enabled: n
+  pmap: clear
 
 layer:
-  base: debian-bookworm-arm64-slim
-  extension:
-    # Базовые компоненты сборки
-    - artefact-base
-    - sys-build-base
-    - target-config
-    - locale-base
-    - deploy-base
-    - sbom-base
-    - device-base
-    # Специфичные для RAID
-    - sys-misc-raid-base
-    - sys-misc-mdadm-tools
-    # Само расширение
-    - mdraid1-external-root
+  base: bookworm-minbase
 
-# Настройка артефактов
+# Настройка артефактов (обязательно)
 artefact:
-  target_name: rpi5-raid1-system
+  target_name: rpi5-raid1-test
   version: 1.0.0
 
-# Региональные настройки
+# Региональные настройки (обязательно)
 locale:
-  timezone: Europe/Moscow
-  default: ru_RU.UTF-8
-  keyboard_layout: Russian
-  keyboard_keymap: ru
-
-# Настройка RAID
-mdraid1_external_root_raid_level: RAID1
-mdraid1_external_root_raid_devices: 2
-mdraid1_external_root_rootfs_type: ext4
-mdraid1_external_root_encryption_enabled: n
-mdraid1_external_root_pmap: clear
+  timezone: UTC
+  default: en_US.UTF-8
+  keyboard_layout: us
+  keyboard_keymap: us
 ```
 
 ### С шифрованием
 
 ```yaml
-# Включить шифрование RAID массива
-mdraid1_external_root_encryption_enabled: y
-mdraid1_external_root_pmap: crypt
-mdraid1_external_root_key_method: random
-mdraid1_external_root_key_size: 512
+# Продакшн конфигурация с шифрованием LUKS2
+device:
+  layer: rpi5
+  hostname: rpi5-raid1-secure
+  user: pi
 
-# Дополнительные настройки для шифрования
-mdraid1_external_root_key_file: /boot/luks-key
-mdraid1_external_root_key_env: LUKS_KEY
+image:
+  layer: image-raid
+  boot_part_size: 200M
+  root_part_size: 100%
+  name: rpi5-raid1-encrypted
+  compression: zstd
+  
+  # RAID конфигурация с шифрованием
+  raid_level: RAID1
+  raid_devices: 2
+  rootfs_type: btrfs
+  encryption_enabled: y
+  pmap: crypt
+  
+  # Параметры шифрования
+  key_method: random
+  key_size: 512
+  key_file: /boot/luks-key
+  
+  # Оптимизация производительности для продакшн
+  apt_cache: y
+  ccache: y
+  ccache_size: 5G
+  parallel_jobs: 4
+  image_size_optimization: y
+
+layer:
+  base: bookworm-minbase
+
+artefact:
+  target_name: rpi5-raid1-secure
+  version: 1.0.0
+
+locale:
+  timezone: Europe/Moscow
+  default: ru_RU.UTF-8
+  keyboard_layout: Russian
+  keyboard_keymap: ru
 ```
 
 ## Сборка
@@ -122,25 +160,26 @@ mdraid1_external_root_key_env: LUKS_KEY
 
 ```bash
 # Сухой запуск для проверки конфигурации
-rpi-image-gen build -c test-config.yaml --dry-run
+rpi-image-gen build -c config/rpi5-raid1-test.yaml --dry-run
 
 # Полная сборка
-rpi-image-gen build -c test-config.yaml
+rpi-image-gen build -c config/rpi5-raid1-test.yaml
 ```
 
 ### Производственная сборка
 
 ```bash
-# С оптимизацией производительности
-rpi-image-gen build -c config.yaml \
-  -- IGconf_artefact_target_name=rpi5-raid1-system \
-  -- IGconf_artefact_version=1.0.0 \
-  -- IGconf_locale_timezone=Europe/Moscow \
-  -- IGconf_locale_default=ru_RU.UTF-8 \
-  -- IGconf_mdraid1_external_root_apt_cache=y \
-  -- IGconf_mdraid1_external_root_ccache=y \
-  -- IGconf_mdraid1_external_root_parallel_jobs=4 \
-  -- IGconf_mdraid1_external_root_compression=zstd
+# С оптимизацией производительности и шифрованием
+rpi-image-gen build -c config/rpi5-raid1-encrypted.yaml
+
+# Или с переопределением параметров через командную строку
+rpi-image-gen build -c config/rpi5-raid1-test.yaml \
+  -- IGconf_image_encryption_enabled=y \
+  -- IGconf_image_pmap=crypt \
+  -- IGconf_image_apt_cache=y \
+  -- IGconf_image_ccache=y \
+  -- IGconf_image_parallel_jobs=4 \
+  -- IGconf_image_compression=zstd
 ```
 
 ## Результаты сборки
