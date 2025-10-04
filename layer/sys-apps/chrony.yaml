@@ -1,0 +1,72 @@
+# METABEGIN
+# X-Env-Layer-Name: chrony
+# X-Env-Layer-Category: sys-apps
+# X-Env-Layer-Desc: Chrony NTP client (imports settings from systemd-timesyncd, replaces it completely)
+# X-Env-Layer-Version: 1.1.0
+# X-Env-Layer-Requires: essential,systemd-net-min
+# X-Env-Layer-Provides: ntp-client,timesync
+# X-Env-Layer-Conflicts: systemd-timesyncd
+#
+# X-Env-VarPrefix: chrony
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable chrony NTP client (imports from systemd-timesyncd)
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - chrony
+  customize-hooks:
+    # Install and configure chrony with systemd-timesyncd replacement
+    - |
+      if [ "${IGconf_chrony_enable}" = "y" ]; then
+        echo "Setting up chrony NTP client..."
+
+        # Import NTP servers from systemd-timesyncd if available
+        NTP_SERVERS=""
+        if [ -f "$1/etc/systemd/timesyncd.conf" ]; then
+          TIMESYNCD_SERVERS=$(grep "^NTP=" "$1/etc/systemd/timesyncd.conf" | cut -d'=' -f2)
+          if [ -n "$TIMESYNCD_SERVERS" ]; then
+            NTP_SERVERS=$(echo "$TIMESYNCD_SERVERS" | sed 's/ / iburst\npool /g' | sed 's/^/pool /' | sed 's/$/ iburst/')
+            echo "Imported NTP servers from systemd-timesyncd"
+          fi
+        fi
+
+        # Use default Debian servers as fallback
+        [ -z "$NTP_SERVERS" ] && NTP_SERVERS="pool 2.debian.pool.ntp.org iburst
+pool 0.debian.pool.ntp.org iburst"
+
+        # Create chrony configuration
+        mkdir -p $1/etc/chrony
+        cat > $1/etc/chrony/chrony.conf << EOF
+# Chrony NTP client configuration
+${NTP_SERVERS}
+
+rtcsync
+makestep 1 3
+ntsdumpdir /var/lib/chrony
+logdir /var/log/chrony
+maxupdateskew 100.0
+EOF
+
+        # Set permissions and create directories
+        chmod 644 $1/etc/chrony/chrony.conf
+        mkdir -p $1/var/log/chrony $1/var/lib/chrony
+
+        # Enable chrony service
+        $BDEBSTRAP_HOOKS/enable-units "$1" chrony
+
+        # Completely remove systemd-timesyncd
+        echo "Removing systemd-timesyncd..."
+        chroot "$1" apt-get purge -y systemd-timesyncd 2>/dev/null || true
+        chroot "$1" systemctl disable systemd-timesyncd 2>/dev/null || true
+        chroot "$1" systemctl stop systemd-timesyncd 2>/dev/null || true
+
+        # Clean up systemd-timesyncd files
+        rm -f "$1/etc/systemd/system/"*"/systemd-timesyncd."* 2>/dev/null || true
+
+        echo "Chrony setup completed"
+      fi

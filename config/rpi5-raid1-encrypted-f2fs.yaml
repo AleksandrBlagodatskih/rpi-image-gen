@@ -1,10 +1,16 @@
 # Продакшн конфигурация для RAID1 образа с шифрованием на Raspberry Pi 5 (f2fs)
 # Использует слой image-raid с LUKS2 шифрованием для безопасного хранения
+# Включает комплексные слои безопасности и системные утилиты
+# Использует обновленные слои: chrony (вместо systemd-chrony-min) и упрощенный distrobox
 
 device:
   layer: rpi5
   hostname: rpi5-raid1-secure-f2fs
   user: pi
+  
+  # Поддержка Radxa SATA Penta HAT для подключения дисков RAID
+  # Раскомментируйте, если используется Radxa SATA HAT:
+  # sata_hat: radxa-sata-penta-hat
 
 image:
   layer: image-raid
@@ -33,7 +39,123 @@ image:
   image_size_optimization: y
 
 layer:
+  # Базовый слой системы
   base: bookworm-minbase
+
+  # ==============================================================
+  # СЛОИ БЕЗОПАСНОСТИ (созданы после edcf4369af9937af45a545de345349dee5de8630)
+  # ==============================================================
+
+  # Комплексный набор минимальных настроек безопасности (рекомендуется)
+  # Включает: Fail2Ban, AppArmor, Auditd, PAM, UFW, Sysctl hardening
+  security_suite: security-suite-minimal
+
+  # Альтернатива: индивидуальные слои безопасности (раскомментируйте при необходимости)
+  # security:
+  #   # Обязательный контроль доступа (MAC)
+  #   apparmor: apparmor-minimal
+  #
+  #   # Система аудита (минимальные правила, <5% CPU)
+  #   auditd: auditd-minimal
+  #
+  #   # Защита от брутфорса
+  #   fail2ban: fail2ban-minimal
+  #
+  #   # Firewall с политикой deny-incoming
+  #   firewall: ufw-minimal
+  #
+  #   # Hardening ядра (CIS Level 2)
+  #   sysctl: sysctl-hardening
+  #
+  #   # Логирование sudo команд
+  #   sudo_log: sudo-logging
+  #
+  #   # Политики паролей и учётных записей
+  #   passwords: password-policies
+  #
+  #   # Базовое качество паролей (pwquality)
+  #   pam: pam-minimal
+
+  # ==============================================================
+  # СИСТЕМНЫЕ СЛОИ (созданы после edcf4369af9937af45a545de345349dee5de8630)
+  # ==============================================================
+
+  # Chrony NTP клиент (автоматически импортирует настройки из systemd-timesyncd)
+  chrony: chrony
+
+  # Raspberry Pi 5 оптимизированная конфигурация для серверного использования
+  rpi5_server: rpi5-server-config
+
+  # ==============================================================
+  # СЛОИ УПРАВЛЕНИЯ И МОНИТОРИНГА
+  # ==============================================================
+
+  # Веб-интерфейс Cockpit для системного управления и мониторинга
+  cockpit: cockpit
+
+  # ==============================================================
+  # КОНТЕЙНЕРНЫЕ СЛОИ (созданы после edcf4369af9937af45a545de345349dee5de8630)
+  # ==============================================================
+
+  # Docker Engine для контейнеризации (требуется для Distrobox)
+  docker: docker-debian-bookworm
+
+  # Distrobox с базовым dev контейнером
+  distrobox: distrobox
+
+# ==============================================================
+# ПЕРЕМЕННЫЕ КОНФИГУРАЦИИ НОВЫХ СЛОЕВ
+# ==============================================================
+
+# Настройки комплексного набора безопасности
+security_suite:
+  enable: y  # Включить все компоненты security-suite-minimal
+
+# Настройки синхронизации времени (критично для RAID и шифрования)
+chrony:
+  enable: y  # Включить chrony NTP клиент (автоматически импортирует настройки из systemd-timesyncd)
+
+# Настройки Raspberry Pi 5 серверной оптимизации
+rpi5_server:
+  disable_hdmi: y          # Отключить HDMI для экономии энергии
+  disable_wifi: y          # Отключить WiFi для безопасности
+  disable_bluetooth: y     # Отключить Bluetooth для безопасности
+  disable_audio: y         # Отключить аудио для серверной операции
+  pcie_max_speed: y        # PCIe Gen 3.0 для NVMe SSD
+  usb_max_performance: y   # USB 3.0 high-performance режим
+  disable_unused_interfaces: y  # Отключить SPI/I2C/I2S
+  optimize_performance: n  # Дополнительные оптимизации производительности
+  security_hardening: n    # Дополнительные меры безопасности
+
+# Настройки Cockpit веб-интерфейса
+cockpit:
+  port: 9090               # Порт для веб-интерфейса
+  allow_unprivileged: n    # Запретить непривилегированным пользователям доступ
+  max_startup_time: 120    # Максимальное время запуска
+  login_banner: "Raspberry Pi 5 Secure Server"  # Приветственное сообщение
+
+# Настройки Docker Engine (требуется для Distrobox)
+docker:
+  trust_user1: y  # Дать пользователю pi права на запуск Docker без sudo
+
+# Настройки Distrobox (минимальная установка с dev контейнером)
+distrobox:
+  enable: y  # Включить distrobox с базовым dev контейнером
+
+# Настройки системных утилит сборки (требуется для Docker)
+sys:
+  apt_keydir: /home/admin/rpi-image-gen/work/keys  # Директория для APT ключей
+
+# Настройки Radxa SATA Penta HAT (раскомментируйте, если используется)
+# radxa_sata:
+#   pcie_gen3: y            # Включить PCIe Gen 3.0 для JMB585
+#   initramfs_sata: y       # Ранняя загрузка SATA драйверов
+#   load_rp1_modules: y     # Загрузка модулей RP1 I/O chip
+#   enable_gpio_power: n    # GPIO управление питанием (экспериментально)
+
+# ==============================================================
+# ОБЯЗАТЕЛЬНЫЕ НАСТРОЙКИ
+# ==============================================================
 
 # Настройка артефактов (требуется для слоя image-raid)
 artefact:
