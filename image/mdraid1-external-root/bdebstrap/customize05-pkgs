@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+# customize05-pkgs - установка базовых пакетов для RAID
+# Устанавливает необходимые пакеты для поддержки RAID массивов
+#
+
+set -eu
+
+# Базовые пакеты для всех типов RAID
+pkgs=(dosfstools)  # mdadm уже устанавливается в raid-base слое
+
+# Дополнительные пакеты в зависимости от типа файловой системы
+case $IGconf_image_rootfs_type in
+   ext4)  pkgs+=(e2fsprogs) ;;
+   btrfs) pkgs+=(btrfs-progs) ;;
+   f2fs)  pkgs+=(f2fs-tools) ;;
+esac
+
+# Установка пакетов в chroot окружение
+chroot $1 apt install -y "${pkgs[@]}"

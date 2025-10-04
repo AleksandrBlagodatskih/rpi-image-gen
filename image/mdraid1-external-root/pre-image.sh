@@ -1,31 +1,37 @@
 #!/bin/bash
+#
+# pre-image.sh - подготовка образов для RAID external
+# Валидация требований RAID и генерация конфигурации genimage
+#
 
 set -eu
 
-fs=$1
-genimg_in=$2
+# Параметры скрипта
+fs=$1        # Путь к файловой системе
+genimg_in=$2 # Директория для выходных файлов genimage
 
+# Проверка существования файловой системы
 [[ -d "$fs" ]] || exit 0
 
 # ============================================================================
-# RAID Requirements Validation
+# Валидация требований RAID
 # ============================================================================
 
-echo "Validating RAID requirements..."
+echo "Валидация требований RAID..."
 
-# Validate required variables are set
+# Валидация обязательных переменных
 if [[ -z "$IGconf_mdraid1_external_root_raid_devices" ]]; then
-    echo "ERROR: mdraid1_external_root_raid_devices variable is not set"
+    echo "ОШИБКА: Переменная mdraid1_external_root_raid_devices не установлена"
     exit 1
 fi
 
 if [[ -z "$IGconf_mdraid1_external_root_raid_level" ]]; then
-    echo "ERROR: mdraid1_external_root_raid_level variable is not set"
+    echo "ОШИБКА: Переменная mdraid1_external_root_raid_level не установлена"
     exit 1
 fi
 
 if [[ -z "$IGconf_mdraid1_external_root_rootfs_type" ]]; then
-    echo "ERROR: mdraid1_external_root_rootfs_type variable is not set"
+    echo "ОШИБКА: Переменная mdraid1_external_root_rootfs_type не установлена"
     exit 1
 fi
 
@@ -98,7 +104,7 @@ cat genimage.cfg.in.$IGconf_mdraid1_external_root_rootfs_type | sed \
    -e "s|<FW_SIZE>|$IGconf_mdraid1_external_root_boot_part_size|g" \
    -e "s|<ROOT_SIZE>|$IGconf_mdraid1_external_root_root_part_size|g" \
    -e "s|<SECTOR_SIZE>|$IGconf_mdraid1_external_root_sector_size|g" \
-   -e "s|<SETUP_SCRIPT>|'$(readlink -ef setup.sh)'|g" \
+   -e "s|<SETUP>|'$(readlink -ef setup.sh)'|g" \
    -e "s|<MKE2FS_CONFIG>|'$(readlink -ef mke2fs.conf)'|g" \
    -e "s|<BOOT_LABEL>|$BOOT_LABEL|g" \
    -e "s|<BOOT_UUID>|$BOOT_UUID|g" \

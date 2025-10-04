@@ -1,7 +1,7 @@
 # METABEGIN
-# X-Env-Layer-Name: raid-base
+# X-Env-Layer-Name: raid-base-simple
 # X-Env-Layer-Category: sys-misc
-# X-Env-Layer-Description: Базовые утилиты для работы с RAID массивами
+# X-Env-Layer-Description: Простые базовые утилиты для работы с RAID массивами
 # X-Env-Layer-Version: 1.0.0
 # METAEND
 ---

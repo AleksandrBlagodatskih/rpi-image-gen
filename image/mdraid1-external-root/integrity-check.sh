@@ -1,21 +1,28 @@
 #!/bin/bash
 #
-# Integrity Verification for RAID External Layer
-# Performs comprehensive integrity checks on built images and filesystems
+# integrity-check.sh - верификация целостности для слоя RAID external
+# Выполняет комплексную проверку целостности собранных образов и файловых систем
 #
 
 set -eu
 
 # ============================================================================
-# Integrity Check Functions
+# Функции проверки целостности
 # ============================================================================
 
+# Проверка целостности файла по хэшу
+# Параметры:
+#   $1 - путь к файлу
+#   $2 - ожидаемый хэш (опционально)
+# Возвращает:
+#   0 - проверка пройдена
+#   1 - ошибка проверки
 check_file_integrity() {
     local file="$1"
     local expected_hash="${2:-}"
 
     if [[ ! -f "$file" ]]; then
-        echo "ERROR: File not found: $file"
+        echo "ОШИБКА: Файл не найден: $file"
         return 1
     fi
 
@@ -24,14 +31,14 @@ check_file_integrity() {
         actual_hash=$(sha256sum "$file" | cut -d' ' -f1)
 
         if [[ "$actual_hash" != "$expected_hash" ]]; then
-            echo "ERROR: Hash mismatch for $file"
-            echo "  Expected: $expected_hash"
-            echo "  Actual:   $actual_hash"
+            echo "ОШИБКА: Несовпадение хэша для $file"
+            echo "  Ожидаемый: $expected_hash"
+            echo "  Полученный: $actual_hash"
             return 1
         fi
     fi
 
-    echo "File integrity check passed: $file"
+    echo "Проверка целостности файла пройдена: $file"
     return 0
 }
 
@@ -193,14 +200,18 @@ verify_image_integrity() {
 }
 
 # ============================================================================
-# Main Integrity Verification Function
+# Основная функция верификации целостности
 # ============================================================================
 
+# Выполняет комплексную проверку целостности образов и файловых систем
+# Параметры:
+#   $1 - директория с образами
+#   $2-$n - точки монтирования для проверки
 perform_integrity_checks() {
     local image_dir="$1"
     local mount_points=("${@:2}")
 
-    echo "Performing comprehensive integrity checks..."
+    echo "Выполнение комплексной проверки целостности..."
 
     local all_checks_passed=true
 

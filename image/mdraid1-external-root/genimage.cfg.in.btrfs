@@ -93,7 +93,7 @@ image boot.vfat {
    }
    size = 200M  # Fixed SD card boot size
    mountpoint = "/boot/firmware"
-   exec-pre = "../setup.sh BOOT <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> BOOT <BOOT_UUID> <ROOT_UUID>"
 }
 
 # RAID1 disk member images (mdraid type)
@@ -106,8 +106,11 @@ image raid1-disk1.btrfs {
       disk-uuid = "<DISK1_UUID>"
       role = 0
       image = "raid1.btrfs"
+      # Оптимизация для RAID1 производительности
+      chunk-size = 512K
+      layout = "left-symmetric"
    }
-   exec-pre = "../setup.sh RAID <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> RAID <BOOT_UUID> <ROOT_UUID>"
 }
 
 # Second disk inherits configuration from first disk
@@ -117,14 +120,15 @@ image raid1-disk2.btrfs {
       disk-uuid = "<DISK2_UUID>"
       role = 1
    }
-   exec-pre = "../setup.sh RAID <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> RAID <BOOT_UUID> <ROOT_UUID>"
 }
 
 # Root filesystem image (mounted on assembled RAID1 array)
 image raid1.btrfs {
    btrfs {
       label = "root"
+      fs-type = "btrfs"  # Используем SSD-оптимизированные настройки
       mountpoint = "/"
    }
-   exec-pre = "../setup.sh ROOT <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> ROOT <BOOT_UUID> <ROOT_UUID>"
 }

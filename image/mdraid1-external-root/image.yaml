@@ -6,11 +6,10 @@
 #  external drives for RAID1 root (ext4 or btrfs). Enterprise-ready with
 #  encryption, SBOM generation, and comprehensive provisioning support.
 # X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: image-base,sys-misc-raid-base,sys-misc-mdadm-tools
+# X-Env-Layer-Requires: image-base,device-base,locale-base,sys-misc-raid-base,sys-misc-mdadm-tools
 # X-Env-Layer-Provides: image
-# X-Env-Layer-Homepage: https://github.com/supernova-project/rpi-image-gen
-# X-Env-Layer-BugTracker: https://github.com/supernova-project/rpi-image-gen/issues
-# X-Env-Layer-Support: https://github.com/supernova-project/rpi-image-gen/discussions
+#
+# X-Env-VarRequires: IGconf_artefact_target_name,IGconf_artefact_version,IGconf_locale_timezone,IGconf_locale_default,IGconf_locale_keyboard_layout,IGconf_locale_keyboard_keymap
 #
 # X-Env-VarPrefix: raid1_external
 #
@@ -36,14 +35,14 @@
 # X-Env-Var-mdraid1_external_root_raid_level-Desc: RAID level for external drives.
 #  RAID1: Mirroring (redundancy, data safety) using genimage mdraid
 # X-Env-Var-mdraid1_external_root_raid_level-Required: n
-# X-Env-Var-mdraid1_external_root_raid_level-Valid: RAID1
+# X-Env-Var-mdraid1_external_root_raid_level-Valid: keywords:RAID1
 # X-Env-Var-mdraid1_external_root_raid_level-Set: y
 #
 # X-Env-Var-mdraid1_external_root_raid_devices: 2
 # X-Env-Var-mdraid1_external_root_raid_devices-Desc: Number of external drives for RAID1 array.
 #  2: Required for RAID1 configuration (fixed)
 # X-Env-Var-mdraid1_external_root_raid_devices-Required: n
-# X-Env-Var-mdraid1_external_root_raid_devices-Valid: 2
+# X-Env-Var-mdraid1_external_root_raid_devices-Valid: keywords:2
 # X-Env-Var-mdraid1_external_root_raid_devices-Set: y
 #
 # X-Env-Var-mdraid1_external_root_encryption_enabled: y

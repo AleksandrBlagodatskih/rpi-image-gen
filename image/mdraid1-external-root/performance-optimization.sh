@@ -1,17 +1,19 @@
 #!/bin/bash
 #
-# Performance Optimization for RAID External Layer
-# Implements build caching, parallel processing, and image size optimization
+# performance-optimization.sh - оптимизация производительности для RAID external
+# Реализует кэширование сборки, параллельную обработку и оптимизацию размера образов
 #
 
 set -eu
 
 # ============================================================================
-# Environment Setup Functions
+# Функции настройки окружения
 # ============================================================================
 
+# Настройка оптимизированного окружения сборки
+# Конфигурирует кэширование APT, ccache и параллельную обработку
 setup_build_environment() {
-    echo "Setting up optimized build environment..."
+    echo "Настройка оптимизированного окружения сборки..."
 
     # Set up APT caching if enabled
     if [[ "${IGconf_mdraid1_external_root_apt_cache:-n}" == "y" ]]; then

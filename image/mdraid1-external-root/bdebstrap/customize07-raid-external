@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# customize07-raid-external - настройка initramfs для поддержки RAID
+# Добавляет необходимые модули ядра для загрузки с RAID массивов
+#
+
+set -eu
+
+# Путь к корневой файловой системе цели сборки
+TARGET_ROOT="$1"
+echo "Настройка initramfs для поддержки RAID..."
+
+# Добавление модулей RAID в initramfs
+INITRAMFS_MODULES="$TARGET_ROOT/etc/initramfs-tools/modules"
+{
+    echo "# Модули поддержки RAID (добавлены расширением RAID)"
+    echo "md_mod"
+    echo "raid0"
+    echo "raid1"
+    echo "raid10"
+    echo "raid456"
+} >> "$INITRAMFS_MODULES"
+
+echo "Модули RAID добавлены в initramfs"

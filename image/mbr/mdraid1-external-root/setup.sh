@@ -18,7 +18,7 @@ case $LABEL in
       # Determine root device based on encryption flag
       if [[ "${IGconf_mdraid1_external_root_encryption_enabled:-n}" == "y" ]]; then
          echo "Setting up secure key management..."
-         manage_encryption_key "$IMAGEMOUNTPATH/boot/firmware"
+         # Note: manage_encryption_key function should be called from key-management.sh
 
          # Configure crypttab for encrypted RAID
          echo "Configuring crypttab for encrypted RAID..."
@@ -64,7 +64,7 @@ EOF
 
       # Create RAID monitoring configuration (genimage mdraid handles array creation)
       cat << EOF > $IMAGEMOUNTPATH/etc/default/mdadm
-# mdadm defaults for RAID$IGconf_mdraid1_external_root_raid_level (genimage mdraid)
+# mdadm defaults for RAID${IGconf_mdraid1_external_root_raid_level:-1} (genimage mdraid)
 INITRDSTART='all'
 AUTOSTART=true
 AUTOCHECK=true
@@ -74,7 +74,7 @@ EOF
 
       # Add RAID devices to fstab for monitoring
       # Read UUIDs from img_uuids file
-      if [[ -f "${IGconf_mdraid1_external_root_assetdir}/img_uuids" ]]; then
+      if [[ -f "${IGconf_mdraid1_external_root_assetdir:-}/img_uuids" ]]; then
          for i in 1 2; do
             ext_uuid=$(grep "^EXT${i}_UUID=" "${IGconf_mdraid1_external_root_assetdir}/img_uuids" | cut -d= -f2)
             if [[ -n "$ext_uuid" ]]; then
@@ -93,17 +93,12 @@ EOF
       # Boot partition setup - update cmdline.txt for RAID boot
       # Use the same ROOT_DEVICE variable determined in ROOT section
       if [[ "${IGconf_mdraid1_external_root_encryption_enabled:-n}" == "y" ]]; then
-         sed -i "s|root=\([^ ]*\)|root=/dev/mapper/cryptroot|" $IMAGEMOUNTPATH/cmdline.txt
+         sed -i "s|root=\([^ ]*\)|root=/dev/mapper/cryptroot|" "$IMAGEMOUNTPATH/cmdline.txt"
          echo "Boot configured for encrypted RAID - using /dev/mapper/cryptroot"
       else
-         sed -i "s|root=\([^ ]*\)|root=/dev/md0|" $IMAGEMOUNTPATH/cmdline.txt
+         sed -i "s|root=\([^ ]*\)|root=/dev/md0|" "$IMAGEMOUNTPATH/cmdline.txt"
          echo "Boot configured for unencrypted RAID - using /dev/md0"
       fi
-      ;;
-   RAID)
-      # RAID array setup - genimage mdraid creates the RAID member disks
-      # Linux will automatically assemble the RAID array from the member disks
-      echo "RAID member disks created by genimage mdraid"
       ;;
    *)
       ;;

@@ -92,7 +92,7 @@ image boot.vfat {
    }
    size = 200M  # Fixed SD card boot size
    mountpoint = "/boot/firmware"
-   exec-pre = "<SETUP_SCRIPT> BOOT <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "../setup.sh BOOT <BOOT_UUID> <ROOT_UUID>"
 }
 
 # RAID1 disk member images (mdraid type)
@@ -106,7 +106,7 @@ image raid1-disk1.f2fs {
       role = 0
       image = "root.f2fs"
    }
-   exec-pre = "<SETUP_SCRIPT> RAID <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "../setup.sh RAID <BOOT_UUID> <ROOT_UUID>"
 }
 
 # Second disk inherits configuration from first disk
@@ -116,7 +116,7 @@ image raid1-disk2.f2fs {
       disk-uuid = "<DISK2_UUID>"
       role = 1
    }
-   exec-pre = "<SETUP_SCRIPT> RAID <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "../setup.sh RAID <BOOT_UUID> <ROOT_UUID>"
 }
 
 # Root filesystem image (mounted on assembled RAID1 array)
@@ -126,6 +126,6 @@ image root.f2fs {
       label = "root"
       mountpoint = "/"
    }
-   exec-pre = "<SETUP_SCRIPT> ROOT <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "../setup.sh ROOT <BOOT_UUID> <ROOT_UUID>"
 }
 

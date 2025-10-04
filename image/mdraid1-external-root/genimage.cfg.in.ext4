@@ -1,5 +1,5 @@
-# Multi-image configuration for RAID external layer
-# Generates: SD card image (boot) + External drive images (RAID partitions)
+# Multi-image configuration for RAID external layer using genimage mdraid
+# Generates: SD card image (boot) + External drive images with RAID1 arrays
 
 # SD Card Image (Boot partition only)
 image sdcard.img {
@@ -17,7 +17,7 @@ image sdcard.img {
    }
 }
 
-# External Drive Images (one per RAID device)
+# RAID1 member disk 1 (first external drive) - parent configuration
 image external1.img {
    hdimage {
       align = 8M
@@ -28,10 +28,11 @@ image external1.img {
    partition raid1 {
       in-partition-table = true
       partition-type-uuid = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
-      image = raid1-disk1.btrfs
+      image = raid1-disk1.ext4
    }
 }
 
+# RAID1 member disk 2 (second external drive) - inherits from parent
 image external2.img {
    hdimage {
       align = 8M
@@ -42,11 +43,9 @@ image external2.img {
    partition raid1 {
       in-partition-table = true
       partition-type-uuid = "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
-      image = raid1-disk1.btrfs
+      image = raid1-disk2.ext4
    }
 }
-
-# External drives for RAID1 configuration (2 devices)
 
 # Sparse versions for core images
 image sdcard.img.sparse {
@@ -67,21 +66,21 @@ image external2.img.sparse {
    }
 }
 
-image raid1-disk1.btrfs.sparse {
+image raid1-disk1.ext4.sparse {
    android-sparse {
-      image = raid1-disk1.btrfs
+      image = raid1-disk1.ext4
    }
 }
 
-image raid1-disk2.btrfs.sparse {
+image raid1-disk2.ext4.sparse {
    android-sparse {
-      image = raid1-disk2.btrfs
+      image = raid1-disk2.ext4
    }
 }
 
-image raid1.btrfs.sparse {
+image root.ext4.sparse {
    android-sparse {
-      image = raid1.btrfs
+      image = root.ext4
    }
 }
 
@@ -93,38 +92,44 @@ image boot.vfat {
    }
    size = 200M  # Fixed SD card boot size
    mountpoint = "/boot/firmware"
-   exec-pre = "../setup.sh BOOT <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> BOOT <BOOT_UUID> <ROOT_UUID>"
 }
 
 # RAID1 disk member images (mdraid type)
 # First disk defines the RAID array configuration
-image raid1-disk1.btrfs {
+image raid1-disk1.ext4 {
    mdraid {
       level = 1
       devices = 2
       raid-uuid = "<ROOT_UUID>"
       disk-uuid = "<DISK1_UUID>"
       role = 0
-      image = "raid1.btrfs"
+      image = "root.ext4"
+      # Оптимизация для RAID1 производительности
+      chunk-size = 512K
+      layout = "left-symmetric"
    }
-   exec-pre = "../setup.sh RAID <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> RAID <BOOT_UUID> <ROOT_UUID>"
 }
 
 # Second disk inherits configuration from first disk
-image raid1-disk2.btrfs {
+image raid1-disk2.ext4 {
    mdraid {
-      parent = "raid1-disk1.btrfs"
+      parent = "raid1-disk1.ext4"
       disk-uuid = "<DISK2_UUID>"
       role = 1
    }
-   exec-pre = "../setup.sh RAID <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> RAID <BOOT_UUID> <ROOT_UUID>"
 }
 
 # Root filesystem image (mounted on assembled RAID1 array)
-image raid1.btrfs {
-   btrfs {
+image root.ext4 {
+   ext4 {
       label = "root"
+      use-mke2fs = true
+      mke2fs-conf = "../mke2fs.conf"
+      fs-type = "raid1"  # Используем RAID-оптимизированные настройки
       mountpoint = "/"
    }
-   exec-pre = "../setup.sh ROOT <BOOT_UUID> <ROOT_UUID>"
+   exec-pre = "<SETUP> ROOT <BOOT_UUID> <ROOT_UUID>"
 }

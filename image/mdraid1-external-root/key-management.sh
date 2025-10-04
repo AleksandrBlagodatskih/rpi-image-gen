@@ -1,20 +1,25 @@
 #!/bin/bash
 #
-# Secure Key Management for RAID External Layer
-# Handles encryption key generation, storage, and provisioning
+# key-management.sh - безопасное управление ключами шифрования для RAID
+# Обрабатывает генерацию, хранение и предоставление ключей шифрования
 #
 
 set -eu
 
 # ============================================================================
-# Key Generation and Management Functions
+# Функции генерации и управления ключами
 # ============================================================================
 
+# Генерация случайного ключа шифрования
+# Параметры:
+#   $1 - размер ключа в битах (256, 512, 1024)
+#   $2 - файл для сохранения ключа
+# Вывод: сохраняет ключ в указанный файл
 generate_random_key() {
     local key_size="$1"
     local key_file="$2"
 
-    echo "Generating random $key_size-bit encryption key..."
+    echo "Генерация случайного $key_size-битного ключа шифрования..."
 
     case "$key_size" in
         256)
