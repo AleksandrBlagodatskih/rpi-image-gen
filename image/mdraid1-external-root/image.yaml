@@ -113,11 +113,11 @@
 #
 # X-Env-Var-pmap: clear
 # X-Env-Var-pmap-Desc: Provisioning Map identifier for this image layout.
-#  All partitions will be provisioned encrypted (crypt) by default.
-#  Use 'clear' for unencrypted deployment.
+#  Automatically set to 'crypt' when encryption is enabled, 'clear' otherwise.
+#  Can be overridden manually if needed.
 # X-Env-Var-pmap-Required: n
 # X-Env-Var-pmap-Valid: clear,crypt
-# X-Env-Var-pmap-Set: force
+# X-Env-Var-pmap-Set: y
 #
 # X-Env-Var-key_method: random
 # X-Env-Var-key_method-Desc: Method for generating encryption keys

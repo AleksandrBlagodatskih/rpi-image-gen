@@ -120,18 +120,6 @@ MAILADDR root
 # Monitoring and alerting
 PROGRAM /usr/sbin/mdadm-wait
 EOF
-
-      # Add RAID devices to fstab for monitoring
-      # Read UUIDs from img_uuids file
-      if [[ -f "${IGconf_image_assetdir:-}/img_uuids" ]]; then
-         for i in 1 2; do
-            ext_uuid=$(grep "^EXT${i}_UUID=" "${IGconf_image_assetdir}/img_uuids" | cut -d= -f2)
-            if [[ -n "$ext_uuid" ]]; then
-               echo "# RAID device $i" >> $IMAGEMOUNTPATH/etc/fstab
-               echo "UUID=$ext_uuid none auto 0 0" >> $IMAGEMOUNTPATH/etc/fstab
-            fi
-         done
-      fi
       ;;
    RAID)
       # RAID member disks created by genimage mdraid
