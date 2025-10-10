@@ -1,0 +1,39 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-cockpit
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: UFW integration with Cockpit firewall management
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: ufw-core
+# X-Env-Layer-Provides: firewall-cockpit-integration
+# X-Env-VarPrefix: ufw
+# X-Env-Var-cockpit_integration: y
+# X-Env-Var-cockpit_integration-Description: Integrate with Cockpit firewall management
+# X-Env-Var-cockpit_integration-Required: false
+# X-Env-Var-cockpit_integration-Valid: bool
+# X-Env-Var-cockpit_integration-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_ufw_cockpit_integration || exit 0
+
+      echo "🎛️ Installing UFW Cockpit integration..."
+
+      # Check if Cockpit is available
+      if [ ! -f "$1/usr/libexec/cockpit/cockpit-session" ]; then
+        echo "⚠️ Cockpit not detected, skipping integration"
+        exit 0
+      fi
+
+      # Cockpit integration
+      echo "🎛️ Configuring Cockpit firewall integration..."
+      # Create cockpit ufw management script
+      install -m 644 "templates/security/ufw/ufw-cockpit-manage" "$1/usr/local/bin/ufw-cockpit-manage"
+      chmod +x "$1/usr/local/bin/ufw-cockpit-manage"
+
+      # Create cockpit manifest for UFW
+      mkdir -p "$1/usr/share/cockpit/ufw"
+      install -m 644 "templates/security/ufw/manifest.json" "$1/usr/share/cockpit/ufw/manifest.json"
+      echo "✅ Cockpit integration configured"

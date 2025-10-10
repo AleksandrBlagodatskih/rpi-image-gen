@@ -1,0 +1,71 @@
+# METABEGIN
+# X-Env-Layer-Name: sysctl-network
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Network security hardening parameters
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: sysctl-network
+# X-Env-VarPrefix: sysctl_network
+# X-Env-Var-tcp_syn_cookies: y
+# X-Env-Var-tcp_syn_cookies-Description: Enable TCP SYN cookies for SYN flood protection
+# X-Env-Var-tcp_syn_cookies-Required: false
+# X-Env-Var-tcp_syn_cookies-Valid: bool
+# X-Env-Var-tcp_syn_cookies-Set: lazy
+# X-Env-Var-icmp_redirect_ignore: y
+# X-Env-Var-icmp_redirect_ignore-Description: Ignore ICMP redirects (prevents man-in-the-middle attacks)
+# X-Env-Var-icmp_redirect_ignore-Required: false
+# X-Env-Var-icmp_redirect_ignore-Valid: bool
+# X-Env-Var-icmp_redirect_ignore-Set: lazy
+# X-Env-Var-rp_filter: y
+# X-Env-Var-rp_filter-Description: Enable IP spoofing protection via rp_filter
+# X-Env-Var-rp_filter-Required: false
+# X-Env-Var-rp_filter-Valid: bool
+# X-Env-Var-rp_filter-Set: lazy
+# X-Env-Var-source_route_ignore: y
+# X-Env-Var-source_route_ignore-Description: Ignore source routed packets
+# X-Env-Var-source_route_ignore-Required: false
+# X-Env-Var-source_route_ignore-Valid: bool
+# X-Env-Var-source_route_ignore-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      SYSCTL_CONF="/etc/sysctl.d/20-network-security.conf"
+
+      echo "🌐 Applying network security hardening..."
+
+      # IPv4 security settings
+      if igconf isy IGconf_sysctl_network_tcp_syn_cookies; then
+        echo "net.ipv4.tcp_syncookies = 1" >> "$1$SYSCTL_CONF"
+        echo "✅ Set net.ipv4.tcp_syncookies = 1 (SYN flood protection)"
+      fi
+
+      if igconf isy IGconf_sysctl_network_icmp_redirect_ignore; then
+        echo "net.ipv4.conf.all.accept_redirects = 0" >> "$1$SYSCTL_CONF"
+        echo "net.ipv4.conf.default.accept_redirects = 0" >> "$1$SYSCTL_CONF"
+        echo "✅ Set accept_redirects = 0 (ignore ICMP redirects)"
+      fi
+
+      if igconf isy IGconf_sysctl_network_rp_filter; then
+        echo "net.ipv4.conf.all.rp_filter = 1" >> "$1$SYSCTL_CONF"
+        echo "net.ipv4.conf.default.rp_filter = 1" >> "$1$SYSCTL_CONF"
+        echo "✅ Set rp_filter = 1 (IP spoofing protection)"
+      fi
+
+      if igconf isy IGconf_sysctl_network_source_route_ignore; then
+        echo "net.ipv4.conf.all.accept_source_route = 0" >> "$1$SYSCTL_CONF"
+        echo "net.ipv4.conf.default.accept_source_route = 0" >> "$1$SYSCTL_CONF"
+        echo "✅ Set accept_source_route = 0 (ignore source routed packets)"
+      fi
+
+      # IPv6 security (basic)
+      echo "net.ipv6.conf.all.accept_redirects = 0" >> "$1$SYSCTL_CONF"
+      echo "net.ipv6.conf.default.accept_redirects = 0" >> "$1$SYSCTL_CONF"
+      echo "net.ipv6.conf.all.accept_source_route = 0" >> "$1$SYSCTL_CONF"
+      echo "net.ipv6.conf.default.accept_source_route = 0" >> "$1$SYSCTL_CONF"
+
+      # Apply settings
+      chroot "$1" sysctl -p "$SYSCTL_CONF" >/dev/null 2>&1 || true
+
+      echo "✅ Network security hardening applied"

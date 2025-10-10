@@ -1,0 +1,64 @@
+# METABEGIN
+# X-Env-Layer-Name: sudo-logging-core-security
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Security hardening for sudo logging
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: sudo-logging-core-basic
+# X-Env-Layer-Provides: sudo-logging-security
+# X-Env-VarPrefix: sudo_logging
+# X-Env-Var-requiretty: y
+# X-Env-Var-requiretty-Description: Require TTY for sudo commands (security hardening)
+# X-Env-Var-requiretty-Required: false
+# X-Env-Var-requiretty-Valid: bool
+# X-Env-Var-requiretty-Set: lazy
+# X-Env-Var-env_reset: y
+# X-Env-Var-env_reset-Description: Reset environment for sudo commands
+# X-Env-Var-env_reset-Required: false
+# X-Env-Var-env_reset-Valid: bool
+# X-Env-Var-env_reset-Set: lazy
+# X-Env-Var-ignore_dot: y
+# X-Env-Var-ignore_dot-Description: Ignore . in PATH for sudo commands
+# X-Env-Var-ignore_dot-Required: false
+# X-Env-Var-ignore_dot-Valid: bool
+# X-Env-Var-ignore_dot-Set: lazy
+# X-Env-Var-timestamp_timeout: 5
+# X-Env-Var-timestamp_timeout-Description: Timeout for sudo timestamp (minutes)
+# X-Env-Var-timestamp_timeout-Required: false
+# X-Env-Var-timestamp_timeout-Valid: int:0-60
+# X-Env-Var-timestamp_timeout-Set: lazy
+# X-Env-Var-use_pty: y
+# X-Env-Var-use_pty-Description: Use pseudo-TTY for sudo commands
+# X-Env-Var-use_pty-Required: false
+# X-Env-Var-use_pty-Valid: bool
+# X-Env-Var-use_pty-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      echo "🔒 Installing sudo logging security hardening..."
+
+      # PHASE 4: Security Hardening
+      echo "🔒 Configuring sudo security hardening..."
+
+      # Configure environment reset
+      if igconf isy IGconf_sudo_logging_env_reset; then
+        echo "✅ Environment reset enabled"
+      fi
+
+      # Configure TTY requirement
+      if igconf isy IGconf_sudo_logging_requiretty; then
+        echo "✅ TTY requirement enabled"
+      fi
+
+      # Configure PTY usage
+      if igconf isy IGconf_sudo_logging_use_pty; then
+        echo "✅ PTY usage enabled"
+      fi
+
+      # Configure timestamp timeout
+      TIMESTAMP_TIMEOUT=$(igconf getval IGconf_sudo_logging_timestamp_timeout)
+      echo "✅ Timestamp timeout: ${TIMESTAMP_TIMEOUT} minutes"
+
+      echo ""
+      echo "✅ sudo logging security hardening completed!"

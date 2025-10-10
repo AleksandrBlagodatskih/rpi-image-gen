@@ -1,0 +1,86 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-docker
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: UFW integration with Docker containers and ufw-docker tool
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: ufw-core
+# X-Env-Layer-Provides: firewall-docker-integration
+# X-Env-VarPrefix: ufw
+# X-Env-Var-allow_docker_ports: n
+# X-Env-Var-allow_docker_ports-Description: Allow Docker published ports
+# X-Env-Var-allow_docker_ports-Required: false
+# X-Env-Var-allow_docker_ports-Valid: bool
+# X-Env-Var-allow_docker_ports-Set: lazy
+# X-Env-Var-install_ufw_docker: n
+# X-Env-Var-install_ufw_docker-Description: Install ufw-docker for automatic Docker firewall rules management
+# X-Env-Var-install_ufw_docker-Required: false
+# X-Env-Var-install_ufw_docker-Valid: bool
+# X-Env-Var-install_ufw_docker-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      echo "🐳 Installing UFW Docker integration..."
+
+      # PHASE 1: Docker Port Allowances
+      if igconf isy IGconf_ufw_allow_docker_ports; then
+        echo "🐳 Configuring Docker port allowances..."
+
+        # Create Docker-specific rules
+        install -m 644 "templates/security/ufw/docker" "$1/etc/ufw/applications.d/docker"
+
+        # Allow Docker swarm ports if applicable
+        if igconf isy IGconf_ufw_allow_docker_ports; then
+          echo "✅ Docker ports will be allowed (2375,2376,4789,7946)"
+        fi
+      fi
+
+      # PHASE 2: UFW-Docker Installation
+      if igconf isy IGconf_ufw_install_ufw_docker; then
+        echo "🐳 Installing ufw-docker for automatic Docker firewall management..."
+
+        # Check if ufw-docker is available as a package first
+        if chroot "$1" apt-cache show ufw-docker >/dev/null 2>&1; then
+          echo "📦 Installing ufw-docker from Debian repository..."
+          chroot "$1" apt-get update && chroot "$1" apt-get install -y ufw-docker
+          echo "✅ ufw-docker installed from repository"
+        else
+          echo "📥 Installing ufw-docker from GitHub..."
+
+          # Download and install ufw-docker from GitHub
+          UFW_DOCKER_URL="https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker"
+          UFW_DOCKER_PATH="/usr/local/bin/ufw-docker"
+
+          if chroot "$1" curl -sSL "$UFW_DOCKER_URL" -o "$UFW_DOCKER_PATH" 2>/dev/null; then
+            chroot "$1" chmod +x "$UFW_DOCKER_PATH"
+            echo "✅ ufw-docker downloaded and installed to $UFW_DOCKER_PATH"
+
+            # Create systemd service for ufw-docker
+            install -m 644 "templates/security/ufw/ufw-docker.service" "$1/etc/systemd/system/ufw-docker.service"
+
+            chroot "$1" systemctl enable ufw-docker
+            echo "✅ ufw-docker systemd service created and enabled"
+
+            # Add PATH update if needed
+            if ! grep -q "/usr/local/bin" "$1/etc/profile.d/ufw-security-status.sh" 2>/dev/null; then
+              echo 'export PATH="$PATH:/usr/local/bin"' >> "$1/etc/profile.d/ufw-security-status.sh"
+            fi
+
+          else
+            echo "❌ Failed to download ufw-docker from GitHub"
+            echo "   You can install it manually after build:"
+            echo "   curl -sSL https://github.com/chaifeng/ufw-docker/raw/master/ufw-docker -o /usr/local/bin/ufw-docker"
+            echo "   chmod +x /usr/local/bin/ufw-docker"
+            echo "   ufw-docker install"
+          fi
+        fi
+
+        echo "✅ ufw-docker integration configured"
+        echo "   Run 'ufw-docker install' after build to activate"
+        echo "   Use 'ufw-docker allow <container>' to allow container access"
+        echo "   Use 'ufw-docker status' to check status"
+      fi
+
+      echo ""
+      echo "✅ UFW Docker integration completed!"

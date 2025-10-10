@@ -1,0 +1,716 @@
+---
+alwaysApply: ${cursor.file.content.includes("init") || cursor.file.content.includes("systemd")}
+---
+
+
+# Правило 77: Системная инициализация Debian
+
+## Назначение правила
+Определяет стандарты инициализации системы Debian GNU/Linux, включая systemd и ранние процессы загрузки, исключая специфичные для Raspberry Pi компоненты.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Системная инициализация Debian
+
+### Настройка systemd
+
+#### Оптимизация systemd для универсальных ARM64 систем:
+```bash
+#!/bin/bash
+# Настройка systemd в Debian
+
+systemd_optimization() {
+    echo "=== Оптимизация systemd для Debian ARM64 ==="
+
+    # Основные настройки systemd
+    configure_systemd_main() {
+        echo "Настройка основных параметров systemd..."
+
+        mkdir -p /etc/systemd/system.conf.d
+
+        cat > /etc/systemd/system.conf.d/10-arm64-performance.conf << EOF
+# Performance optimizations for ARM64
+[Manager]
+DefaultTimeoutStartSec=30s
+DefaultTimeoutStopSec=30s
+DefaultRestartSec=5s
+DefaultStartLimitIntervalSec=10s
+DefaultStartLimitBurst=5
+
+# Limit resources for services
+DefaultLimitNOFILE=65536
+DefaultLimitNPROC=4096
+
+# Journal settings
+LogLevel=info
+LogTarget=journal-or-kmsg
+EOF
+
+        echo "✓ Основные параметры systemd настроены"
+    }
+
+    # Оптимизация journald
+    configure_journald() {
+        echo "Настройка journald..."
+
+        mkdir -p /etc/systemd/journald.conf.d
+
+        cat > /etc/systemd/journald.conf.d/10-arm64-journal.conf << EOF
+# Journal configuration for ARM64
+[Journal]
+Storage=persistent
+Compress=yes
+Seal=yes
+SplitMode=uid
+SyncIntervalSec=5m
+RateLimitInterval=30s
+RateLimitBurst=1000
+MaxRetentionSec=7day
+MaxFileSec=1day
+ForwardToSyslog=no
+ForwardToKMsg=no
+ForwardToConsole=no
+EOF
+
+        systemctl restart systemd-journald
+        echo "✓ Journald оптимизирован"
+    }
+
+    # Настройка таймеров
+    configure_timers() {
+        echo "Настройка системных таймеров..."
+
+        # Таймер для обновления пакетов
+        cat > /etc/systemd/system/apt-daily.timer << EOF
+[Unit]
+Description=Daily apt download activities
+After=network-online.target
+Wants=network-online.target
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=12h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        # Таймер для очистки
+        cat > /etc/systemd/system/system-cleanup.timer << EOF
+[Unit]
+Description=Weekly system cleanup
+After=apt-daily.service
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        systemctl daemon-reload
+        systemctl enable apt-daily.timer
+        systemctl enable system-cleanup.timer
+
+        echo "✓ Системные таймеры настроены"
+    }
+
+    # Создание пользовательских служб
+    create_custom_services() {
+        echo "Создание пользовательских служб..."
+
+        # Служба для мониторинга системы
+        cat > /etc/systemd/system/system-monitor.service << EOF
+[Unit]
+Description=System monitoring service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/system-monitor.sh
+Restart=always
+RestartSec=30
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        # Служба для резервного копирования
+        cat > /etc/systemd/system/backup.service << EOF
+[Unit]
+Description=Automated backup service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/backup.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        # Таймер для резервного копирования
+        cat > /etc/systemd/system/backup.timer << EOF
+[Unit]
+Description=Daily backup timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        systemctl daemon-reload
+
+        echo "✓ Пользовательские службы созданы"
+    }
+
+    # Основная логика
+    case "$1" in
+        "main")
+            configure_systemd_main
+            ;;
+        "journald")
+            configure_journald
+            ;;
+        "timers")
+            configure_timers
+            ;;
+        "services")
+            create_custom_services
+            ;;
+        "all")
+            configure_systemd_main
+            echo ""
+            configure_journald
+            echo ""
+            configure_timers
+            echo ""
+            create_custom_services
+            ;;
+        *)
+            echo "Использование: $0 <main|journald|timers|services|all>"
+            exit 1
+            ;;
+    esac
+}
+
+# Управление службами
+service_management() {
+    echo "=== Управление службами systemd ==="
+
+    # Анализ состояния служб
+    analyze_services() {
+        echo "Анализ состояния служб..."
+
+        echo "Неудачные службы:"
+        systemctl --failed --no-pager | grep -v "UNIT\|LOAD" | while read -r unit status; do
+            echo "  ✗ $unit: $status"
+        done
+
+        echo -e "\nСлужбы с ошибками:"
+        journalctl -p err --since "1 hour ago" --no-pager | grep -i "systemd" | head -5
+
+        echo -e "\nЗагруженные службы:"
+        systemctl list-units --type=service --state=loaded --no-pager | wc -l | {
+            read count
+            echo "  Всего: $count служб"
+        }
+    }
+
+    # Оптимизация автозагрузки
+    optimize_autostart() {
+        echo "Оптимизация автозагрузки служб..."
+
+        # Отключение ненужных служб
+        unnecessary_services=(
+            "bluetooth.service"
+            "cups.service"
+            "avahi-daemon.service"
+            "ModemManager.service"
+        )
+
+        for service in "${unnecessary_services[@]}"; do
+            if systemctl is-enabled "$service" >/dev/null 2>&1; then
+                echo "Отключение $service..."
+                systemctl disable "$service" 2>/dev/null || true
+            fi
+        done
+
+        # Включение необходимых служб
+        essential_services=(
+            "sshd.service"
+            "systemd-networkd.service"
+            "systemd-resolved.service"
+            "cron.service"
+        )
+
+        for service in "${essential_services[@]}"; do
+            if ! systemctl is-enabled "$service" >/dev/null 2>&1; then
+                echo "Включение $service..."
+                systemctl enable "$service" 2>/dev/null || true
+            fi
+        done
+
+        echo "✓ Автозагрузка оптимизирована"
+    }
+
+    # Мониторинг служб
+    monitor_services() {
+        echo "Мониторинг служб в реальном времени..."
+
+        # Показать статус ключевых служб
+        key_services=(
+            "systemd-networkd"
+            "systemd-resolved"
+            "sshd"
+            "cron"
+            "rsyslog"
+        )
+
+        echo "Статус ключевых служб:"
+        for service in "${key_services[@]}"; do
+            status=$(systemctl is-active "$service" 2>/dev/null || echo "unknown")
+            enabled=$(systemctl is-enabled "$service" 2>/dev/null || echo "unknown")
+            echo "  $service: $status ($enabled)"
+        done
+
+        # Память, используемая службами
+        echo -e "\nПамять, используемая службами:"
+        ps aux --sort=-%mem | head -10 | awk '{print "  " $4 "%\t" $11}'
+    }
+
+    # Основная логика
+    case "$1" in
+        "analyze")
+            analyze_services
+            ;;
+        "optimize")
+            optimize_autostart
+            ;;
+        "monitor")
+            monitor_services
+            ;;
+        "all")
+            analyze_services
+            echo ""
+            optimize_autostart
+            echo ""
+            monitor_services
+            ;;
+        *)
+            echo "Использование: $0 <analyze|optimize|monitor|all>"
+            exit 1
+            ;;
+    esac
+}
+
+# Настройка ранней загрузки
+early_boot_configuration() {
+    echo "=== Настройка ранней загрузки ==="
+
+    # Настройка initramfs
+    configure_initramfs() {
+        echo "Настройка initramfs..."
+
+        # Оптимизация модулей в initramfs
+        cat > /etc/initramfs-tools/modules << EOF
+# ARM64 specific modules for initramfs
+ext4
+btrfs
+xfs
+squashfs
+overlay
+virtio_blk
+virtio_net
+virtio_pci
+EOF
+
+        # Настройка initramfs-tools
+        cat > /etc/initramfs-tools/initramfs.conf << EOF
+MODULES=most
+BUSYBOX=y
+KEYMAP=n
+COMPRESS=gzip
+DEVICE=
+NFSROOT=auto
+EOF
+
+        # Обновление initramfs
+        update-initramfs -u
+
+        echo "✓ Initramfs настроен"
+    }
+
+    # Настройка tmpfiles
+    configure_tmpfiles() {
+        echo "Настройка временных файлов..."
+
+        cat > /etc/tmpfiles.d/debian-arm64.conf << EOF
+# Temporary files configuration for ARM64
+d /run/user 0755 root root -
+d /tmp 1777 root root -
+d /var/tmp 1777 root root -
+d /var/cache 0755 root root -
+d /var/log 0755 root root -
+
+# Clean up old files
+r! /tmp/*
+r! /var/tmp/*
+EOF
+
+        systemd-tmpfiles --create
+
+        echo "✓ Временные файлы настроены"
+    }
+
+    # Настройка udev
+    configure_udev() {
+        echo "Настройка udev..."
+
+        # Правила для ARM64 устройств
+        cat > /etc/udev/rules.d/99-arm64-devices.rules << EOF
+# ARM64 device rules
+SUBSYSTEM=="block", KERNEL=="sd*", ATTR{queue/scheduler}="deadline"
+SUBSYSTEM=="block", KERNEL=="nvme*", ATTR{queue/scheduler}="none"
+
+# Network devices
+SUBSYSTEM=="net", KERNEL=="eth*", ATTR{tx_queue_len}="1000"
+SUBSYSTEM=="net", KERNEL=="wlan*", ATTR{tx_queue_len}="2000"
+EOF
+
+        udevadm control --reload-rules
+        udevadm trigger
+
+        echo "✓ Udev настроен"
+    }
+
+    # Основная логика
+    case "$1" in
+        "initramfs")
+            configure_initramfs
+            ;;
+        "tmpfiles")
+            configure_tmpfiles
+            ;;
+        "udev")
+            configure_udev
+            ;;
+        "all")
+            configure_initramfs
+            echo ""
+            configure_tmpfiles
+            echo ""
+            configure_udev
+            ;;
+        *)
+            echo "Использование: $0 <initramfs|tmpfiles|udev|all>"
+            exit 1
+            ;;
+    esac
+}
+
+main() {
+    case "$1" in
+        "systemd")
+            shift
+            systemd_optimization "$@"
+            ;;
+        "service")
+            shift
+            service_management "$@"
+            ;;
+        "early")
+            shift
+            early_boot_configuration "$@"
+            ;;
+        *)
+            echo "Использование: $0 <systemd|service|early> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Управление загрузкой
+
+#### Конфигурация GRUB и альтернативных загрузчиков:
+```bash
+#!/bin/bash
+# Управление загрузкой в Debian
+
+bootloader_management() {
+    echo "=== Управление загрузчиком Debian ARM64 ==="
+
+    # Настройка GRUB
+    configure_grub() {
+        echo "Настройка GRUB..."
+
+        # Обновление GRUB конфигурации
+        cat > /etc/default/grub << EOF
+# GRUB configuration for ARM64
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR=`lsb_release -i -s 2> /dev/null || echo Debian`
+GRUB_CMDLINE_LINUX_DEFAULT="quiet"
+GRUB_CMDLINE_LINUX=""
+
+# ARM64 specific options
+GRUB_TERMINAL=console
+GRUB_GFXMODE=auto
+GRUB_DISABLE_OS_PROBER=true
+EOF
+
+        # Обновление GRUB
+        update-grub
+
+        echo "✓ GRUB настроен"
+    }
+
+    # Настройка systemd-boot (для EFI систем)
+    configure_systemd_boot() {
+        echo "Настройка systemd-boot..."
+
+        # Проверка EFI
+        if [ ! -d /sys/firmware/efi ]; then
+            echo "Система не загружена в EFI режиме"
+            return 1
+        fi
+
+        # Установка systemd-boot
+        apt-get install -y systemd-boot-efi
+
+        # Установка загрузчика
+        bootctl install
+
+        # Создание загрузочной записи
+        cat > /boot/loader/entries/debian.conf << EOF
+title Debian GNU/Linux
+linux /vmlinuz
+initrd /initrd.img
+options root=UUID=$(blkid -s UUID -o value $(df / | tail -1 | awk '{print $1}')) rw quiet
+EOF
+
+        # Обновление загрузчика
+        bootctl update
+
+        echo "✓ systemd-boot настроен"
+    }
+
+    # Настройка U-Boot (для embedded систем)
+    configure_uboot() {
+        echo "Настройка U-Boot..."
+
+        # Установка U-Boot tools
+        apt-get install -y u-boot-tools
+
+        # Создание boot.scr
+        cat > /boot/boot.cmd << EOF
+# U-Boot boot script for ARM64
+setenv bootargs console=ttyAMA0,115200 root=/dev/mmcblk0p2 rw rootwait
+load mmc 0:1 \${kernel_addr_r} vmlinuz
+load mmc 0:1 \${ramdisk_addr_r} initrd.img
+booti \${kernel_addr_r} \${ramdisk_addr_r}:\${filesize} \${fdt_addr_r}
+EOF
+
+        # Компиляция скрипта
+        mkimage -C none -A arm64 -T script -d /boot/boot.cmd /boot/boot.scr
+
+        echo "✓ U-Boot настроен"
+    }
+
+    # Управление загрузочными записями
+    manage_boot_entries() {
+        echo "Управление загрузочными записями..."
+
+        case "$1" in
+            "list")
+                echo "Доступные загрузочные записи:"
+                if command -v bootctl >/dev/null 2>&1; then
+                    bootctl list
+                elif [ -d /boot/grub ]; then
+                    grep "^menuentry" /boot/grub/grub.cfg | sed 's/menuentry //' | sed 's/ {//'
+                else
+                    echo "Загрузчик не обнаружен"
+                fi
+                ;;
+            "set-default")
+                local entry="$2"
+                echo "Установка по умолчанию: $entry"
+
+                if command -v bootctl >/dev/null 2>&1; then
+                    bootctl set-default "$entry"
+                elif [ -f /etc/default/grub ]; then
+                    sed -i "s/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"$entry\"/" /etc/default/grub
+                    update-grub
+                fi
+                ;;
+            *)
+                echo "Использование: manage_boot_entries <list|set-default> [entry]"
+                ;;
+        esac
+    }
+
+    # Основная логика
+    case "$1" in
+        "grub")
+            configure_grub
+            ;;
+        "systemd-boot")
+            configure_systemd_boot
+            ;;
+        "uboot")
+            configure_uboot
+            ;;
+        "entries")
+            shift
+            manage_boot_entries "$@"
+            ;;
+        *)
+            echo "Использование: $0 <grub|systemd-boot|uboot|entries> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+# Мониторинг загрузки
+boot_monitoring() {
+    echo "=== Мониторинг загрузки системы ==="
+
+    # Время загрузки
+    analyze_boot_time() {
+        echo "Анализ времени загрузки..."
+
+        # systemd-analyze
+        if command -v systemd-analyze >/dev/null 2>&1; then
+            echo "Общее время загрузки:"
+            systemd-analyze | head -1
+
+            echo -e "\nКритический путь:"
+            systemd-analyze critical-chain | head -5
+
+            echo -e "\nВремя по службам:"
+            systemd-analyze blame | head -10
+        else
+            echo "systemd-analyze не доступен"
+        fi
+    }
+
+    # Логи загрузки
+    analyze_boot_logs() {
+        echo "Анализ логов загрузки..."
+
+        echo "Сообщения ядра при загрузке:"
+        journalctl -b -k | head -20
+
+        echo -e "\nОшибки при загрузке:"
+        journalctl -b -p err | head -10
+
+        echo -e "\nПредупреждения при загрузке:"
+        journalctl -b -p warning | head -10
+    }
+
+    # Оптимизация загрузки
+    optimize_boot() {
+        echo "Оптимизация загрузки..."
+
+        # Отключение ненужных служб
+        slow_services=$(systemctl list-units --type=service --state=running --no-pager | \
+                       grep -E "(bluetooth|cups|avahi|modem)" | awk '{print $1}')
+
+        for service in $slow_services; do
+            echo "Отключение медленной службы: $service"
+            systemctl disable "$service" 2>/dev/null || true
+        done
+
+        # Оптимизация fsck
+        if [ -f /etc/systemd/system/systemd-fsck-root.service.d/override.conf ]; then
+            mkdir -p /etc/systemd/system/systemd-fsck-root.service.d
+            cat > /etc/systemd/system/systemd-fsck-root.service.d/override.conf << EOF
+[Service]
+StandardOutput=null
+EOF
+        fi
+
+        systemctl daemon-reload
+
+        echo "✓ Загрузка оптимизирована"
+    }
+
+    # Основная логика
+    case "$1" in
+        "time")
+            analyze_boot_time
+            ;;
+        "logs")
+            analyze_boot_logs
+            ;;
+        "optimize")
+            optimize_boot
+            ;;
+        "all")
+            analyze_boot_time
+            echo ""
+            analyze_boot_logs
+            echo ""
+            optimize_boot
+            ;;
+        *)
+            echo "Использование: $0 <time|logs|optimize|all>"
+            exit 1
+            ;;
+    esac
+}
+
+main() {
+    case "$1" in
+        "bootloader")
+            shift
+            bootloader_management "$@"
+            ;;
+        "monitor")
+            shift
+            boot_monitoring "$@"
+            ;;
+        *)
+            echo "Использование: $0 <bootloader|monitor> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе раздела Debian system initialization

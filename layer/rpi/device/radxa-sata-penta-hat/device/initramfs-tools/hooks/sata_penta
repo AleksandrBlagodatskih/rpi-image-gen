@@ -1,0 +1,82 @@
+#!/bin/bash
+# Initramfs hook for Radxa SATA Penta HAT SATA drivers
+# Optimized for JMB585 PCIe SATA controller on Raspberry Pi 5
+
+set -eu  # exit on error, undefined variables
+set -o pipefail  # exit on pipe failures
+
+PREREQ=""
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case "$1" in
+    prereqs)
+        prereqs
+        exit 0
+        ;;
+    *)
+        ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# Валидация окружения - DESTDIR должен быть установлен initramfs-tools
+if [ -z "${DESTDIR:-}" ]; then
+    echo "Warning: DESTDIR not set, initramfs environment may be incomplete" >&2
+fi
+
+# Безопасная загрузка модулей с проверкой существования
+safe_force_load() {
+    local module="$1"
+    if modprobe --dry-run "$module" 2>/dev/null; then
+        force_load "$module"
+    else
+        echo "Предупреждение: модуль $module недоступен" >&2
+    fi
+}
+
+# Core PCIe and SATA modules for JMB585 on Raspberry Pi 5 (BCM2712)
+# Optimized loading sequence according to RPi BSP documentation
+safe_force_load pcie-brcmstb || echo "Broadcom PCIe module not available (may be built-in on RPi 5), continuing..."
+safe_force_load pcie-rp1 || echo "RP1 PCIe module not available (may be built-in), continuing..."
+safe_force_load pci-host-generic || echo "PCI host generic module not available (may be built-in), continuing..."
+
+# ATA/SCSI core modules (must load before SATA controllers)
+safe_force_load libata || echo "ATA library module not available, continuing..."
+safe_force_load scsi_mod || echo "SCSI core module not available, continuing..."
+safe_force_load sd_mod || echo "SCSI disk module not available, continuing..."
+
+# SATA host controllers (AHCI for JMB585 PCIe SATA controller)
+safe_force_load ahci || echo "AHCI SATA controller not available (may be built-in), continuing..."
+safe_force_load libahci || echo "AHCI library not available (may be built-in), continuing..."
+
+# GPIO modules for HAT interface (load early for power management)
+safe_force_load gpio_raspberrypi_exp || echo "GPIO expander module not available, continuing..."
+safe_force_load gpio_keys || echo "GPIO keys module not available, continuing..."
+safe_force_load gpio_keys_polled || echo "GPIO keys polled module not available, continuing..."
+
+# Additional stability modules for RPi 5 PCIe/SATA compatibility
+safe_force_load ata_piix || echo "ATA PIIX module not available, continuing..."
+safe_force_load ata_generic || echo "ATA generic module not available, continuing..."
+safe_force_load sg || echo "SCSI generic module not available, continuing..."
+safe_force_load sr_mod || echo "SCSI CD-ROM module not available, continuing..."
+
+# Final SATA transport layer
+safe_force_load scsi_transport_sata || echo "SCSI SATA transport module not available (may be built-in), continuing..."
+
+# GPIO modules for Raspberry Pi 5 HAT interface
+safe_force_load gpio_raspberrypi_exp || echo "GPIO expander module not available, continuing..."
+safe_force_load gpio_keys || echo "GPIO keys module not available, continuing..."
+safe_force_load gpio_keys_polled || echo "GPIO keys polled module not available, continuing..."
+
+# Load additional modules if requested
+if [ -n "${IGconf_radxa_sata_load_additional_modules:-}" ] && [ "${IGconf_radxa_sata_load_additional_modules}" = "y" ]; then
+  safe_force_load ata_piix || echo "ATA PIIX module not available (may be built-in), continuing..."
+  safe_force_load ata_generic || echo "ATA generic module not available (may be built-in), continuing..."
+  safe_force_load sg || echo "SCSI generic module not available, continuing..."
+  safe_force_load sr_mod || echo "SCSI CD-ROM module not available, continuing..."
+fi
+
+echo "Radxa SATA Penta HAT: модули initramfs загружены успешно"

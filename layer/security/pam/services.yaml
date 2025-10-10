@@ -1,0 +1,87 @@
+# METABEGIN
+# X-Env-Layer-Name: pam-services
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: PAM integration with system services
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: pam-core
+# X-Env-Layer-Provides: pam-services
+# X-Env-VarPrefix: pam_services
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable PAM integration with system services
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-cockpit_enable: y
+# X-Env-Var-cockpit_enable-Description: Enable PAM authentication for Cockpit
+# X-Env-Var-cockpit_enable-Required: false
+# X-Env-Var-cockpit_enable-Valid: bool
+# X-Env-Var-cockpit_enable-Set: lazy
+# X-Env-Var-ssh_enable: y
+# X-Env-Var-ssh_enable-Description: Enable enhanced PAM controls for SSH
+# X-Env-Var-ssh_enable-Required: false
+# X-Env-Var-ssh_enable-Valid: bool
+# X-Env-Var-ssh_enable-Set: lazy
+# X-Env-Var-sudo_enable: y
+# X-Env-Var-sudo_enable-Description: Enable PAM controls for sudo
+# X-Env-Var-sudo_enable-Required: false
+# X-Env-Var-sudo_enable-Valid: bool
+# X-Env-Var-sudo_enable-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "pam_services"
+
+      echo "🔧 Configuring PAM integration with system services..."
+
+      # Configure Cockpit PAM authentication
+      if igconf isy IGconf_pam_services_cockpit_enable; then
+        # Cockpit uses its own PAM configuration
+        cat > "$1/etc/pam.d/cockpit" << 'EOF'
+#%PAM-1.0
+auth       required     pam_sepermit.so
+auth       substack     password-auth
+auth       include      postlogin
+account    required     pam_nologin.so
+account    include      password-auth
+password   include      password-auth
+session    required     pam_selinux.so close
+session    required     pam_loginuid.so
+session    required     pam_selinux.so open env_params
+session    required     pam_namespace.so
+session    optional     pam_keyinit.so force revoke
+session    include      password-auth
+session    include      postlogin
+EOF
+        echo "✅ Cockpit PAM authentication configured"
+      fi
+
+      # Configure SSH PAM enhancements
+      if igconf isy IGconf_pam_services_ssh_enable; then
+        # SSH already uses common PAM files, but we can enhance them
+        cat >> "$1/etc/pam.d/sshd" << 'EOF'
+
+# Additional PAM controls for SSH
+account    required     pam_access.so
+session    optional     pam_lastlog.so showfailed
+EOF
+        echo "✅ SSH PAM enhancements configured"
+      fi
+
+      # Configure sudo PAM controls
+      if igconf isy IGconf_pam_services_sudo_enable; then
+        cat > "$1/etc/pam.d/sudo" << 'EOF'
+#%PAM-1.0
+auth       include      common-auth
+account    include      common-account
+password   include      common-password
+session    include      common-session
+EOF
+        echo "✅ Sudo PAM controls configured"
+      fi
+
+      echo "✅ PAM service integration completed"

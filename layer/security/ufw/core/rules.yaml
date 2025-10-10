@@ -1,0 +1,87 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-core-rules
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: UFW firewall rules configuration and application
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: ufw-core-basic
+# X-Env-Layer-Provides: firewall-rules
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      echo "📋 Installing UFW firewall rules configuration..."
+
+      # PHASE 4: Rules Configuration (Safe - no application during build)
+      echo "📋 Configuring firewall rules..."
+
+      # Create user rules directory structure
+      mkdir -p "$1/etc/ufw"
+
+      # Base rules file (will be applied post-build)
+      install -m 644 "templates/security/ufw/user.rules" "$1/etc/ufw/user.rules"
+
+      # IPv6 rules if enabled
+      if igconf isy IGconf_ufw_ipv6_enable; then
+        cat >> "$1/etc/ufw/user6.rules" << 'EOF'
+### RULES ###
+### END RULES ###
+
+# Don't delete these required lines, otherwise there will be errors
+*filter
+-A ufw6-user-input -j RETURN
+-A ufw6-user-output -j RETURN
+-A ufw6-user-forward -j RETURN
+COMMIT
+EOF
+      fi
+
+      # Create user6.rules if IPv6 enabled
+      if igconf isy IGconf_ufw_ipv6_enable; then
+        cp "$1/etc/ufw/user.rules" "$1/etc/ufw/user6.rules"
+      fi
+
+      # PHASE 5: Application Rules (Conditional)
+      if igconf isy IGconf_ufw_apply_rules; then
+        echo "⚠️  WARNING: Applying rules during build (not recommended)..."
+
+        # Configure SSH access based on security settings
+        if igconf isy IGconf_ufw_allow_ssh; then
+          echo "⚠️  WARNING: Allowing SSH access from anywhere (not recommended)"
+          chroot "$1" ufw --force allow ssh >/dev/null 2>&1 || echo "⚠️  SSH rule application failed"
+        elif [ -n "${IGconf_ufw_ssh_allowed_ips:-}" ]; then
+          echo "🔒 Configuring restricted SSH access"
+          # Allow SSH only from specified IPs/networks
+          IFS=',' read -ra IPS <<< "${IGconf_ufw_ssh_allowed_ips}"
+          for ip in "${IPS[@]}"; do
+            ip=$(echo "$ip" | xargs)  # Trim whitespace
+            if [ -n "$ip" ]; then
+              echo "  Allowing SSH from: $ip"
+              chroot "$1" ufw --force allow from "$ip" to any port ssh >/dev/null 2>&1 || echo "⚠️  SSH rule for $ip failed"
+            fi
+          done
+        else
+          echo "🚫 SSH access blocked (configure IGconf_ufw_ssh_allowed_ips for access)"
+        fi
+
+        if igconf isy IGconf_ufw_allow_http; then
+          echo "✅ Allowing HTTP access from anywhere"
+          chroot "$1" ufw --force allow http >/dev/null 2>&1 || echo "⚠️  HTTP rule application failed"
+        fi
+
+        if igconf isy IGconf_ufw_allow_https; then
+          echo "✅ Allowing HTTPS access from anywhere"
+          chroot "$1" ufw --force allow https >/dev/null 2>&1 || echo "⚠️  HTTPS rule application failed"
+        fi
+
+        # Rate limiting
+        if igconf isy IGconf_ufw_rate_limit; then
+          echo "✅ Enabling rate limiting for new connections"
+          chroot "$1" ufw --force limit ssh >/dev/null 2>&1 || echo "⚠️  Rate limiting setup failed"
+        fi
+      else
+        echo "📋 Rules configured but NOT applied (use post-build setup)"
+      fi
+
+      echo ""
+      echo "✅ UFW firewall rules configuration completed!"

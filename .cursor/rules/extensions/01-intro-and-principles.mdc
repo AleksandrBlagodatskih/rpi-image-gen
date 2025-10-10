@@ -1,0 +1,124 @@
+---
+alwaysApply: ${cursor.file.isNew || cursor.file.path.includes("layer/") || cursor.file.path.includes("config/")}
+---
+
+
+# Правило 01: Введение и основные принципы разработки расширений
+
+## Назначение правила
+Определяет фундаментальные принципы и требования к разработке расширений для rpi-image-gen.
+
+## Обязательные требования
+
+### Структура расширения 🔴 ОВЯЗАТЕЛЬНЫЕ
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: {unique-name}
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Краткое описание назначения
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,{dependencies}
+# X-Env-VarPrefix: {prefix}
+#
+# X-Env-Var-{variable}: {default}
+# X-Env-Var-{variable}-Description: Описание переменной
+# X-Env-Var-{variable}-Required: true|false
+# X-Env-Var-{variable}-Valid: {validation_rules}
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - {required-packages}
+  setup-hooks:
+    - {setup-commands}
+  customize-hooks:
+    - {customization-commands}
+```
+
+### Категории расширений 🔴 ОВЯЗАТЕЛЬНЫЕ
+- `extension` - функциональные расширения
+- `device` - специфичные для устройств
+- `image` - конфигурации образов
+- `suite` - комплексные решения
+
+### Правила именования 🔴 ОВЯЗАТЕЛЬНЫЕ
+- Названия слоев: `kebab-case` (например: `web-kiosk`, `iot-sensor`)
+- Префиксы переменных: `{layer_name}_` (например: `IGconf_kiosk_url`)
+- Файлы: `{category}-{name}.yaml`
+
+## Запрещенные практики
+- Использование неописанных переменных окружения
+- Зависимости от внешних сервисов без fallback
+- Нарушение изоляции между расширениями
+- Игнорирование обработки ошибок
+
+## Примеры правильной реализации
+
+### Правильный пример: Веб-киоск
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: web-kiosk
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Настройка устройства как веб-киоска
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,x11-misc
+# X-Env-VarPrefix: kiosk
+#
+# X-Env-Var-url: https://example.com
+# X-Env-Var-url-Description: URL для отображения в киоске
+# X-Env-Var-url-Required: true
+# X-Env-Var-autostart: true
+# X-Env-Var-autostart-Description: Автозапуск киоска при загрузке
+# X-Env-Var-autostart-Required: false
+# X-Env-Var-autostart-Valid: true,false
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - chromium-browser
+    - unclutter
+    - x11-xserver-utils
+  customize-hooks:
+    - |
+      # Создание скрипта автозапуска с валидацией
+      [[ -n "${IGconf_kiosk_url}" ]] || { echo "Ошибка: IGconf_kiosk_url не задан"; exit 1; }
+
+      cat > /usr/local/bin/start-kiosk.sh << 'EOF'
+      #!/bin/bash
+      set -euo pipefail
+
+      xset s off
+      xset s noblank
+      xset -dpms
+      unclutter -idle 0.5 -root &
+
+      # Безопасная обработка URL
+      KIOSK_URL="${IGconf_kiosk_url}"
+      sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' ~/.config/chromium/Default/Preferences
+      chromium-browser --noerrdialogs --disable-infobars --kiosk "${KIOSK_URL}"
+      EOF
+      chmod +x /usr/local/bin/start-kiosk.sh
+
+    - |
+      # Настройка автозапуска с проверками
+      if [[ "${IGconf_kiosk_autostart}" = "true" ]]; then
+        USER_HOME="/home/${IGconf_device_user}"
+        AUTOSTART_DIR="${USER_HOME}/.config/autostart"
+
+        mkdir -p "${AUTOSTART_DIR}"
+        cat > "${AUTOSTART_DIR}/kiosk.desktop" << EOF
+        [Desktop Entry]
+        Type=Application
+        Name=Web Kiosk
+        Exec=/usr/local/bin/start-kiosk.sh
+        EOF
+        chown -R "${IGconf_device_user}:${IGconf_device_user}" "${USER_HOME}/.config"
+      fi
+```
+
+## Метрики соблюдения
+- [ ] Все переменные описаны в METABEGIN блоке
+- [ ] Используются только допустимые категории
+- [ ] Соблюдены правила именования
+- [ ] Присутствует обработка ошибок
+- [ ] Есть валидация входных данных

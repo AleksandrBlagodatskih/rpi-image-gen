@@ -1,0 +1,83 @@
+# METABEGIN
+# X-Env-Layer-Name: pam-ldap
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: LDAP integration for PAM authentication
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: pam-core
+# X-Env-Layer-Provides: pam-ldap
+# X-Env-VarPrefix: pam_ldap
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable LDAP authentication for PAM
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-uri: ldap://localhost
+# X-Env-Var-uri-Description: LDAP server URI
+# X-Env-Var-uri-Required: false
+# X-Env-Var-uri-Valid: string
+# X-Env-Var-uri-Set: lazy
+# X-Env-Var-base: dc=example,dc=com
+# X-Env-Var-base-Description: LDAP base DN
+# X-Env-Var-base-Required: false
+# X-Env-Var-base-Valid: string
+# X-Env-Var-base-Set: lazy
+# X-Env-Var-binddn: cn=admin,dc=example,dc=com
+# X-Env-Var-binddn-Description: LDAP bind DN
+# X-Env-Var-binddn-Required: false
+# X-Env-Var-binddn-Valid: string
+# X-Env-Var-binddn-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - libpam-ldapd
+    - nslcd
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "pam_ldap"
+
+      echo "🔗 Configuring LDAP authentication for PAM..."
+
+      # Configure nslcd (LDAP client daemon)
+      LDAP_URI=${IGconf_pam_ldap_uri:-ldap://localhost}
+      LDAP_BASE=${IGconf_pam_ldap_base:-dc=example,dc=com}
+      LDAP_BINDDN=${IGconf_pam_ldap_binddn:-cn=admin,dc=example,dc=com}
+
+      # Create nslcd configuration
+      cat > "$1/etc/nslcd.conf" << EOF
+# LDAP client configuration
+uid nslcd
+gid nslcd
+
+uri $LDAP_URI
+base $LDAP_BASE
+binddn $LDAP_BINDDN
+
+# LDAP protocol settings
+ldap_version 3
+bind_timelimit 30
+timelimit 30
+
+# PAM password checking
+pam_authz_search (&(objectClass=posixAccount)(uid=\$username))
+
+# NSS lookups
+nss_initgroups_ignoreusers ALLLOCAL
+EOF
+
+      # Set proper permissions
+      chmod 600 "$1/etc/nslcd.conf"
+      chown nslcd:nslcd "$1/etc/nslcd.conf"
+
+      # Configure PAM LDAP
+      install -m 644 "templates/security/pam/common-auth-ldap" "$1/etc/pam.d/common-auth"
+      install -m 644 "templates/security/pam/common-account-ldap" "$1/etc/pam.d/common-account"
+      install -m 644 "templates/security/pam/common-password-ldap" "$1/etc/pam.d/common-password"
+
+      # Enable and start nslcd service
+      chroot "$1" systemctl enable nslcd
+
+      echo "✅ LDAP authentication configured (URI: $LDAP_URI, Base: $LDAP_BASE)"

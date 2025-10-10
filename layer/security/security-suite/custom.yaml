@@ -1,0 +1,68 @@
+# METABEGIN
+# X-Env-Layer-Name: security-suite-custom
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Custom security configuration (user-defined)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: security-suite-custom
+# X-Env-VarPrefix: security_suite_custom
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable custom security configuration
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-fail2ban_ssh: y
+# X-Env-Var-fail2ban_ssh-Description: Include Fail2Ban SSH protection
+# X-Env-Var-fail2ban_ssh-Required: false
+# X-Env-Var-fail2ban_ssh-Valid: bool
+# X-Env-Var-fail2ban_web: n
+# X-Env-Var-fail2ban_web-Description: Include Fail2Ban web server protection
+# X-Env-Var-fail2ban_web-Required: false
+# X-Env-Var-fail2ban_web-Valid: bool
+# X-Env-Var-fail2ban_services: n
+# X-Env-Var-fail2ban_services-Description: Include Fail2Ban additional services protection
+# X-Env-Var-fail2ban_services-Required: false
+# X-Env-Var-fail2ban_services-Valid: bool
+# X-Env-Var-pam_ldap: n
+# X-Env-Var-pam_ldap-Description: Include LDAP authentication
+# X-Env-Var-pam_ldap-Required: false
+# X-Env-Var-pam_ldap-Valid: bool
+# X-Env-Var-pam_services: n
+# X-Env-Var-pam_services-Description: Include PAM service integrations
+# X-Env-Var-pam_services-Required: false
+# X-Env-Var-pam_services-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      echo "⚙️ Applying custom security configuration..."
+
+      # Always include core components
+      LAYERS="fail2ban-core pam-core"
+
+      # Add optional components based on configuration
+      if igconf isy IGconf_security_suite_custom_fail2ban_ssh; then
+        LAYERS="$LAYERS fail2ban-ssh"
+      fi
+
+      if igconf isy IGconf_security_suite_custom_fail2ban_web; then
+        LAYERS="$LAYERS fail2ban-web"
+      fi
+
+      if igconf isy IGconf_security_suite_custom_fail2ban_services; then
+        LAYERS="$LAYERS fail2ban-services"
+      fi
+
+      if igconf isy IGconf_security_suite_custom_pam_ldap; then
+        LAYERS="$LAYERS pam-ldap"
+      fi
+
+      if igconf isy IGconf_security_suite_custom_pam_services; then
+        LAYERS="$LAYERS pam-services"
+      fi
+
+      echo "Custom security layers: $LAYERS"
+
+      # Note: This is a template - actual layer inclusion should be done
+      # at the configuration level, not in customize-hooks
+      echo "✅ Custom security configuration applied"

@@ -1,0 +1,246 @@
+= Radxa SATA Penta HAT Support
+
+== Описание
+
+Radxa SATA Penta HAT - это расширение для Raspberry Pi 5, предоставляющее высокопроизводительный SATA интерфейс с пятью портами. HAT включает:
+
+* SATA контроллер JMB585 PCIe Gen 3x2
+* 4 стандартных SATA коннектора
+* 1 дополнительный SATA порт (edge connector)
+* 12V питание через Molex или barrel jack коннекторы
+* FFC кабель для подключения к Raspberry Pi 5
+
+== Технические характеристики
+
+* **Контроллер**: JMicron JMB585 PCIe Gen 3.0 x2 SATA
+* **Интерфейс**: PCIe Gen 3.0 (рекомендуется включить `dtparam=pciex1_gen=3`)
+* **Питание**: 12V DC (Molex или barrel jack)
+* **SATA порты**: 4x SATA + 1x edge connector
+* **Совместимость**: Только Raspberry Pi 5
+
+== Настройка
+
+=== Базовая конфигурация
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: sata-server
+
+layer:
+  device: radxa-sata-penta-hat
+----
+
+=== Расширенная конфигурация с оптимизациями
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: sata-server
+
+layer:
+  device: radxa-sata-penta-hat
+
+# Полная оптимизация для JMB585 контроллера
+radxa_sata:
+  pcie_gen3: y           # PCIe Gen 3.0 + ASPM off для SATA
+  initramfs_sata: y      # Ранняя загрузка SATA драйверов
+  enable_gpio_power: y   # GPIO управление питанием HAT
+----
+
+=== Расширенная конфигурация с RP1 поддержкой
+
+[source,yaml]
+----
+device:
+  layer: rpi5
+  hostname: sata-server
+
+layer:
+  device: radxa-sata-penta-hat
+
+# Настройки Radxa SATA Penta HAT с полной поддержкой RP1
+radxa_sata:
+  pcie_gen3: y        # Включить PCIe Gen 3.0 (рекомендуется)
+  initramfs_sata: y   # Включить initramfs SATA инициализацию с RP1 модулями
+  load_additional_modules: n # Загружать дополнительные PCIe и SATA модули
+  enable_gpio_power: n # GPIO управление питанием (экспериментально)
+----
+
+== Initramfs инициализация
+
+Данный слой автоматически настраивает initramfs для ранней загрузки SATA драйверов, что обеспечивает:
+
+* Раннее обнаружение SATA дисков
+* Поддержку загрузки с SATA устройств
+* Стабильную работу с JMB585 контроллером
+
+=== Включаемые модули
+
+==== Модули RP1 чипа ввода-вывода
+* `rpi_poe` - RP1 Power over Ethernet модуль
+* `rpi_poe_firmware` - Прошивка RP1 PoE
+* `rpi_poe_firmware_update` - Обновление прошивки RP1
+
+==== PCIe модули для Raspberry Pi 5 (BCM2712)
+* `pcie-brcmstb` - PCIe драйвер Broadcom (может быть built-in в RPi 5 firmware)
+* `pcie-rp1` - PCIe драйвер для RP1 I/O процессора (основной для RPi 5)
+* `pci-host-generic` - Универсальный PCI хост контроллер
+
+==== SATA контроллер модули для JMB585
+* `ahci` - Advanced Host Controller Interface для SATA
+* `libahci` - AHCI библиотека с оптимизациями для RPi 5
+* `libata` - ATA библиотека (ядро SATA поддержки)
+* `scsi_mod` - SCSI core модуль
+* `sd_mod` - SCSI disk модуль
+* `scsi_transport_sata` - SATA транспорт для SCSI layer
+
+==== GPIO и управление питанием
+* `gpio_raspberrypi_exp` - GPIO expander
+* `gpio_keys` - GPIO клавиши
+* `gpio_keys_polled` - Опрашиваемые GPIO клавиши
+
+==== Дополнительные модули
+* `ata_piix` - ATA PIIX контроллер
+* `ata_generic` - Универсальный ATA драйвер
+
+== Аппаратная настройка
+
+=== Подключение HAT
+
+1. Подключите FFC кабель к Raspberry Pi 5 (J6 разъем)
+2. Подключите FFC кабель к HAT
+3. Подключите SATA диски к портам HAT
+4. Подключите 12V питание (Molex или barrel jack)
+5. Включите Raspberry Pi 5
+
+=== Питание
+
+HAT требует внешнего 12V питания для:
+
+* Питания SATA дисков
+* Питания Raspberry Pi 5 через GPIO (опционально)
+* Стабильной работы высокопроизводных дисков
+
+== Производительность
+
+=== PCIe Gen 3.0 и SATA оптимизации
+
+Для достижения максимальной производительности SATA контроллера JMB585:
+
+[source,yaml]
+----
+radxa_sata:
+  pcie_gen3: y
+----
+
+Это добавляет следующие оптимизации в `/boot/firmware/config.txt`:
+
+* `dtparam=pciex1_gen=3` - PCIe Gen 3.0 для максимальной пропускной способности
+* `dtparam=pciex1_aspm=off` - Отключение ASPM для consistent SATA performance
+* `dtparam=sata_aggressive_linkpwr=1` - Агрессивное управление питанием SATA
+
+=== GPIO управление питанием
+
+Для улучшения стабильности работы SATA дисков:
+
+[source,yaml]
+----
+radxa_sata:
+  enable_gpio_power: y
+----
+
+Настраивает GPIO-based power management с автоматическим включением питания при обнаружении JMB585 контроллера.
+
+=== Тестирование производительности
+
+[source,bash]
+----
+# Проверка скорости SATA портов
+hdparm -tT /dev/sda
+
+# Информация о PCIe шине
+lspci -vvv | grep -A 20 JMB585
+
+# Проверка температуры и статуса дисков
+smartctl -a /dev/sda
+----
+
+== Устранение неисправностей
+
+=== Диски не обнаруживаются
+
+1. Проверьте питание HAT (12V)
+2. Проверьте подключение FFC кабеля
+3. Убедитесь, что включена PCIe Gen 3.0 настройка
+4. Проверьте логи: `dmesg | grep -i sata`
+
+=== Низкая производительность
+
+1. Включите PCIe Gen 3.0: `radxa_sata_pcie_gen3: y`
+2. Проверьте питание дисков
+3. Используйте качественные SATA кабели
+4. Рассмотрите активное охлаждение
+
+=== Initramfs проблемы
+
+1. Проверьте, что initramfs обновлен: `ls -la /boot/firmware/ | grep initrd`
+2. Проверьте логи загрузки: `dmesg | grep initrd`
+3. Перегенерируйте initramfs: `update-initramfs -u -k all`
+
+== Структура overlay файлов initramfs
+
+=== Расположение overlay файлов
+```
+device/initramfs-tools/
+├── hooks/
+│   └── sata_penta               # Hook для загрузки SATA драйверов
+└── modules                      # Список модулей ядра для initramfs
+
+# Hook sata_penta копируется из device/initramfs-tools/hooks/sata_penta
+# Модули добавляются из device/initramfs-tools/modules
+```
+
+=== Процесс копирования overlay файлов
+```bash
+# Копирование hook скрипта
+install -m 755 device/initramfs-tools/hooks/sata_penta /etc/initramfs-tools/hooks/sata_penta
+
+# Добавление модулей в /etc/initramfs-tools/modules (только имена модулей)
+echo "# Radxa SATA Penta HAT modules" >> /etc/initramfs-tools/modules
+grep -v '^#' device/initramfs-tools/modules/initramfs-modules | grep -v '^$' >> /etc/initramfs-tools/modules
+
+# Настройка initramfs.conf для загрузки модулей по списку
+sed -i 's/MODULES=most/MODULES=list/' /etc/initramfs-tools/initramfs.conf
+
+# Генерация initramfs с новыми модулями
+update-initramfs -u -k all
+```
+
+== Совместимость
+
+* **Raspberry Pi**: Только Raspberry Pi 5 (BCM2712 SoC)
+* **Ядро**: Raspberry Pi Linux kernel (rpi-6.6.y или новее)
+* **Дистрибутивы**: Debian Bookworm, Ubuntu 22.04+ и производные
+* **Firmware**: Raspberry Pi firmware 1.20230911 или новее
+* **Initramfs-tools**: Debian initramfs-tools с поддержкой модулей
+* **Файловые системы**: ext4, btrfs, zfs (с соответствующими пакетами)
+
+=== Совместимость с initramfs-tools
+
+Расширение полностью совместимо с Debian initramfs-tools:
+
+* **Hook API**: Использует стандартные функции `prereqs()`, `force_load()`
+* **Module loading**: Следует конвенциям загрузки модулей ядра
+* **Configuration**: Правильно настраивает `MODULES=list` в `initramfs.conf`
+* **File structure**: Использует стандартную overlay структуру `/etc/initramfs-tools/`
+* **Error handling**: Graceful degradation при недоступных модулях
+
+== Ссылки
+
+* https://github.com/geerlingguy/raspberry-pi-pcie-devices/issues/615[Radxa Penta SATA HAT discussion,window=_blank]
+* https://www.raspberrypi.com/documentation/computers/raspberry-pi.html[Raspberry Pi 5 hardware documentation,window=_blank]
+* https://www.raspberrypi.com/documentation/computers/linux_kernel.html[Raspberry Pi linux kernel documentation,window=_blank]
+* https://github.com/raspberrypi/firmware[Raspberry Pi firmware repository,window=_blank]

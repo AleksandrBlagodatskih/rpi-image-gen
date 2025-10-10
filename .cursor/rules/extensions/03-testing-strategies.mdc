@@ -1,0 +1,356 @@
+---
+alwaysApply: ${cursor.file.path.includes("test/") || cursor.file.path.includes("spec/")}
+---
+
+
+# Правило 03: Стратегии тестирования расширений
+
+## Назначение правила
+Определяет обязательные стратегии и практики тестирования расширений rpi-image-gen.
+
+## Обязательные уровни тестирования 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### 1. Модульное тестирование 🔴 ОВЯЗАТЕЛЬНЫЕ
+```bash
+# Тестирование отдельного слоя
+rpi-image-gen layer --describe your-layer-name
+
+# Проверка зависимостей
+rpi-image-gen layer --list --depends your-layer-name
+
+# Валидация переменных
+rpi-image-gen metadata --lint layer/your-layer.yaml
+
+# Проверка синтаксиса скриптов
+bash -n hook-script.sh
+
+# Валидация YAML структуры
+python3 -c "import yaml; yaml.safe_load(open('layer.yaml'))"
+```
+
+**Обязательные проверки:**
+- [ ] Синтаксис всех скриптов в расширении
+- [ ] Валидность YAML метаданных
+- [ ] Корректность зависимостей слоев
+- [ ] Наличие всех обязательных переменных
+- [ ] Правильность путей и разрешений файлов
+
+### 2. Интеграционное тестирование 🔴 ОВЯЗАТЕЛЬНЫЕ
+```bash
+# Тестовая сборка с минимальной конфигурацией
+rpi-image-gen build --dry-run -c test-config.yaml
+
+# Полная сборка с тестовыми данными
+rpi-image-gen build -c test-config.yaml \
+  -- IGconf_extension_test_mode=true \
+  -- IGconf_extension_debug=true
+
+# Тестирование с различными комбинациями переменных
+rpi-image-gen build -c config-variants.yaml --variant minimal
+rpi-image-gen build -c config-variants.yaml --variant full
+```
+
+**Обязательные сценарии:**
+- [ ] Сборка с минимальными настройками
+- [ ] Сборка с полными настройками
+- [ ] Сборка с невалидными переменными (проверка обработки ошибок)
+- [ ] Сборка с конфликтующими расширениями
+- [ ] Тестирование зависимостей между слоями
+
+### 3. Нагрузочное тестирование ⚠️ РЕКОМЕНДУЕМЫЕ
+```bash
+# Мониторинг ресурсов во время сборки
+time rpi-image-gen build -c config.yaml
+
+# Проверка размера образа
+du -h work/image-*/image-*.img
+
+# Анализ производительности
+rpi-image-gen build -c config.yaml --perf-report
+
+# Мониторинг использования памяти
+/usr/bin/time -v rpi-image-gen build -c config.yaml
+```
+
+**Рекомендуемые метрики:**
+- [ ] Время сборки (не более 30 минут для типичного расширения)
+- [ ] Размер результирующего образа
+- [ ] Использование CPU и памяти
+- [ ] Успешность сборки (100%)
+- [ ] Время загрузки системы с расширением
+
+## Структура тестового проекта 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+```
+tests/
+├── unit/
+│   ├── test_layer_validation.py      # Валидация метаданных слоев
+│   ├── test_variable_expansion.py    # Тестирование переменных
+│   └── test_dependency_resolution.py # Разрешение зависимостей
+├── integration/
+│   ├── test_full_build.py           # Полная сборка
+│   ├── test_custom_hooks.py         # Тестирование хуков
+│   └── test_image_boot.py           # Загрузка образа
+└── fixtures/
+    ├── test_configs/                # Тестовые конфигурации
+    │   ├── minimal-config.yaml
+    │   ├── full-config.yaml
+    │   └── invalid-config.yaml
+    └── expected_outputs/            # Ожидаемые результаты
+        ├── layer-metadata.json
+        └── build-artifacts/
+```
+
+## Автоматизированные тесты 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Шаблон тестового сценария
+```python
+#!/usr/bin/env python3
+import subprocess
+import sys
+import os
+import tempfile
+import shutil
+
+class ExtensionTestSuite:
+    def __init__(self, extension_path):
+        self.extension_path = extension_path
+        self.test_results = []
+
+    def run_test(self, test_name, test_func):
+        """Запуск отдельного теста с логированием"""
+        print(f"Запуск теста: {test_name}")
+        try:
+            result = test_func()
+            self.test_results.append((test_name, result, None))
+            print(f"✓ {test_name}: {'ПРОЙДЕН' if result else 'ПРОВАЛЕН'}")
+            return result
+        except Exception as e:
+            self.test_results.append((test_name, False, str(e)))
+            print(f"✗ {test_name}: ОШИБКА - {e}")
+            return False
+
+    def test_extension_build(self):
+        """Тестирование сборки расширения"""
+        cmd = [
+            'rpi-image-gen', 'build',
+            '-c', 'tests/fixtures/test-config.yaml',
+            '--dry-run'
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(f"Ошибка сборки: {result.stderr}")
+            return False
+
+        return True
+
+    def test_layer_validation(self):
+        """Тестирование валидации слоя"""
+        cmd = ['rpi-image-gen', 'metadata', '--lint', f'{self.extension_path}/layer.yaml']
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return result.returncode == 0
+
+    def test_dependency_resolution(self):
+        """Тестирование разрешения зависимостей"""
+        cmd = ['rpi-image-gen', 'layer', '--list', '--depends', 'your-extension-name']
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return result.returncode == 0
+
+    def test_variable_expansion(self):
+        """Тестирование расширения переменных"""
+        # Создание тестового окружения
+        test_env = {
+            'IGconf_test_var1': 'value1',
+            'IGconf_test_var2': 'value2'
+        }
+
+        # Тестирование расширения в шаблонах
+        template = "${IGconf_test_var1}/${IGconf_test_var2}"
+        expanded = os.path.expandvars(template)
+
+        return expanded == "value1/value2"
+
+    def run_all_tests(self):
+        """Запуск всех тестов"""
+        tests = [
+            ("Сборка расширения", self.test_extension_build),
+            ("Валидация слоя", self.test_layer_validation),
+            ("Разрешение зависимостей", self.test_dependency_resolution),
+            ("Расширение переменных", self.test_variable_expansion),
+        ]
+
+        passed = 0
+        total = len(tests)
+
+        for test_name, test_func in tests:
+            if self.run_test(test_name, test_func):
+                passed += 1
+
+        print(f"\nРезультаты: {passed}/{total} тестов пройдено")
+
+        # Генерация отчета
+        self.generate_report()
+
+        return passed == total
+
+    def generate_report(self):
+        """Генерация отчета о тестировании"""
+        report_file = "/tmp/extension-test-report.txt"
+
+        with open(report_file, 'w') as f:
+            f.write("Отчет о тестировании расширения\n")
+            f.write("=" * 40 + "\n\n")
+
+            for test_name, result, error in self.test_results:
+                status = "ПРОЙДЕН" if result else "ПРОВАЛЕН"
+                f.write(f"{test_name}: {status}\n")
+                if error:
+                    f.write(f"  Ошибка: {error}\n")
+                f.write("\n")
+
+        print(f"Отчет сохранен: {report_file}")
+
+def main():
+    if len(sys.argv) != 2:
+        print("Использование: python3 test_extension.py <путь_к_расширению>")
+        sys.exit(1)
+
+    extension_path = sys.argv[1]
+
+    if not os.path.exists(extension_path):
+        print(f"Путь к расширению не существует: {extension_path}")
+        sys.exit(1)
+
+    test_suite = ExtensionTestSuite(extension_path)
+    success = test_suite.run_all_tests()
+
+    sys.exit(0 if success else 1)
+
+if __name__ == "__main__":
+    main()
+```
+
+## Интеграция с CI/CD 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### GitHub Actions Workflow
+```yaml
+name: Build and Test Extension
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-user-static binfmt-support
+
+    - name: Lint extension
+      run: |
+        rpi-image-gen metadata --lint layer/*.yaml
+        rpi-image-gen layer --lint layer/*.yaml
+
+    - name: Run unit tests
+      run: |
+        python3 -m pytest tests/unit/ -v
+
+    - name: Build test image
+      run: |
+        rpi-image-gen build -c tests/test-config.yaml --dry-run
+
+    - name: Generate SBOM
+      run: |
+        rpi-image-gen build -c config.yaml --sbom
+```
+
+### GitLab CI Pipeline
+```yaml
+stages:
+  - validate
+  - test
+  - build
+  - deploy
+
+validate_extension:
+  stage: validate
+  script:
+    - rpi-image-gen metadata --lint layer/*.yaml
+    - rpi-image-gen layer --describe $CI_EXTENSION_LAYER
+
+test_extension:
+  stage: test
+  script:
+    - python3 -m pytest tests/ --junitxml=report.xml
+  artifacts:
+    reports:
+      junit: report.xml
+
+build_image:
+  stage: build
+  script:
+    - rpi-image-gen build -c config.yaml
+  artifacts:
+    paths:
+      - work/image-*/image-*.img
+    expire_in: 1 week
+
+security_scan:
+  stage: build
+  script:
+    - rpi-image-gen build -c config.yaml --sbom --cve-check
+  allow_failure: true
+```
+
+## Критерии успешности тестирования 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Минимальные требования
+- [ ] Все модульные тесты проходят (100% успех)
+- [ ] Интеграционные тесты завершаются успешно
+- [ ] Сборка проходит без ошибок
+- [ ] Размер образа в допустимых пределах
+- [ ] Время сборки приемлемое
+
+### Качественные метрики
+- [ ] Покрытие кода тестами > 80%
+- [ ] Отсутствие критических уязвимостей
+- [ ] Соответствие стандартам качества кода
+- [ ] Наличие документации для всех функций
+- [ ] Регулярные обновления тестов
+
+### Автоматизация
+- [ ] Тесты запускаются автоматически в CI/CD
+- [ ] Регрессионные тесты на каждое изменение
+- [ ] Мониторинг производительности
+- [ ] Автоматическое создание отчетов
+- [ ] Интеграция с системами отслеживания ошибок
+
+## Запрещенные практики ❌ ЗАПРЕЩЕНЫ
+
+### Недопустимые подходы к тестированию
+- Тестирование только "счастливого пути"
+- Игнорирование edge cases
+- Отсутствие валидации ошибок
+- Ручное тестирование как основной метод
+- Отсутствие автоматизации
+
+### Нарушения требований
+- Пропуск обязательных уровней тестирования
+- Игнорирование проваленных тестов
+- Отсутствие документации тестовых случаев
+- Несоответствие стандартам проекта
+
+## Метрики соблюдения правила
+- [ ] Наличие полной тестовой инфраструктуры
+- [ ] Регулярный запуск автоматизированных тестов
+- [ ] Документирование всех тестовых сценариев
+- [ ] Интеграция с CI/CD системами
+- [ ] Мониторинг качества и покрытия кода

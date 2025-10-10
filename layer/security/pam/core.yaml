@@ -1,0 +1,80 @@
+# METABEGIN
+# X-Env-Layer-Name: pam-core
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Core PAM configuration and password policies
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: pam-core
+# X-Env-VarPrefix: pam_core
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable core PAM configuration
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-minlen: 8
+# X-Env-Var-minlen-Description: Minimum password length
+# X-Env-Var-minlen-Required: false
+# X-Env-Var-minlen-Valid: int:6-32
+# X-Env-Var-minlen-Set: lazy
+# X-Env-Var-faillock_enable: y
+# X-Env-Var-faillock_enable-Description: Enable account lockout after failed login attempts
+# X-Env-Var-faillock_enable-Required: false
+# X-Env-Var-faillock_enable-Valid: bool
+# X-Env-Var-faillock_enable-Set: lazy
+# X-Env-Var-faillock_attempts: 3
+# X-Env-Var-faillock_attempts-Description: Maximum failed login attempts before lockout
+# X-Env-Var-faillock_attempts-Required: false
+# X-Env-Var-faillock_attempts-Valid: int:3-10
+# X-Env-Var-faillock_attempts-Set: lazy
+# X-Env-Var-faillock_unlock_time: 600
+# X-Env-Var-faillock_unlock_time-Description: Account lockout duration in seconds
+# X-Env-Var-faillock_unlock_time-Required: false
+# X-Env-Var-faillock_unlock_time-Valid: int:60-3600
+# X-Env-Var-faillock_unlock_time-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - libpam-pwquality
+    - libpam-modules
+    - libpam-cracklib
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "pam_core"
+
+      echo "🛡️ Installing PAM core configuration..."
+
+      # Configure pwquality
+      install -m 644 "templates/security/pam/pwquality.conf" "$1/etc/security/pwquality.conf"
+
+      # Update pwquality settings
+      MINLEN=${IGconf_pam_core_minlen:-8}
+      sed -i "s/^minlen = .*/minlen = $MINLEN/" "$1/etc/security/pwquality.conf"
+
+      # Configure common PAM files
+      install -m 644 "templates/security/pam/common-auth" "$1/etc/pam.d/common-auth"
+      install -m 644 "templates/security/pam/common-account" "$1/etc/pam.d/common-account"
+      install -m 644 "templates/security/pam/common-password" "$1/etc/pam.d/common-password"
+      install -m 644 "templates/security/pam/common-session" "$1/etc/pam.d/common-session"
+
+      # Configure faillock if enabled
+      if igconf isy IGconf_pam_core_faillock_enable; then
+        ATTEMPTS=${IGconf_pam_core_faillock_attempts:-3}
+        UNLOCK_TIME=${IGconf_pam_core_faillock_unlock_time:-600}
+
+        # Add faillock to common-auth
+        sed -i '/^auth.*requisite.*pam_deny.so/a auth    required                        pam_faillock.so preauth audit deny='"$ATTEMPTS"' unlock_time='"$UNLOCK_TIME" "$1/etc/pam.d/common-auth"
+
+        # Add faillock to common-account
+        echo "account required                                                pam_faillock.so" >> "$1/etc/pam.d/common-account"
+
+        echo "✅ Account lockout configured ($ATTEMPTS attempts, ${UNLOCK_TIME}s unlock)"
+      fi
+
+      echo "✅ PAM core configuration completed"

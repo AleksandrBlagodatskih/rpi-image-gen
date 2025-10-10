@@ -1,0 +1,73 @@
+# METABEGIN
+# X-Env-Layer-Name: hybrid-raid-luks
+# X-Env-Layer-Category: image
+# X-Env-Layer-Description: Hybrid SD + RAID1 + LUKS storage layer (genimage-based disk images)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: rpi-essential-base
+# X-Env-Layer-Provides: image,raid,luks
+# X-Env-VarPrefix: hybrid_raid_luks
+#
+# X-Env-Var-rootfs_type: ext4
+# X-Env-Var-rootfs_type-Description: Root filesystem type (ext4, btrfs, f2fs)
+# X-Env-Var-rootfs_type-Required: false
+# X-Env-Var-rootfs_type-Valid: ext4,btrfs,f2fs
+# X-Env-Var-rootfs_type-Set: immediate
+#
+# X-Env-Var-encryption_enabled: n
+# X-Env-Var-encryption_enabled-Description: Enable LUKS encryption for root filesystem
+# X-Env-Var-encryption_enabled-Required: false
+# X-Env-Var-encryption_enabled-Valid: bool
+# X-Env-Var-encryption_enabled-Set: immediate
+#
+# X-Env-Var-key_method: file
+# X-Env-Var-key_method-Description: LUKS key storage method (file, env)
+# X-Env-Var-key_method-Required: false
+# X-Env-Var-key_method-Valid: file,env
+# X-Env-Var-key_method-Set: immediate
+#
+# X-Env-Var-ssd_devices: /dev/sda,/dev/sdb
+# X-Env-Var-ssd_devices-Description: Comma-separated list of SSD devices for RAID1
+# X-Env-Var-ssd_devices-Required: true
+# X-Env-Var-ssd_devices-Valid: string
+# X-Env-Var-ssd_devices-Set: immediate
+#
+# X-Env-Var-boot_part_size: 200M
+# X-Env-Var-boot_part_size-Description: Boot partition size
+# X-Env-Var-boot_part_size-Required: false
+# X-Env-Var-boot_part_size-Valid: size
+# X-Env-Var-boot_part_size-Set: immediate
+#
+# X-Env-Var-root_part_size: 2G
+# X-Env-Var-root_part_size-Description: Root partition size
+# X-Env-Var-root_part_size-Required: false
+# X-Env-Var-root_part_size-Valid: size
+# X-Env-Var-root_part_size-Set: immediate
+#
+# X-Env-Var-key_size: 512
+# X-Env-Var-key_size-Description: LUKS key size in bits
+# X-Env-Var-key_size-Required: false
+# X-Env-Var-key_size-Valid: int:256-8192
+# X-Env-Var-key_size-Set: immediate
+#
+# X-Env-Var-pmap: clear
+# X-Env-Var-pmap-Description: Provision map type (clear, crypt)
+# X-Env-Var-pmap-Required: false
+# X-Env-Var-pmap-Valid: clear,crypt
+# X-Env-Var-pmap-Set: immediate
+#
+# X-Env-Var-disk_expansion_enabled: y
+# X-Env-Var-disk_expansion_enabled-Description: Enable automatic disk expansion to smallest disk size on first boot
+# X-Env-Var-disk_expansion_enabled-Required: false
+# X-Env-Var-disk_expansion_enabled-Valid: bool
+# X-Env-Var-disk_expansion_enabled-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - mdadm
+    - cryptsetup
+    - initramfs-tools
+    - parted
+    - e2fsprogs  # for resize2fs
+    - btrfs-progs  # for btrfs filesystem resize
+    - f2fs-tools  # for resize.f2fs

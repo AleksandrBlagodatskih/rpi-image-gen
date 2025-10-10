@@ -1,0 +1,14 @@
+[Unit]
+Description=Disk Expansion Service
+After=local-fs.target
+Before=systemd-user-sessions.service
+ConditionPathExists=!/var/lib/disk-expansion.done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/disk-expansion
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

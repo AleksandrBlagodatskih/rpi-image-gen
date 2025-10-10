@@ -1,0 +1,28 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-core-services
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: UFW systemd services and final configuration
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: ufw-core-basic
+# X-Env-Layer-Provides: firewall-services
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      echo "🔄 Installing UFW systemd services..."
+
+      # PHASE 6: Service Configuration
+      echo "🔄 Configuring UFW service..."
+
+      # Enable UFW service (but don't start it)
+      chroot "$1" systemctl enable ufw
+
+      # Create override for logging if needed
+      if [ "${LOGLEVEL}" != "low" ]; then
+        mkdir -p "$1/etc/systemd/system/ufw.service.d"
+        install -m 644 "templates/security/ufw/override.conf" "$1/etc/systemd/system/ufw.service.d/override.conf"
+      fi
+
+      echo ""
+      echo "✅ UFW firewall services configuration completed!"

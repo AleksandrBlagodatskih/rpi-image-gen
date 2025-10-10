@@ -1,0 +1,97 @@
+# METABEGIN
+# X-Env-Layer-Name: fail2ban-services
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Additional service protection with Fail2Ban
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: fail2ban-core
+# X-Env-Layer-Provides: fail2ban-services
+# X-Env-VarPrefix: fail2ban_services
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable additional service protection
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-recidive_enable: y
+# X-Env-Var-recidive_enable-Description: Enable recidive jail for persistent attackers
+# X-Env-Var-recidive_enable-Required: false
+# X-Env-Var-recidive_enable-Valid: bool
+# X-Env-Var-recidive_enable-Set: lazy
+# X-Env-Var-recidive_bantime: 604800
+# X-Env-Var-recidive_bantime-Description: Ban time for recidive offenders (7 days)
+# X-Env-Var-recidive_bantime-Required: false
+# X-Env-Var-recidive_bantime-Valid: int:86400-2592000
+# X-Env-Var-recidive_bantime-Set: lazy
+# X-Env-Var-docker_enable: y
+# X-Env-Var-docker_enable-Description: Enable Docker container protection
+# X-Env-Var-docker_enable-Required: false
+# X-Env-Var-docker_enable-Valid: bool
+# X-Env-Var-docker_enable-Set: lazy
+# X-Env-Var-distrobox_enable: y
+# X-Env-Var-distrobox_enable-Description: Enable Distrobox container protection
+# X-Env-Var-distrobox_enable-Required: false
+# X-Env-Var-distrobox_enable-Valid: bool
+# X-Env-Var-distrobox_enable-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "fail2ban_services"
+
+      echo "🔧 Configuring additional service protection with Fail2Ban..."
+
+      # Configure recidive jail for persistent attackers
+      if igconf isy IGconf_fail2ban_services_recidive_enable; then
+        RECIDIVE_BANTIME=${IGconf_fail2ban_services_recidive_bantime:-604800}
+
+        cat >> "$1/etc/fail2ban/jail.local" << EOF
+
+[recidive]
+enabled = true
+filter = recidive
+logpath = /var/log/fail2ban.log
+banaction = iptables-allports
+bantime = $RECIDIVE_BANTIME
+findtime = 86400
+maxretry = 5
+EOF
+        echo "✅ Recidive protection configured (bantime: ${RECIDIVE_BANTIME}s)"
+      fi
+
+      # Configure Docker protection
+      if igconf isy IGconf_fail2ban_services_docker_enable; then
+        cat >> "$1/etc/fail2ban/jail.local" << EOF
+
+[docker-noscript]
+enabled = true
+port = http,https
+filter = docker-noscript
+logpath = /var/lib/docker/containers/*/*-json.log
+maxretry = 6
+bantime = 3600
+EOF
+        echo "✅ Docker protection configured"
+      fi
+
+      # Configure Distrobox protection
+      if igconf isy IGconf_fail2ban_services_distrobox_enable; then
+        cat >> "$1/etc/fail2ban/jail.local" << EOF
+
+[distrobox-noscript]
+enabled = true
+port = http,https,ssh
+filter = distrobox-noscript
+logpath = /var/log/distrobox-*.log
+maxretry = 6
+bantime = 3600
+EOF
+        echo "✅ Distrobox protection configured"
+      fi
+
+      # Reload fail2ban configuration
+      chroot "$1" fail2ban-client reload >/dev/null 2>&1 || true
+
+      echo "✅ Additional service protection configured"

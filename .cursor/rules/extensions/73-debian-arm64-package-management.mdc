@@ -1,0 +1,485 @@
+---
+alwaysApply: ${cursor.file.content.includes("apt") || cursor.file.content.includes("package")}
+---
+
+
+# Правило 73: Управление пакетами Debian arm64
+
+## Назначение правила
+Определяет стандарты управления пакетами, репозиториями и зависимостями в Debian GNU/Linux на архитектуру arm64.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Управление пакетами Debian arm64
+
+### Настройка репозиториев
+
+#### Оптимизация источников пакетов для ARM64:
+```bash
+#!/bin/bash
+# Настройка репозиториев Debian arm64
+
+configure_repositories() {
+    echo "=== Настройка репозиториев Debian arm64 ==="
+
+    local sources_file="/etc/apt/sources.list"
+    local backup_file="/etc/apt/sources.list.backup.$(date +%Y%m%d%H%M%S)"
+
+    # Создание резервной копии
+    cp "$sources_file" "$backup_file"
+    echo "Резервная копия создана: $backup_file"
+
+    # Выбор оптимального зеркала
+    select_best_mirror() {
+        local mirrors=("deb.debian.org" "ftp.debian.org" "mirror.leaseweb.net")
+        local best_mirror="deb.debian.org"
+        local best_time=999
+
+        for mirror in "${mirrors[@]}"; do
+            echo "Тестирование зеркала: $mirror"
+            local time
+            time=$(timeout 5 curl -s -w "%{time_total}" -o /dev/null "http://$mirror/debian/dists/trixie/Release" 2>/dev/null || echo "999")
+
+            if (( $(echo "$time < $best_time" | bc -l 2>/dev/null || echo "0") )); then
+                best_time="$time"
+                best_mirror="$mirror"
+            fi
+        done
+
+        echo "$best_mirror"
+    }
+
+    local best_mirror=$(select_best_mirror)
+    echo "Выбранное зеркало: $best_mirror"
+
+    # Создание оптимизированного sources.list
+    cat > "$sources_file" << EOF
+# Optimized Debian arm64 repositories
+# Generated for performance and reliability
+
+deb http://$best_mirror/debian trixie main contrib non-free non-free-firmware
+deb-src http://$best_mirror/debian trixie main contrib non-free non-free-firmware
+
+deb http://$best_mirror/debian trixie-updates main contrib non-free non-free-firmware
+deb-src http://$best_mirror/debian trixie-updates main contrib non-free non-free-firmware
+
+deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+deb-src http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+EOF
+
+    # Настройка apt для ARM64
+    cat > /etc/apt/apt.conf.d/99-arm64-optimization << EOF
+// ARM64 specific optimizations
+APT::Architecture "arm64";
+APT::Architectures { "arm64"; "all"; };
+
+Acquire::http::Timeout "30";
+Acquire::Retries "3";
+Acquire::CompressionTypes::Order { "gz"; "bz2"; };
+
+DPkg::Options { "--force-confdef"; "--force-confold"; };
+DPkg::Progress-Fancy "1";
+EOF
+
+    # Настройка pinning для стабильности
+    cat > /etc/apt/preferences.d/debian-arm64-pinning << EOF
+Package: *
+Pin: release a=trixie
+Pin-Priority: 900
+
+Package: *
+Pin: release a=trixie-security
+Pin-Priority: 990
+
+Package: *
+Pin: release a=trixie-updates
+Pin-Priority: 950
+EOF
+
+    echo "✓ Репозитории оптимизированы для Debian arm64"
+}
+
+# Добавление дополнительных репозиториев
+add_extra_repositories() {
+    echo "=== Добавление дополнительных репозиториев ==="
+
+    # Backports
+    cat >> /etc/apt/sources.list << EOF
+
+# Debian Backports
+deb http://deb.debian.org/debian trixie-backports main contrib non-free non-free-firmware
+deb-src http://deb.debian.org/debian trixie-backports main contrib non-free non-free-firmware
+EOF
+
+    # Experimental (опционально)
+    cat >> /etc/apt/sources.list << EOF
+
+# Debian Experimental (use with caution)
+# deb http://deb.debian.org/debian experimental main
+EOF
+
+    # Обновление pinning для backports
+    cat >> /etc/apt/preferences.d/debian-arm64-pinning << EOF
+
+Package: *
+Pin: release a=trixie-backports
+Pin-Priority: 100
+EOF
+
+    echo "✓ Дополнительные репозитории добавлены"
+}
+
+main() {
+    case "${1:-basic}" in
+        "basic")
+            configure_repositories
+            ;;
+        "extra")
+            configure_repositories
+            add_extra_repositories
+            ;;
+        *)
+            echo "Использование: $0 <basic|extra>"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Управление пакетами
+
+#### Интеллектуальная установка и управление пакетами:
+```bash
+#!/bin/bash
+# Управление пакетами Debian arm64
+
+package_management() {
+    echo "=== Управление пакетами Debian arm64 ==="
+
+    # Обновление списка пакетов
+    update_package_list() {
+        echo "Обновление списка пакетов..."
+        apt-get update
+
+        if [ $? -eq 0 ]; then
+            echo "✓ Список пакетов обновлен"
+        else
+            echo "✗ Ошибка обновления списка пакетов"
+            return 1
+        fi
+    }
+
+    # Установка пакетов с проверкой
+    smart_install() {
+        local packages="$*"
+
+        echo "Установка пакетов: $packages"
+
+        # Проверка доступности пакетов
+        for pkg in $packages; do
+            if ! apt-cache show "$pkg" >/dev/null 2>&1; then
+                echo "✗ Пакет $pkg не найден"
+                return 1
+            fi
+        done
+
+        # Установка
+        apt-get install -y $packages
+
+        if [ $? -eq 0 ]; then
+            echo "✓ Пакеты установлены успешно"
+        else
+            echo "✗ Ошибка установки пакетов"
+            return 1
+        fi
+    }
+
+    # Удаление пакетов
+    smart_remove() {
+        local packages="$*"
+
+        echo "Удаление пакетов: $packages"
+
+        apt-get remove -y $packages
+
+        # Очистка
+        apt-get autoremove -y
+        apt-get autoclean
+
+        echo "✓ Пакеты удалены"
+    }
+
+    # Поиск пакетов
+    search_packages() {
+        local query="$1"
+
+        echo "Поиск пакетов по запросу: $query"
+
+        apt-cache search "$query" | head -20
+    }
+
+    # Показать информацию о пакете
+    package_info() {
+        local package="$1"
+
+        echo "Информация о пакете: $package"
+
+        apt-cache show "$package" | grep -E "^(Package|Version|Description|Depends|Size):"
+    }
+
+    # Основная логика
+    case "$1" in
+        "update")
+            update_package_list
+            ;;
+        "install")
+            shift
+            smart_install "$@"
+            ;;
+        "remove")
+            shift
+            smart_remove "$@"
+            ;;
+        "search")
+            search_packages "$2"
+            ;;
+        "info")
+            package_info "$2"
+            ;;
+        "upgrade")
+            echo "Обновление системы..."
+            apt-get update
+            apt-get upgrade -y
+            echo "✓ Система обновлена"
+            ;;
+        "dist-upgrade")
+            echo "Полное обновление дистрибутива..."
+            apt-get update
+            apt-get dist-upgrade -y
+            echo "✓ Дистрибутив обновлен"
+            ;;
+        *)
+            echo "Использование: $0 <update|install|remove|search|info|upgrade|dist-upgrade> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+# Управление зависимостями
+dependency_management() {
+    echo "=== Управление зависимостями ==="
+
+    # Проверка зависимостей пакета
+    check_dependencies() {
+        local package="$1"
+
+        echo "Проверка зависимостей пакета: $package"
+
+        apt-cache depends "$package" | grep -E "Depends|Recommends|Suggests" | sed 's/.*: //' | sort | uniq
+    }
+
+    # Поиск обратных зависимостей
+    check_reverse_dependencies() {
+        local package="$1"
+
+        echo "Пакеты, зависящие от $package:"
+        apt-cache rdepends "$package" | grep -v "Reverse Depends:" | head -10
+    }
+
+    # Проверка на конфликты
+    check_conflicts() {
+        local package="$1"
+
+        echo "Проверка конфликтов для пакета: $package"
+
+        apt-cache show "$package" | grep -A5 "Conflicts:"
+    }
+
+    # Основная логика
+    case "$1" in
+        "check")
+            check_dependencies "$2"
+            ;;
+        "rdepends")
+            check_reverse_dependencies "$2"
+            ;;
+        "conflicts")
+            check_conflicts "$2"
+            ;;
+        *)
+            echo "Использование: $0 <check|rdepends|conflicts> <package>"
+            exit 1
+            ;;
+    esac
+}
+
+main() {
+    case "$1" in
+        "pkg")
+            shift
+            package_management "$@"
+            ;;
+        "dep")
+            shift
+            dependency_management "$@"
+            ;;
+        *)
+            echo "Использование: $0 <pkg|dep> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Мониторинг и аудит пакетов
+
+#### Система мониторинга состояния пакетов:
+```bash
+#!/bin/bash
+# Мониторинг и аудит пакетов Debian arm64
+
+package_monitoring() {
+    echo "=== Мониторинг пакетов Debian arm64 ==="
+
+    # Общая статистика
+    echo "Общая статистика пакетов:"
+    echo "Всего установленных пакетов: $(dpkg -l | grep -c '^ii')"
+    echo "Доступных обновлений: $(apt-get -s upgrade 2>/dev/null | grep -c '^Inst' || echo '0')"
+    echo "Orphaned пакетов: $(deborphan 2>/dev/null | wc -l 2>/dev/null || echo 'N/A')"
+
+    # Проверка на broken пакеты
+    echo -e "\nПроверка на broken пакеты:"
+    broken_packages=$(dpkg -l | grep -v '^ii' | grep -c '^[^|]*[[:space:]]*[[:space:]]' || echo "0")
+    if [ "$broken_packages" -gt 0 ]; then
+        echo "✗ Найдено $broken_packages broken пакетов"
+        dpkg -l | grep -v '^ii' | head -5
+    else
+        echo "✓ Broken пакетов не найдено"
+    fi
+
+    # Проверка дискового пространства
+    echo -e "\nИспользование дискового пространства пакетами:"
+    du -sh /var/cache/apt/archives 2>/dev/null || echo "Cache: N/A"
+    du -sh /var/lib/dpkg 2>/dev/null || echo "dpkg: N/A"
+    du -sh /usr 2>/dev/null || echo "usr: N/A"
+
+    # Недавно установленные пакеты
+    echo -e "\nНедавно установленные пакеты:"
+    grep "install " /var/log/dpkg.log 2>/dev/null | tail -5 | awk '{print $4}' || echo "Лог недоступен"
+}
+
+# Аудит безопасности пакетов
+security_audit() {
+    echo "=== Аудит безопасности пакетов ==="
+
+    # Проверка на уязвимые пакеты
+    if command -v debsecan >/dev/null 2>&1; then
+        echo "Проверка уязвимостей с debsecan:"
+        debsecan | head -10
+    else
+        echo "debsecan не установлен (рекомендуется установить для аудита безопасности)"
+    fi
+
+    # Проверка неподписанных репозиториев
+    echo -e "\nПроверка репозиториев:"
+    if grep -r "deb " /etc/apt/sources.list* | grep -v "deb-src" | while read -r line; do
+        repo_url=$(echo "$line" | awk '{print $2}')
+        if [[ "$repo_url" == http://* ]] && ! [[ "$repo_url" == *debian.org* ]] && ! [[ "$repo_url" == *security.debian.org* ]]; then
+            echo "⚠ Неподписанный репозиторий: $repo_url"
+        fi
+    done; then
+        echo "✓ Репозитории проверены"
+    fi
+
+    # Проверка на modified пакеты
+    echo -e "\nПроверка целостности пакетов:"
+    if command -v debsums >/dev/null 2>&1; then
+        modified=$(debsums -c 2>/dev/null | wc -l)
+        if [ "$modified" -gt 0 ]; then
+            echo "⚠ Найдено $modified измененных файлов"
+        else
+            echo "✓ Целостность пакетов подтверждена"
+        fi
+    else
+        echo "debsums не установлен"
+    fi
+}
+
+# Генерация отчета о пакетах
+generate_package_report() {
+    local report_file="/var/log/package-report-$(date +%Y%m%d).txt"
+
+    echo "Генерация отчета о пакетах: $report_file"
+
+    {
+        echo "=== Отчет о пакетах Debian arm64 ==="
+        echo "Дата: $(date)"
+        echo ""
+
+        package_monitoring
+        echo ""
+        security_audit
+
+        echo -e "\n=== Рекомендации ==="
+        echo "1. Регулярно обновляйте систему: apt-get update && apt-get upgrade"
+        echo "2. Удаляйте ненужные пакеты: apt-get autoremove"
+        echo "3. Проверяйте целостность: debsums -c"
+        echo "4. Мониторьте безопасность: apt-get install debsecan"
+
+    } > "$report_file"
+
+    echo "Отчет сохранен: $report_file"
+}
+
+main() {
+    case "${1:-monitor}" in
+        "monitor")
+            package_monitoring
+            ;;
+        "audit")
+            security_audit
+            ;;
+        "report")
+            generate_package_report
+            ;;
+        "all")
+            package_monitoring
+            echo ""
+            security_audit
+            echo ""
+            generate_package_report
+            ;;
+        *)
+            echo "Использование: $0 <monitor|audit|report|all>"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе раздела Debian arm64 package management

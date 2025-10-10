@@ -1,0 +1,42 @@
+# METABEGIN
+# X-Env-Layer-Name: security-suite-enterprise
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Enterprise security suite (comprehensive security)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: security-suite-enterprise
+# X-Env-VarPrefix: security_suite_enterprise
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable enterprise security suite
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  layers:
+    # Standard security foundation
+    - security-suite-standard
+
+    # System auditing
+    - auditd-core
+    - auditd-rules
+    - auditd-services
+
+    # LDAP authentication
+    - pam-ldap
+
+    # Advanced system hardening
+    - sysctl-security
+
+    # Performance optimizations
+    - sysctl-performance
+
+  customize-hooks:
+    - |
+      echo "🏢 Enterprise security suite installed"
+      echo "   Components:"
+      echo "   • Standard security suite"
+      echo "   • System auditing (auditd)"
+      echo "   • LDAP authentication"
+      echo "   • Advanced hardening"
+      echo "   • Performance optimizations"

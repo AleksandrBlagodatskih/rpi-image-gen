@@ -1,0 +1,651 @@
+---
+alwaysApply: ${cursor.file.content.includes("recovery") || cursor.file.content.includes("tips")}
+---
+
+
+# Правило 75: Системные советы и восстановление Debian
+
+## Назначение правила
+Определяет стандарты диагностики, восстановления и оптимизации системы Debian GNU/Linux.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Системные советы и восстановление Debian
+
+### Диагностика системы
+
+#### Комплексная диагностика состояния системы:
+```bash
+#!/bin/bash
+# Диагностика системы Debian
+
+system_diagnostics() {
+    echo "=== Диагностика системы Debian ==="
+
+    # Общая информация о системе
+    echo "Общая информация:"
+    echo "  Дистрибутив: $(lsb_release -d -s 2>/dev/null || cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2)"
+    echo "  Ядро: $(uname -r)"
+    echo "  Архитектура: $(uname -m)"
+    echo "  Uptime: $(uptime -p)"
+    echo "  Загрузка: $(uptime | awk -F'load average:' '{print $2}')"
+
+    # Память
+    echo -e "\nИспользование памяти:"
+    free -h | awk 'NR==1{print "  " $0} NR==2{print "  " $0}'
+
+    # Дисковое пространство
+    echo -e "\nДисковое пространство:"
+    df -h | grep -E '^/dev/' | awk '{print "  " $0}'
+
+    # Сетевые интерфейсы
+    echo -e "\nСетевые интерфейсы:"
+    ip -brief addr show | awk '{print "  " $0}'
+
+    # Службы systemd
+    echo -e "\nСостояние важных служб:"
+    for service in sshd systemd-networkd systemd-resolved; do
+        if systemctl is-active "$service" >/dev/null 2>&1; then
+            echo "  ✓ $service: активен"
+        else
+            echo "  ✗ $service: не активен"
+        fi
+    done
+
+    # Проверка на ошибки
+    echo -e "\nПроверка на системные ошибки:"
+    journalctl -p err --since "1 hour ago" --no-pager | wc -l | {
+        read count
+        if [ "$count" -gt 0 ]; then
+            echo "  ⚠ Найдено $count ошибок в логах за последний час"
+        else
+            echo "  ✓ Критических ошибок не найдено"
+        fi
+    }
+}
+
+# Диагностика загрузки
+boot_diagnostics() {
+    echo "=== Диагностика загрузки системы ==="
+
+    # Время загрузки
+    echo "Время загрузки системы:"
+    systemd-analyze | head -3
+
+    # Неудачные службы при загрузке
+    echo -e "\nНеудачные службы при загрузке:"
+    systemctl --failed --no-pager | grep -v "UNIT\|LOAD" | while read -r unit status; do
+        echo "  ✗ $unit: $status"
+    done
+
+    # Анализ критического пути загрузки
+    echo -e "\nКритический путь загрузки:"
+    systemd-analyze critical-chain | head -10
+
+    # Проверка файловой системы
+    echo -e "\nПроверка файловой системы:"
+    for fs in $(df -t ext4 -t btrfs -t xfs --output=target | tail -n +2); do
+        echo "  Проверка $fs..."
+        if mountpoint -q "$fs"; then
+            fs_type=$(df -T "$fs" | tail -1 | awk '{print $2}')
+            case "$fs_type" in
+                ext4)
+                    tune2fs -l "$(df "$fs" | tail -1 | awk '{print $1}')" | grep -E "Filesystem state|Last checked" | sed 's/^/    /' || echo "    Не удалось получить информацию"
+                    ;;
+                *)
+                    echo "    Файловая система $fs_type не поддерживает расширенную диагностику"
+                    ;;
+            esac
+        fi
+    done
+}
+
+# Диагностика сети
+network_diagnostics() {
+    echo "=== Диагностика сети ==="
+
+    # DNS разрешение
+    echo "Тестирование DNS:"
+    for domain in debian.org google.com; do
+        if nslookup "$domain" >/dev/null 2>&1; then
+            echo "  ✓ DNS разрешение $domain: OK"
+        else
+            echo "  ✗ DNS разрешение $domain: FAILED"
+        fi
+    done
+
+    # Доступность интернета
+    echo -e "\nТестирование интернет-соединения:"
+    if ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+        echo "  ✓ Интернет-доступ: OK"
+    else
+        echo "  ✗ Интернет-доступ: FAILED"
+    fi
+
+    # Репозитории Debian
+    echo -e "\nТестирование репозиториев Debian:"
+    if curl -s --connect-timeout 5 http://deb.debian.org/debian/dists/trixie/Release >/dev/null; then
+        echo "  ✓ Репозиторий deb.debian.org: OK"
+    else
+        echo "  ✗ Репозиторий deb.debian.org: FAILED"
+    fi
+
+    # Локальные сетевые службы
+    echo -e "\nЛокальные сетевые службы:"
+    netstat -tlnp 2>/dev/null | grep -E ":22|:80|:443" | while read -r line; do
+        port=$(echo "$line" | awk '{print $4}' | cut -d: -f2)
+        service=$(echo "$line" | awk '{print $7}' | cut -d/ -f2)
+        echo "  Порт $port: $service"
+    done
+}
+
+main() {
+    case "${1:-all}" in
+        "system")
+            system_diagnostics
+            ;;
+        "boot")
+            boot_diagnostics
+            ;;
+        "network")
+            network_diagnostics
+            ;;
+        "all")
+            system_diagnostics
+            echo ""
+            boot_diagnostics
+            echo ""
+            network_diagnostics
+            ;;
+        *)
+            echo "Использование: $0 <system|boot|network|all>"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Восстановление системы
+
+#### Инструменты восстановления и ремонта:
+```bash
+#!/bin/bash
+# Восстановление системы Debian
+
+system_recovery() {
+    echo "=== Восстановление системы Debian ==="
+
+    # Восстановление из резервной копии
+    restore_from_backup() {
+        local backup_file="$1"
+        local restore_path="$2"
+
+        echo "Восстановление из резервной копии: $backup_file"
+
+        if [ ! -f "$backup_file" ]; then
+            echo "Ошибка: файл резервной копии не найден"
+            return 1
+        fi
+
+        # Определение типа архива
+        case "$backup_file" in
+            *.tar.gz|*.tgz)
+                tar -xzf "$backup_file" -C "$restore_path"
+                ;;
+            *.tar.bz2|*.tbz2)
+                tar -xjf "$backup_file" -C "$restore_path"
+                ;;
+            *.tar.xz|*.txz)
+                tar -xJf "$backup_file" -C "$restore_path"
+                ;;
+            *)
+                echo "Неподдерживаемый формат архива"
+                return 1
+                ;;
+        esac
+
+        echo "✓ Восстановление завершено"
+    }
+
+    # Восстановление пакетов
+    restore_packages() {
+        echo "Восстановление списка пакетов..."
+
+        # Сохранение текущего списка пакетов
+        dpkg --get-selections > /root/package-selections-backup.txt
+
+        # Восстановление из списка
+        if [ -f "/root/package-selections-restore.txt" ]; then
+            dpkg --set-selections < /root/package-selections-restore.txt
+            apt-get dselect-upgrade -y
+            echo "✓ Пакеты восстановлены"
+        else
+            echo "Файл списка пакетов не найден"
+            return 1
+        fi
+    }
+
+    # Восстановление конфигурационных файлов
+    restore_config_files() {
+        echo "Восстановление конфигурационных файлов..."
+
+        # Восстановление из /etc
+        if [ -d "/etc/backup" ]; then
+            cp -r /etc/backup/* /etc/
+            echo "✓ Конфигурационные файлы восстановлены из /etc/backup"
+        else
+            echo "Резервная копия /etc не найдена"
+        fi
+    }
+
+    # Ремонт загрузчика
+    repair_bootloader() {
+        echo "Ремонт загрузчика GRUB..."
+
+        # Переустановка GRUB
+        apt-get install --reinstall -y grub-efi-arm64
+
+        # Обновление конфигурации
+        update-grub
+
+        # Установка в EFI
+        if [ -d "/boot/efi" ]; then
+            grub-install --target=arm64-efi --efi-directory=/boot/efi --bootloader-id=debian
+            echo "✓ Загрузчик GRUB восстановлен"
+        else
+            echo "EFI раздел не найден, пропуск установки GRUB"
+        fi
+    }
+
+    # Ремонт файловой системы
+    repair_filesystem() {
+        local device="$1"
+
+        echo "Ремонт файловой системы: $device"
+
+        if [ ! -b "$device" ]; then
+            echo "Устройство не найдено: $device"
+            return 1
+        fi
+
+        # Размонтирование
+        umount "$device" 2>/dev/null || true
+
+        # Определение типа ФС
+        fs_type=$(blkid -o value -s TYPE "$device")
+        echo "Тип файловой системы: $fs_type"
+
+        case "$fs_type" in
+            ext4)
+                e2fsck -y "$device"
+                ;;
+            btrfs)
+                btrfs check --repair "$device"
+                ;;
+            xfs)
+                xfs_repair "$device"
+                ;;
+            *)
+                echo "Неподдерживаемый тип файловой системы: $fs_type"
+                return 1
+                ;;
+        esac
+
+        echo "✓ Файловая система отремонтирована"
+    }
+
+    # Основная логика
+    case "$1" in
+        "backup")
+            restore_from_backup "$2" "$3"
+            ;;
+        "packages")
+            restore_packages
+            ;;
+        "config")
+            restore_config_files
+            ;;
+        "bootloader")
+            repair_bootloader
+            ;;
+        "filesystem")
+            repair_filesystem "$2"
+            ;;
+        *)
+            echo "Использование: $0 <backup|packages|config|bootloader|filesystem> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+# Создание резервных копий
+create_backups() {
+    echo "=== Создание резервных копий Debian ==="
+
+    local backup_dir="/var/backups/debian-$(date +%Y%m%d)"
+    mkdir -p "$backup_dir"
+
+    # Резервная копия списка пакетов
+    echo "Создание резервной копии списка пакетов..."
+    dpkg --get-selections > "$backup_dir/package-selections.txt"
+
+    # Резервная копия /etc
+    echo "Создание резервной копии /etc..."
+    tar -czf "$backup_dir/etc-backup.tar.gz" /etc
+
+    # Резервная копия /home (опционально)
+    read -p "Создать резервную копию /home? (y/N): " backup_home
+    if [[ $backup_home =~ ^[Yy]$ ]]; then
+        echo "Создание резервной копии /home..."
+        tar -czf "$backup_dir/home-backup.tar.gz" /home
+    fi
+
+    # Резервная копия баз данных (если установлены)
+    if command -v mysqldump >/dev/null 2>&1; then
+        echo "Создание резервной копии MySQL..."
+        mysqldump --all-databases > "$backup_dir/mysql-backup.sql"
+    fi
+
+    if command -v pg_dumpall >/dev/null 2>&1; then
+        echo "Создание резервной копии PostgreSQL..."
+        su - postgres -c "pg_dumpall" > "$backup_dir/postgres-backup.sql"
+    fi
+
+    # Создание архива
+    echo "Создание общего архива..."
+    tar -czf "/var/backups/debian-backup-$(date +%Y%m%d).tar.gz" -C /var/backups "debian-$(date +%Y%m%d)"
+
+    echo "✓ Резервные копии созданы в: $backup_dir"
+    echo "Общий архив: /var/backups/debian-backup-$(date +%Y%m%d).tar.gz"
+}
+
+# Режим восстановления
+recovery_mode() {
+    echo "=== Режим восстановления Debian ==="
+    echo "Этот режим предназначен для восстановления системы в случае проблем"
+
+    # Монтирование необходимых файловых систем
+    mount -t proc proc /proc
+    mount -t sysfs sys /sys
+    mount -t devpts devpts /dev/pts
+
+    # Настройка сети (если возможно)
+    if [ -f /etc/network/interfaces ]; then
+        ifup -a
+    fi
+
+    # Запуск SSH для удаленного доступа
+    if [ -f /etc/init.d/ssh ]; then
+        /etc/init.d/ssh start
+        echo "SSH запущен для удаленного доступа"
+    fi
+
+    echo "Система в режиме восстановления"
+    echo "Используйте другие инструменты для диагностики и восстановления"
+    echo ""
+    echo "Доступные команды:"
+    echo "  $0 recovery packages    - восстановить пакеты"
+    echo "  $0 recovery bootloader  - восстановить загрузчик"
+    echo "  $0 recovery filesystem  - проверить ФС"
+    echo ""
+    /bin/bash
+}
+
+main() {
+    case "$1" in
+        "recovery")
+            shift
+            system_recovery "$@"
+            ;;
+        "backup")
+            create_backups
+            ;;
+        "mode")
+            recovery_mode
+            ;;
+        *)
+            echo "Использование: $0 <recovery|backup|mode> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Оптимизация производительности
+
+#### Инструменты оптимизации системы:
+```bash
+#!/bin/bash
+# Оптимизация производительности Debian
+
+performance_optimization() {
+    echo "=== Оптимизация производительности Debian ==="
+
+    # Оптимизация swappiness
+    optimize_swappiness() {
+        echo "Оптимизация swappiness..."
+
+        # Для SSD систем
+        if [ -f /sys/block/sda/queue/rotational ]; then
+            rotational=$(cat /sys/block/sda/queue/rotational)
+            if [ "$rotational" = "0" ]; then
+                echo "SSD система обнаружена, установка swappiness=1"
+                echo "vm.swappiness=1" > /etc/sysctl.d/99-swappiness.conf
+            else
+                echo "HDD система, установка swappiness=10"
+                echo "vm.swappiness=10" > /etc/sysctl.d/99-swappiness.conf
+            fi
+        fi
+
+        sysctl -p /etc/sysctl.d/99-swappiness.conf
+        echo "✓ Swappiness оптимизирован"
+    }
+
+    # Оптимизация I/O планировщика
+    optimize_io_scheduler() {
+        echo "Оптимизация I/O планировщика..."
+
+        for disk in /sys/block/sd*; do
+            if [ -f "$disk/queue/scheduler" ]; then
+                disk_name=$(basename "$disk")
+                scheduler_file="$disk/queue/scheduler"
+
+                # Для SSD - noop или deadline
+                if [ -f "$disk/queue/rotational" ] && [ "$(cat "$disk/queue/rotational")" = "0" ]; then
+                    echo noop > "$scheduler_file"
+                    echo "✓ $disk_name: установлен noop планировщик (SSD)"
+                else
+                    echo deadline > "$scheduler_file"
+                    echo "✓ $disk_name: установлен deadline планировщик (HDD)"
+                fi
+            fi
+        done
+    }
+
+    # Оптимизация TCP
+    optimize_tcp() {
+        echo "Оптимизация TCP параметров..."
+
+        cat > /etc/sysctl.d/99-tcp-optimization.conf << EOF
+# TCP optimization
+net.core.somaxconn = 1024
+net.core.netdev_max_backlog = 5000
+net.ipv4.tcp_max_syn_backlog = 1024
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_keepalive_time = 300
+net.ipv4.tcp_keepalive_probes = 5
+net.ipv4.tcp_keepalive_intvl = 15
+EOF
+
+        sysctl -p /etc/sysctl.d/99-tcp-optimization.conf
+        echo "✓ TCP параметры оптимизированы"
+    }
+
+    # Оптимизация systemd
+    optimize_systemd() {
+        echo "Оптимизация systemd..."
+
+        # Увеличение лимитов
+        mkdir -p /etc/systemd/system.conf.d
+        cat > /etc/systemd/system.conf.d/limits.conf << EOF
+[Manager]
+DefaultLimitNOFILE=65536
+DefaultLimitNPROC=65536
+EOF
+
+        # Оптимизация journald
+        cat > /etc/systemd/journald.conf.d/performance.conf << EOF
+[Journal]
+Storage=volatile
+Compress=yes
+Seal=no
+SplitMode=uid
+SyncIntervalSec=5m
+RateLimitInterval=30s
+RateLimitBurst=1000
+EOF
+
+        systemctl restart systemd-journald
+        echo "✓ Systemd оптимизирован"
+    }
+
+    # Очистка системы
+    system_cleanup() {
+        echo "Очистка системы..."
+
+        # Очистка apt cache
+        apt-get clean
+        apt-get autoclean
+
+        # Удаление orphan пакетов
+        apt-get autoremove -y
+
+        # Очистка journal
+        journalctl --vacuum-time=7d
+
+        # Очистка временных файлов
+        rm -rf /tmp/*
+        rm -rf /var/tmp/*
+
+        # Очистка cache браузеров (если установлены)
+        if [ -d /root/.cache ]; then
+            rm -rf /root/.cache/* 2>/dev/null || true
+        fi
+
+        echo "✓ Система очищена"
+    }
+
+    # Основная логика
+    case "$1" in
+        "swappiness")
+            optimize_swappiness
+            ;;
+        "io")
+            optimize_io_scheduler
+            ;;
+        "tcp")
+            optimize_tcp
+            ;;
+        "systemd")
+            optimize_systemd
+            ;;
+        "cleanup")
+            system_cleanup
+            ;;
+        "all")
+            optimize_swappiness
+            echo ""
+            optimize_io_scheduler
+            echo ""
+            optimize_tcp
+            echo ""
+            optimize_systemd
+            echo ""
+            system_cleanup
+            ;;
+        *)
+            echo "Использование: $0 <swappiness|io|tcp|systemd|cleanup|all>"
+            exit 1
+            ;;
+    esac
+}
+
+# Мониторинг производительности
+performance_monitoring() {
+    echo "=== Мониторинг производительности ==="
+
+    # Текущая нагрузка
+    echo "Текущая нагрузка системы:"
+    uptime
+    echo ""
+
+    # Использование CPU
+    echo "Использование CPU:"
+    top -bn1 | head -10
+    echo ""
+
+    # Использование памяти
+    echo "Использование памяти:"
+    free -h
+    echo ""
+
+    # Использование диска
+    echo "Использование диска:"
+    df -h
+    echo ""
+
+    # I/O статистика
+    echo "I/O статистика:"
+    iostat -x 1 5 2>/dev/null || echo "iostat не установлен"
+    echo ""
+
+    # Сетевые соединения
+    echo "Активные сетевые соединения:"
+    ss -tuln | head -10
+}
+
+main() {
+    case "$1" in
+        "optimize")
+            shift
+            performance_optimization "$@"
+            ;;
+        "monitor")
+            performance_monitoring
+            ;;
+        *)
+            echo "Использование: $0 <optimize|monitor> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе раздела Debian system tips and recovery

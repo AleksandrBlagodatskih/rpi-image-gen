@@ -1,0 +1,38 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-distrobox
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: UFW support for Distrobox container network access
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: ufw-core
+# X-Env-Layer-Provides: firewall-distrobox-integration
+# X-Env-VarPrefix: ufw
+# X-Env-Var-distrobox_network: y
+# X-Env-Var-distrobox_network-Description: Allow network access for Distrobox containers
+# X-Env-Var-distrobox_network-Required: false
+# X-Env-Var-distrobox_network-Valid: bool
+# X-Env-Var-distrobox_network-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_ufw_distrobox_network || exit 0
+
+      echo "📦 Installing UFW Distrobox integration..."
+
+      # Check if Distrobox is available
+      if ! command -v distrobox >/dev/null 2>&1; then
+        echo "⚠️ Distrobox not detected, skipping network access"
+        exit 0
+      fi
+
+      # Distrobox integration
+      echo "📦 Configuring Distrobox network access..."
+      # Create distrobox network rules
+      install -m 644 "templates/security/ufw/ufw-distrobox-network" "$1/usr/local/bin/ufw-distrobox-network"
+      chmod +x "$1/usr/local/bin/ufw-distrobox-network"
+
+      # Run the configuration
+      chroot "$1" /usr/local/bin/ufw-distrobox-network
+      echo "✅ Distrobox integration configured"

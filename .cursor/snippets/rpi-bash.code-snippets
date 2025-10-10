@@ -1,0 +1,324 @@
+{
+  "rpi-bash-header": {
+    "scope": "shellscript",
+    "prefix": "rpi-bash-header",
+    "body": [
+      "#!/bin/bash",
+      "# shellcheck disable=SC2154,SC2086",
+      "",
+      "set -euo pipefail",
+      "",
+      "# Обязательные переменные окружения",
+      "readonly SCRIPT_NAME=\"$(basename \"${BASH_SOURCE[0]}\")\"",
+      "readonly SCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"",
+      "",
+      "# Функции логирования",
+      "log_info() { echo \"[$SCRIPT_NAME] INFO: $*\"; }",
+      "log_warn() { echo \"[$SCRIPT_NAME] WARN: $*\" >&2; }",
+      "log_error() { echo \"[$SCRIPT_NAME] ERROR: $*\" >&2; }",
+      "",
+      "# Функция завершения с ошибкой",
+      "die() {",
+      "    log_error \"$*\"",
+      "    exit 1",
+      "}",
+      "",
+      "# Основная логика",
+      "main() {",
+      "    ${1:# Реализация}",
+      "    return 0",
+      "}",
+      "",
+      "# Запуск главной функции",
+      "main \"$@\""
+    ],
+    "description": "Стандартный заголовок Bash скрипта для rpi-image-gen"
+  },
+
+  "rpi-bash-safe-var": {
+    "scope": "shellscript",
+    "prefix": "rpi-safe-var",
+    "body": [
+      "${1:variable_name}=\"${${1:variable_name}:-${2:default_value}}\""
+    ],
+    "description": "Безопасное использование переменной с значением по умолчанию"
+  },
+
+  "rpi-bash-required-var": {
+    "scope": "shellscript",
+    "prefix": "rpi-required-var",
+    "body": [
+      "${1:variable_name}=\"${${1:variable_name}:?${2:Variable required}}\""
+    ],
+    "description": "Обязательная переменная с проверкой"
+  },
+
+  "rpi-bash-validate-input": {
+    "scope": "shellscript",
+    "prefix": "rpi-validate-input",
+    "body": [
+      "validate_${1:input}() {",
+      "    local ${1:input}=\"$1\"",
+      "    ${2:# Проверка корректности входных данных}",
+      "    [[ -n \"$${1:input}\" ]] || die \"${1:input} не может быть пустым\"",
+      "    ${3:# Дополнительные проверки}",
+      "}",
+      "",
+      "# Вызов валидации",
+      "validate_${1:input} \"$${1:input}\""
+    ],
+    "description": "Функция валидации входных данных"
+  },
+
+  "rpi-bash-temp-file": {
+    "scope": "shellscript",
+    "prefix": "rpi-temp-file",
+    "body": [
+      "${1:TEMP_FILE}=$(mktemp ${2:--suffix=\".$$\"})",
+      "trap 'rm -f \"$${1:TEMP_FILE}\"' EXIT INT TERM"
+    ],
+    "description": "Безопасное создание временного файла с очисткой"
+  },
+
+  "rpi-bash-temp-dir": {
+    "scope": "shellscript",
+    "prefix": "rpi-temp-dir",
+    "body": [
+      "${1:TEMP_DIR}=$(mktemp -d ${2:--suffix=\".$$\"})",
+      "trap 'rm -rf \"$${1:TEMP_DIR}\"' EXIT INT TERM"
+    ],
+    "description": "Безопасное создание временной директории с очисткой"
+  },
+
+  "rpi-bash-check-command": {
+    "scope": "shellscript",
+    "prefix": "rpi-check-cmd",
+    "body": [
+      "command -v ${1:command_name} >/dev/null 2>&1 || die \"Требуется установить: ${1:command_name}\""
+    ],
+    "description": "Проверка наличия команды"
+  },
+
+  "rpi-bash-conditional-execution": {
+    "scope": "shellscript",
+    "prefix": "rpi-conditional-exec",
+    "body": [
+      "if [[ \"${${1:variable_name}:-}\" == \"${2:expected_value}\" ]]; then",
+      "    ${3:# Выполнить если условие истинно}",
+      "else",
+      "    ${4:# Выполнить если условие ложно}",
+      "fi"
+    ],
+    "description": "Условное выполнение на основе переменной окружения"
+  },
+
+  "rpi-bash-error-handling": {
+    "scope": "shellscript",
+    "prefix": "rpi-error-handling",
+    "body": [
+      "${1:command} || {",
+      "    log_error \"${2:Command failed}: ${1:command}\"",
+      "    ${3:# Дополнительные действия при ошибке}",
+      "    exit 1",
+      "}"
+    ],
+    "description": "Обработка ошибок команд"
+  },
+
+  "rpi-bash-user-management": {
+    "scope": "shellscript",
+    "prefix": "rpi-user-management",
+    "body": [
+      "# Создание пользователя для приложения",
+      "APP_USER=\"${${1:app_user}:-${2:app-user}}\"",
+      "if ! id -u \"$APP_USER\" >/dev/null 2>&1; then",
+      "    useradd --system --shell /bin/false --home \"/var/lib/$APP_USER\" \"$APP_USER\"",
+      "fi",
+      "",
+      "# Настройка прав доступа",
+      "chown -R \"$APP_USER:$APP_USER\" \"/var/lib/$APP_USER\"",
+      "chmod 750 \"/var/lib/$APP_USER\""
+    ],
+    "description": "Создание системного пользователя с правильными правами"
+  },
+
+  "rpi-bash-service-setup": {
+    "scope": "shellscript",
+    "prefix": "rpi-service-setup",
+    "body": [
+      "# Создание systemd сервиса",
+      "cat > \"/etc/systemd/system/${1:service_name}.service\" << EOF",
+      "[Unit]",
+      "Description=${2:Service Description}",
+      "After=network.target",
+      "",
+      "[Service]",
+      "User=${3:app_user}",
+      "ExecStart=${4:/usr/local/bin/app}",
+      "Restart=always",
+      "",
+      "[Install]",
+      "WantedBy=multi-user.target",
+      "EOF",
+      "",
+      "# Включение и запуск сервиса",
+      "systemctl daemon-reload",
+      "systemctl enable ${1:service_name}",
+      "systemctl start ${1:service_name}"
+    ],
+    "description": "Создание и настройка systemd сервиса"
+  },
+
+  "rpi-bash-nginx-config": {
+    "scope": "shellscript",
+    "prefix": "rpi-nginx-config",
+    "body": [
+      "# Настройка nginx",
+      "cat > \"/etc/nginx/sites-available/${1:app_name}\" << EOF",
+      "server {",
+      "    listen ${2:80};",
+      "    server_name ${3:localhost};",
+      "",
+      "    location / {",
+      "        proxy_pass http://127.0.0.1:${4:8000};",
+      "        proxy_set_header Host \\$host;",
+      "        proxy_set_header X-Real-IP \\$remote_addr;",
+      "    }",
+      "}",
+      "EOF",
+      "",
+      "ln -sf \"/etc/nginx/sites-available/${1:app_name}\" \"/etc/nginx/sites-enabled/${1:app_name}\"",
+      "rm -f /etc/nginx/sites-enabled/default",
+      "systemctl reload nginx"
+    ],
+    "description": "Базовая конфигурация nginx для приложения"
+  },
+
+  "rpi-bash-port-validation": {
+    "scope": "shellscript",
+    "prefix": "rpi-port-validation",
+    "body": [
+      "validate_port() {",
+      "    local port=\"$1\"",
+      "    [[ \"$port\" =~ ^[0-9]+$ ]] || die \"Неверный порт: $port\"",
+      "    [[ \"$port\" -ge 1024 && \"$port\" -le 65535 ]] || die \"Порт должен быть в диапазоне 1024-65535: $port\"",
+      "}",
+      "",
+      "# Использование",
+      "SERVICE_PORT=\"${${1:SERVICE_PORT}:-8080}\"",
+      "validate_port \"$SERVICE_PORT\""
+    ],
+    "description": "Валидация сетевого порта"
+  },
+
+  "rpi-bash-hostname-validation": {
+    "scope": "shellscript",
+    "prefix": "rpi-hostname-validation",
+    "body": [
+      "validate_hostname() {",
+      "    local hostname=\"$1\"",
+      "    [[ \"$hostname\" =~ ^[a-zA-Z0-9.-]+$ ]] || die \"Неверное имя хоста: $hostname\"",
+      "    [[ ${#hostname} -le 253 ]] || die \"Имя хоста слишком длинное: $hostname\"",
+      "}",
+      "",
+      "# Использование",
+      "HOSTNAME=\"${${1:HOSTNAME}:-localhost}\"",
+      "validate_hostname \"$HOSTNAME\""
+    ],
+    "description": "Валидация имени хоста"
+  },
+
+  "rpi-bash-parallel-execution": {
+    "scope": "shellscript",
+    "prefix": "rpi-parallel-exec",
+    "body": [
+      "# Параллельное выполнение задач",
+      "execute_parallel() {",
+      "    local max_jobs=\"${${1:MAX_JOBS}:-4}\"",
+      "    local job_count=0",
+      "",
+      "    for ${2:item} in \"${${3:items}[@]}\"; do",
+      "        ${4:process_item} \"$${2:item}\" &",
+      "        ((job_count++))",
+      "",
+      "        # Ограничение количества параллельных задач",
+      "        if [[ \\$job_count -ge \\$max_jobs ]]; then",
+      "            wait",
+      "            job_count=0",
+      "        fi",
+      "    done",
+      "",
+      "    # Ожидание завершения оставшихся задач",
+      "    wait",
+      "}",
+      "",
+      "# Использование",
+      "execute_parallel"
+    ],
+    "description": "Параллельное выполнение задач с ограничением количества"
+  },
+
+  "rpi-minimal-function": {
+    "scope": "shellscript",
+    "prefix": "rpi-minimal-func",
+    "body": [
+      "# ✅ МИНИМАЛЬНАЯ ФУНКЦИЯ - одна задача",
+      "${1:function_name}() {",
+      "    ${2:# Только необходимая логика - без избыточности}",
+      "    ${3:command} \"${4:arg}\"",
+      "}",
+      "",
+      "# ❌ ИЗБЫТОЧНАЯ ФУНКЦИЯ - много задач",
+      "# setup_everything() {",
+      "#     install_packages",
+      "#     configure_services",
+      "#     create_users",
+      "#     setup_firewall",
+      "#     enable_monitoring",
+      "# }"
+    ],
+    "description": "Пример минимальной функции по принципу Single Responsibility"
+  },
+
+  "rpi-dry-variable": {
+    "scope": "shellscript",
+    "prefix": "rpi-dry-var",
+    "body": [
+      "# ✅ DRY - используем переменные для избежания повторений",
+      "${1:SERVICE_NAME}=\"${2:my-service}\"",
+      "${3:SERVICE_USER}=\"${4:app-user}\"",
+      "${5:CONFIG_DIR}=\"/etc/$${1:SERVICE_NAME}\"",
+      "",
+      "# Переиспользование переменных",
+      "mkdir -p \"$${5:CONFIG_DIR}\" \"/var/log/$${1:SERVICE_NAME}\"",
+      "chown -R \"$${3:SERVICE_USER}:$${3:SERVICE_USER}\" \"/var/lib/$${1:SERVICE_NAME}\"",
+      "",
+      "# ❌ НЕ DRY - повторение строк",
+      "# mkdir -p /etc/my-service /var/log/my-service",
+      "# chown -R app-user:app-user /var/lib/my-service"
+    ],
+    "description": "DRY принцип - избегайте повторений с помощью переменных"
+  },
+
+  "rpi-yagni-check": {
+    "scope": "shellscript",
+    "prefix": "rpi-yagni-check",
+    "body": [
+      "# ✅ YAGNI - добавляйте только если действительно нужно",
+      "${1:install_basic}() {",
+      "    apt-get install -y ${2:nginx}",
+      "}",
+      "",
+      "# Не добавляйте \"на всякий случай\":",
+      "# setup_advanced_monitoring() { ... }  # Пока не нужно",
+      "# configure_load_balancer() { ... }    # Пока не нужно",
+      "# setup_backup_system() { ... }        # Пока не нужно",
+      "",
+      "# Добавляйте только когда:",
+      "# - Функциональность востребована",
+      "# - Есть четкие требования",
+      "# - Прошло тестирование MVP"
+    ],
+    "description": "YAGNI принцип - добавляйте только необходимое"
+  }
+}

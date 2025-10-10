@@ -1,0 +1,41 @@
+# METABEGIN
+# X-Env-Layer-Name: security-suite-basic
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Basic security suite (minimal security baseline)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: security-suite-basic
+# X-Env-VarPrefix: security_suite_basic
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable basic security suite
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  layers:
+    # Firewall protection (modular)
+    - ufw-core-basic
+    - ufw-core-rules
+    - ufw-core-services
+
+    # Basic access controls
+    - apparmor-core
+
+    # Password security
+    - password-policies-core
+
+    # Automatic security updates (modular)
+    - unattended-upgrades-core-basic
+    - unattended-upgrades-core-security
+    - unattended-upgrades-core-monitoring
+    - unattended-upgrades-core-services
+
+  customize-hooks:
+    - |
+      echo "🛡️ Basic security suite installed"
+      echo "   Components:"
+      echo "   • UFW Firewall"
+      echo "   • AppArmor MAC"
+      echo "   • Password policies"
+      echo "   • Automatic updates"

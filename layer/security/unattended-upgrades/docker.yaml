@@ -1,0 +1,36 @@
+# METABEGIN
+# X-Env-Layer-Name: unattended-upgrades-docker
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Docker container restart after unattended-upgrades
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: unattended-upgrades-core-basic
+# X-Env-Layer-Provides: package-updates-docker-integration
+# X-Env-VarPrefix: unattended
+# X-Env-Var-docker_integration: y
+# X-Env-Var-docker_integration-Description: Restart Docker containers after updates if Docker is present
+# X-Env-Var-docker_integration-Required: false
+# X-Env-Var-docker_integration-Valid: bool
+# X-Env-Var-docker_integration-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_unattended_docker_integration || exit 0
+
+      echo "🐳 Installing unattended-upgrades Docker integration..."
+
+      # Check if Docker is available
+      if ! command -v docker >/dev/null 2>&1; then
+        echo "⚠️ Docker not detected, skipping integration"
+        exit 0
+      fi
+
+      # Docker integration
+      echo "🐳 Adding Docker container restart after updates..."
+      # Create post-update hook for Docker
+      install -m 644 "templates/security/unattended-upgrades/99unattended-upgrades-docker" "$1/etc/apt/apt.conf.d/99unattended-upgrades-docker"
+      install -m 644 "templates/security/unattended-upgrades/unattended-upgrades-docker-restart" "$1/usr/local/bin/unattended-upgrades-docker-restart"
+      chmod +x "$1/usr/local/bin/unattended-upgrades-docker-restart"
+      echo "✅ Docker integration configured"

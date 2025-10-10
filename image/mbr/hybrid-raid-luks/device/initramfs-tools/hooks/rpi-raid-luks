@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+
+case "$1" in
+   prereqs) echo ""; exit 0;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Copy essential tools
+copy_exec /sbin/mdadm
+copy_exec /sbin/cryptsetup
+
+# Copy key script and key file
+copy_exec /usr/bin/rpi-raid
+[ -f /etc/luks/key ] && copy_file key /etc/luks/key /key

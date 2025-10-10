@@ -1,0 +1,116 @@
+# METABEGIN
+# X-Env-Layer-Name: auditd-services
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Auditd integration with system services
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: auditd-core, auditd-rules
+# X-Env-Layer-Provides: auditd-services
+# X-Env-VarPrefix: auditd_services
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable auditd service integrations
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-cockpit_audit: y
+# X-Env-Var-cockpit_audit-Description: Enable audit logging for Cockpit administrative actions
+# X-Env-Var-cockpit_audit-Required: false
+# X-Env-Var-cockpit_audit-Valid: bool
+# X-Env-Var-cockpit_audit-Set: lazy
+# X-Env-Var-docker_audit: y
+# X-Env-Var-docker_audit-Description: Enable comprehensive audit logging for Docker operations
+# X-Env-Var-docker_audit-Required: false
+# X-Env-Var-docker_audit-Valid: bool
+# X-Env-Var-docker_audit-Set: lazy
+# X-Env-Var-openssh_audit: y
+# X-Env-Var-openssh_audit-Description: Enable detailed audit logging for SSH connections
+# X-Env-Var-openssh_audit-Required: false
+# X-Env-Var-openssh_audit-Valid: bool
+# X-Env-Var-openssh_audit-Set: lazy
+# X-Env-Var-distrobox_audit: y
+# X-Env-Var-distrobox_audit-Description: Enable audit logging for Distrobox container operations
+# X-Env-Var-distrobox_audit-Required: false
+# X-Env-Var-distrobox_audit-Valid: bool
+# X-Env-Var-distrobox_audit-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "auditd_services"
+
+      echo "🔗 Configuring auditd service integrations..."
+
+      # Cockpit audit integration
+      if igconf isy IGconf_auditd_services_cockpit_audit; then
+        echo "🎛️ Adding Cockpit audit rules..."
+        cat >> "$1/etc/audit/rules.d/cockpit.rules" << 'EOF'
+-w /usr/libexec/cockpit/cockpit-session -p x -k cockpit_admin
+-w /usr/share/cockpit/ -p wa -k cockpit_config
+-w /etc/cockpit/ -p wa -k cockpit_config
+-a exit,always -F arch=b64 -S setuid -F euid!=0 -F auid>=1000 -F auid!=4294967295 -k cockpit_user_mgmt
+-a exit,always -F arch=b64 -S setgid -F egid!=0 -F auid>=1000 -F auid!=4294967295 -k cockpit_user_mgmt
+EOF
+        echo "✅ Cockpit audit rules added"
+      fi
+
+      # Docker audit integration
+      if igconf isy IGconf_auditd_services_docker_audit; then
+        echo "🐳 Adding Docker audit rules..."
+        cat >> "$1/etc/audit/rules.d/docker.rules" << 'EOF'
+-w /usr/bin/docker -p x -k docker_ops
+-w /usr/bin/docker-compose -p x -k docker_compose
+-w /usr/bin/podman -p x -k podman_ops
+-w /var/run/docker.sock -p wa -k docker_socket
+-w /etc/docker/ -p wa -k docker_config
+-w /var/lib/docker/ -p wa -k docker_storage
+-a exit,always -F arch=b64 -S execve -F path=/usr/bin/docker -F key=docker_exec
+-a exit,always -F arch=b64 -S execve -F path=/usr/bin/docker-compose -F key=docker_compose_exec
+EOF
+        echo "✅ Docker audit rules added"
+      fi
+
+      # OpenSSH audit integration
+      if igconf isy IGconf_auditd_services_openssh_audit; then
+        echo "🔑 Adding OpenSSH audit rules..."
+        cat >> "$1/etc/audit/rules.d/openssh.rules" << 'EOF'
+-w /usr/sbin/sshd -p x -k ssh_daemon
+-w /etc/ssh/sshd_config -p wa -k ssh_config
+-w /usr/bin/ssh-keygen -p x -k ssh_keygen
+-w /etc/ssh/ -p wa -k ssh_config
+-a exit,always -F arch=b64 -S openat -F dir=/home -F key=ssh_home_access
+-a exit,always -F arch=b64 -S read -F path=/etc/passwd -F key=ssh_passwd_read
+EOF
+        echo "✅ OpenSSH audit rules added"
+      fi
+
+      # Distrobox audit integration
+      if igconf isy IGconf_auditd_services_distrobox_audit; then
+        echo "📦 Adding Distrobox audit rules..."
+        cat >> "$1/etc/audit/rules.d/distrobox.rules" << 'EOF'
+-w /usr/bin/distrobox -p x -k distrobox_ops
+-w /usr/bin/distrobox-enter -p x -k distrobox_enter
+-w /usr/bin/distrobox-export -p x -k distrobox_export
+-w /var/lib/distrobox/ -p wa -k distrobox_storage
+-w /home/.distrobox/ -p wa -k distrobox_home
+-a exit,always -F arch=b64 -S unshare -F key=distrobox_unshare
+-a exit,always -F arch=b64 -S clone -F key=distrobox_clone
+EOF
+        echo "✅ Distrobox audit rules added"
+      fi
+
+      # Reload rules to include new ones
+      if [ -f "$1/sbin/auditctl" ]; then
+        chroot "$1" auditctl -R /etc/audit/rules.d/security-monitoring.rules >/dev/null 2>&1 || true
+      fi
+
+      echo ""
+      echo "🔗 Service Audit Integrations:"
+      echo "   Cockpit audit: $(igconf isy IGconf_auditd_services_cockpit_audit && echo "enabled" || echo "disabled")"
+      echo "   Docker audit: $(igconf isy IGconf_auditd_services_docker_audit && echo "enabled" || echo "disabled")"
+      echo "   SSH audit: $(igconf isy IGconf_auditd_services_openssh_audit && echo "enabled" || echo "disabled")"
+      echo "   Distrobox audit: $(igconf isy IGconf_auditd_services_distrobox_audit && echo "enabled" || echo "disabled")"
+      echo ""
+      echo "🔍 Auditd service integrations configured"

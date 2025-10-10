@@ -1,0 +1,36 @@
+# METABEGIN
+# X-Env-Layer-Name: unattended-upgrades-core-services
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Systemd services and integrations for unattended-upgrades
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: unattended-upgrades-core-basic
+# X-Env-Layer-Provides: package-updates-services
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_unattended_enable || exit 0
+
+      echo "⚙️ Installing unattended-upgrades systemd services..."
+
+      # PHASE 7: Service configuration
+      echo "⚙️ Configuring systemd services..."
+
+      # Enable unattended-upgrades timer
+      chroot "$1" systemctl enable apt-daily-upgrade.timer
+      chroot "$1" systemctl start apt-daily-upgrade.timer 2>/dev/null || echo "Warning: Could not start timer during build"
+
+      # Configure needrestart for kernel updates
+      if chroot "$1" command -v needrestart >/dev/null 2>&1; then
+        echo "Configuring needrestart for kernel updates"
+        # Inline heredoc content
+        chroot "$1" cat > /etc/needrestart/conf.d/unattended-upgrades.conf << 'EOF'
+$nrconf{kernelhints} = 0;
+$nrconf{restart} = 'a';
+EOF
+      fi
+
+      echo ""
+      echo "✅ Unattended-upgrades services configuration completed!"

@@ -1,0 +1,44 @@
+# METABEGIN
+# X-Env-Layer-Name: sudo-logging-ssh-audit
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Sudo audit integration for OpenSSH remote sessions
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: sudo-logging-core
+# X-Env-Layer-Provides: sudo-ssh-audit
+# X-Env-VarPrefix: sudo_logging
+# X-Env-Var-openssh_audit: y
+# X-Env-Var-openssh_audit-Description: Enable sudo audit for OpenSSH remote sessions
+# X-Env-Var-openssh_audit-Required: false
+# X-Env-Var-openssh_audit-Valid: bool
+# X-Env-Var-openssh_audit-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_sudo_logging_openssh_audit || exit 0
+
+      echo "🔑 Installing sudo SSH audit integration..."
+
+      # Check if SSH is available
+      if [ ! -f "$1/usr/sbin/sshd" ]; then
+        echo "⚠️ OpenSSH server not detected, skipping SSH audit"
+        exit 0
+      fi
+
+      # OpenSSH audit integration
+      echo "🔑 Configuring OpenSSH sudo audit..."
+      # Add SSH session tracking to sudoers
+      echo "# SSH session auditing" >> "$1/etc/sudoers"
+      echo 'Defaults env_keep += "SSH_CLIENT SSH_CONNECTION SSH_TTY"' >> "$1/etc/sudoers"
+
+      # Create SSH session logger
+      install -m 644 "templates/security/sudo-logging/sudo-ssh-audit" "$1/usr/local/bin/sudo-ssh-audit"
+      chmod +x "$1/usr/local/bin/sudo-ssh-audit"
+
+      # Add to sudoers for automatic execution
+      echo "Defaults log_output" >> "$1/etc/sudoers"
+      echo "Defaults log_input" >> "$1/etc/sudoers"
+
+      echo "✅ OpenSSH audit integration configured"

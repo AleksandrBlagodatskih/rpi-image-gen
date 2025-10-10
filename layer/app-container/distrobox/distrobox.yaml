@@ -1,0 +1,128 @@
+# METABEGIN
+# X-Env-Layer-Name: distrobox
+# X-Env-Layer-Category: container
+# X-Env-Layer-Description: Minimal Distrobox setup with dev container
+# X-Env-Layer-Version: 1.1.0
+# X-Env-Layer-Provides: distrobox
+# X-Env-Layer-RequiresProvider: docker
+# X-Env-Layer-Requires: rpi-user-credentials
+#
+# X-Env-VarPrefix: distrobox
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable distrobox with dev container
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+#
+# X-Env-Var-container_name: dev
+# X-Env-Var-container_name-Desc: Name for the dev container
+# X-Env-Var-container_name-Required: n
+# X-Env-Var-container_name-Valid: regex:^[a-zA-Z0-9_-]+$
+#
+# X-Env-Var-container_image: debian:bookworm
+# X-Env-Var-container_image-Desc: Base container image for dev environment
+# X-Env-Var-container_image-Required: n
+# X-Env-Var-container_image-Valid: regex:^[^:]+:[^:]+$
+#
+# X-Env-Var-container_manager: docker
+# X-Env-Var-container_manager-Desc: Container manager to use (docker/podman)
+# X-Env-Var-container_manager-Required: n
+# X-Env-Var-container_manager-Valid: docker,podman
+#
+# X-Env-Var-docker_suite: bookworm
+# X-Env-Var-docker_suite-Desc: Debian suite for Docker compatibility (bookworm/trixie)
+# X-Env-Var-docker_suite-Required: n
+# X-Env-Var-docker_suite-Valid: bookworm,trixie
+#
+# X-Env-Var-dev_packages: build-essential,git,vim,curl,wget,python3,python3-pip
+# X-Env-Var-dev_packages-Desc: Comma-separated list of development packages to install
+# X-Env-Var-dev_packages-Required: n
+#
+# X-Env-Var-generate_entry: n
+# X-Env-Var-generate_entry-Desc: Generate desktop entries for the container
+# X-Env-Var-generate_entry-Required: n
+# X-Env-Var-generate_entry-Valid: bool
+#
+# X-Env-Var-enable_host_docker: n
+# X-Env-Var-enable_host_docker-Desc: Enable access to host Docker daemon from inside the container (security risk - use separate Docker daemon instead)
+# X-Env-Var-enable_host_docker-Required: n
+# X-Env-Var-enable_host_docker-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - distrobox
+  customize-hooks:
+    # Create basic dev container
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      if [ "${IGconf_distrobox_enable}" = "y" ]; then
+        echo "Creating distrobox dev container..."
+
+        # Set up container manager config
+        mkdir -p "$1/etc/distrobox"
+        cat > "$1/etc/distrobox/distrobox.conf" << EOF
+        container_manager=${IGconf_distrobox_container_manager:-docker}
+        container_image_default=${IGconf_distrobox_container_image:-debian:bookworm}
+        container_generate_entry=${IGconf_distrobox_generate_entry:-false}
+        non_interactive=true
+        EOF
+
+        # Prepare additional flags for host Docker access
+        additional_flags=""
+        extra_packages="${IGconf_distrobox_dev_packages:-build-essential,git,vim,curl,wget,python3,python3-pip}"
+
+        if [ "${IGconf_distrobox_enable_host_docker:-n}" = "y" ]; then
+          echo "⚠️  SECURITY WARNING: Enabling host Docker access!"
+          echo "   This gives containers full control over host Docker daemon."
+          echo "   Consider using separate Docker daemon for development instead."
+          echo "   Press Ctrl+C to abort, or wait 5 seconds to continue..."
+          sleep 5
+
+          # Determine Docker tools based on suite compatibility
+          docker_suite="${IGconf_distrobox_docker_suite:-bookworm}"
+          case "$docker_suite" in
+            "bookworm")
+              # Docker tools compatible with Debian Bookworm
+              docker_packages="docker-ce-cli,docker-buildx-plugin,docker-compose-v2"
+              ;;
+            "trixie")
+              # Docker tools compatible with Debian Trixie (may need different versions)
+              docker_packages="docker-ce-cli,docker-buildx-plugin,docker-compose-v2"
+              ;;
+            *)
+              echo "Warning: Unknown Docker suite '$docker_suite', using bookworm compatibility"
+              docker_packages="docker-ce-cli,docker-buildx-plugin,docker-compose-v2"
+              ;;
+          esac
+
+          # Add Docker tools and additional utilities
+          extra_packages="${extra_packages},${docker_packages},ctop,lazydocker,dive,hadolint,regclient"
+          # Mount Docker socket from host
+          additional_flags="--volume /var/run/docker.sock:/var/run/docker.sock"
+        fi
+
+        # Create dev container with configurable packages
+        chroot "$1" distrobox create \
+          --name "${IGconf_distrobox_container_name:-dev}" \
+          --image "${IGconf_distrobox_container_image:-debian:bookworm}" \
+          --additional-packages "$extra_packages" \
+          --yes --nvidia false \
+          ${additional_flags:+$additional_flags}
+
+        # Configure Docker access if enabled
+        if [ "${IGconf_distrobox_enable_host_docker:-n}" = "y" ]; then
+          echo "Configuring host Docker access..."
+          # Add user to docker group inside container
+          chroot "$1" distrobox enter "${IGconf_distrobox_container_name:-dev}" -- sh -c "
+            groupadd -f docker
+            usermod -aG docker \$USER
+          "
+          echo "Host Docker access configured"
+        fi
+
+        echo "Distrobox dev container created successfully"
+      fi

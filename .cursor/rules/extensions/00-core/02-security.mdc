@@ -1,0 +1,446 @@
+---
+alwaysApply: ${cursor.file.path.endsWith(".sh") || cursor.file.path.endsWith(".yaml") || cursor.file.path.includes("layer/") || cursor.file.path.includes("config/")}
+---
+
+# Правило 02: Безопасность расширений rpi-image-gen
+
+## Назначение правила
+Определяет стандарты безопасности для разработки расширений rpi-image-gen с автоматической проверкой в Cursor IDE.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Принципы безопасности
+
+### Минимизация привилегий (Principle of Least Privilege)
+
+#### Безопасное выполнение команд
+```bash
+# ✅ ПРАВИЛЬНО - выполнение с минимальными привилегиями
+if [[ "$EUID" -eq 0 ]]; then
+    # Для операций требующих root
+    run_operation_as_root
+else
+    # Для обычных операций
+    run_operation_as_user
+fi
+
+# Создание dedicated пользователя для сервиса
+SERVICE_USER="${IGconf_service_user:-app-user}"
+if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
+    useradd --system --shell /bin/false --home "/var/lib/$SERVICE_USER" "$SERVICE_USER"
+fi
+
+# Настройка прав доступа
+chown -R "$SERVICE_USER:$SERVICE_USER" "/var/lib/$SERVICE_USER"
+chmod 750 "/var/lib/$SERVICE_USER"
+```
+
+#### Безопасные временные файлы
+```bash
+# ✅ ПРАВИЛЬНО - безопасное создание временных файлов
+TEMP_DIR=$(mktemp -d --suffix=".$$")
+TEMP_FILE=$(mktemp --suffix=".$$")
+
+# Обязательная очистка
+trap 'rm -rf "$TEMP_DIR"; rm -f "$TEMP_FILE"' EXIT INT TERM
+
+# Использование uchroot для изоляции
+uchroot "$TEMP_DIR" bash -c "isolated_operation"
+```
+
+### Валидация входных данных
+
+#### Проверка переменных окружения
+```bash
+# ✅ ПРАВИЛЬНО - валидация всех входных данных
+validate_input() {
+    local port="${IGconf_service_port:-8080}"
+    local host="${IGconf_service_host:-localhost}"
+
+    # Валидация номера порта
+    if ! [[ "$port" =~ ^[0-9]+$ ]] || [[ "$port" -lt 1024 ]] || [[ "$port" -gt 65535 ]]; then
+        die "Invalid port number: $port"
+    fi
+
+    # Валидация hostname
+    if ! [[ "$host" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+        die "Invalid hostname: $host"
+    fi
+
+    # Валидация путей
+    local data_dir="${IGconf_data_dir:-/var/lib/app}"
+    if [[ "$data_dir" != /var/lib/* ]]; then
+        die "Data directory must be under /var/lib/: $data_dir"
+    fi
+}
+
+# Вызов валидации в начале
+validate_input
+```
+
+#### Защита от инъекций команд
+```bash
+# ❌ ОПАСНО - уязвимо к инъекциям
+user_input="$1"
+eval "$user_input"  # Никогда не делайте так!
+
+# ✅ БЕЗОПАСНО - использование массивов и функций
+execute_command() {
+    local cmd="$1"
+    local arg="$2"
+
+    # Безопасное выполнение с явными аргументами
+    case "$cmd" in
+        "start") systemctl start "$arg" ;;
+        "stop") systemctl stop "$arg" ;;
+        "restart") systemctl restart "$arg" ;;
+        *) die "Unknown command: $cmd" ;;
+    esac
+}
+
+# Использование
+execute_command "start" "my-service"
+```
+
+### Защита сетевых сервисов
+
+#### Безопасная настройка сервисов
+```bash
+# Настройка UFW (Uncomplicated Firewall)
+setup_firewall() {
+    # Установка UFW если не установлен
+    command -v ufw >/dev/null 2>&1 || apt-get install -y ufw
+
+    # Сброс правил
+    ufw --force reset
+
+    # Разрешение только необходимых портов
+    ufw default deny incoming
+    ufw default allow outgoing
+
+    # SSH (обязательно)
+    ufw allow ssh
+
+    # Сервисные порты (только если нужны)
+    if [[ "${IGconf_enable_http:-false}" == "true" ]]; then
+        ufw allow 80/tcp
+        ufw allow 443/tcp
+    fi
+
+    if [[ "${IGconf_enable_custom_port:-false}" == "true" ]]; then
+        local port="${IGconf_custom_port}"
+        if [[ "$port" =~ ^[0-9]+$ ]] && [[ "$port" -ge 1024 ]]; then
+            ufw allow "$port"
+        fi
+    fi
+
+    # Включение firewall
+    ufw --force enable
+}
+```
+
+#### Настройка fail2ban
+```bash
+# Автоматическая защита от brute-force атак
+setup_fail2ban() {
+    command -v fail2ban >/dev/null 2>&1 || apt-get install -y fail2ban
+
+    # Настройка SSH защиты
+    cat > /etc/fail2ban/jail.local << 'EOF'
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+EOF
+
+    systemctl enable fail2ban
+    systemctl restart fail2ban
+}
+```
+
+### Управление секретами
+
+#### Безопасное хранение секретов
+```bash
+# ❌ НЕБЕЗОПАСНО - секреты в коде
+DATABASE_PASSWORD="super-secret-password"
+
+# ✅ БЕЗОПАСНО - использование переменных окружения
+DATABASE_PASSWORD="${IGconf_db_password:?Database password required}"
+
+# Проверка что секрет не пустой
+if [[ -z "${DATABASE_PASSWORD:-}" ]]; then
+    die "Database password not provided"
+fi
+
+# Безопасное использование в конфигурациях
+cat > /etc/myapp/config << EOF
+database_url=postgresql://user:${DATABASE_PASSWORD}@localhost/db
+EOF
+
+# Настройка правильных прав доступа
+chmod 600 /etc/myapp/config
+chown myapp:myapp /etc/myapp/config
+```
+
+#### Генерация безопасных секретов
+```bash
+# Генерация случайных паролей и ключей
+generate_secrets() {
+    # Генерация ключа приложения
+    if [[ ! -f /etc/myapp/secret.key ]]; then
+        openssl rand -hex 32 > /etc/myapp/secret.key
+        chmod 600 /etc/myapp/secret.key
+    fi
+
+    # Генерация пароля базы данных
+    if [[ -z "${IGconf_db_password:-}" ]]; then
+        IGconf_db_password=$(openssl rand -base64 12)
+        echo "Generated DB password: $IGconf_db_password"
+    fi
+
+    # Генерация JWT секрета
+    if [[ -z "${IGconf_jwt_secret:-}" ]]; then
+        IGconf_jwt_secret=$(openssl rand -hex 64)
+    fi
+}
+```
+
+### Мониторинг безопасности
+
+#### Аудит системных событий
+```bash
+# Настройка auditd для мониторинга
+setup_audit() {
+    command -v auditd >/dev/null 2>&1 || apt-get install -y auditd
+
+    # Правила аудита для критических файлов
+    cat > /etc/audit/rules.d/myapp.rules << 'EOF'
+# Мониторинг конфигурационных файлов
+-w /etc/myapp/ -p wa -k myapp_config
+
+# Мониторинг сетевых подключений
+-a always,exit -F arch=b64 -S connect,accept -F key=network_access
+
+# Мониторинг sudo использования
+-a always,exit -F path=/usr/bin/sudo -F key=sudo_usage
+EOF
+
+    # Перезагрузка правил
+    auditctl -R /etc/audit/rules.d/myapp.rules
+    systemctl enable auditd
+}
+```
+
+#### Аудит и соответствие стандартам
+
+#### SBOM (Software Bill of Materials) и CVE сканирование
+```bash
+# Генерация SBOM для образа (если поддерживается rpi-image-gen)
+rpi-image-gen build -c config.yaml --sbom
+
+# Сканирование на известные уязвимости
+rpi-image-gen build -c config.yaml --cve-scan
+
+# Проверка пакетов на CVE после установки
+check_cve_compliance() {
+    # Использование инструментов вроде debsecan или grype
+    if command -v debsecan >/dev/null 2>&1; then
+        debsecan --format detail
+    fi
+}
+```
+
+#### Аудит системных событий
+```bash
+# Настройка auditd для отслеживания изменений
+setup_security_audit() {
+    # Мониторинг установки пакетов
+    echo "-w /var/lib/dpkg/info -p wa -k package_changes" >> /etc/audit/rules.d/rpi-audit.rules
+
+    # Мониторинг изменений конфигурации
+    echo "-w /etc -p wa -k config_changes" >> /etc/audit/rules.d/rpi-audit.rules
+
+    systemctl restart auditd
+}
+```
+
+### Регулярные обновления безопасности
+
+#### Автоматические обновления
+```bash
+# Настройка unattended-upgrades
+configure_auto_updates() {
+    command -v unattended-upgrades >/dev/null 2>&1 || apt-get install -y unattended-upgrades
+
+    # Включение автоматических обновлений безопасности
+    cat > /etc/apt/apt.conf.d/50unattended-upgrades << 'EOF'
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,n=${DISTRO},l=Debian-Security";
+    "origin=Raspberry Pi,n=${DISTRO},l=Raspberry Pi";
+};
+
+Unattended-Upgrade::Package-Blacklist {};
+
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::InstallOnShutdown "false";
+Unattended-Upgrade::Mail "root";
+Unattended-Upgrade::MailOnlyOnError "true";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Automatic-Reboot "false";
+EOF
+
+    # Включение сервиса
+    systemctl enable unattended-upgrades
+}
+```
+
+### Контейнеризация и изоляция
+
+#### Использование Podman/Docker
+```bash
+# Безопасное развертывание в контейнерах
+deploy_in_container() {
+    local app_name="${IGconf_app_name}"
+    local image="${IGconf_app_image:-docker.io/library/nginx:latest}"
+
+    # Создание dedicated пользователя для контейнера
+    useradd --system --shell /bin/false --home "/var/lib/$app_name" "$app_name"
+
+    # Настройка SELinux/AppArmor если доступно
+    if command -v semanage >/dev/null 2>&1; then
+        semanage fcontext -a -t container_file_t "/var/lib/$app_name(/.*)?"
+        restorecon -R "/var/lib/$app_name"
+    fi
+
+    # Запуск контейнера с ограничениями
+    podman run -d \
+        --name "$app_name" \
+        --user "$app_name" \
+        --read-only \
+        --tmpfs /tmp \
+        --cap-drop ALL \
+        --cap-add NET_BIND_SERVICE \
+        -v "/var/lib/$app_name:/data:Z" \
+        "$image"
+}
+```
+
+## Автоматическая проверка безопасности в Cursor
+
+### Анализ кода на уязвимости
+- [ ] Поиск жестко закодированных секретов
+- [ ] Проверка использования `eval` и `exec`
+- [ ] Валидация прав доступа к файлам
+- [ ] Проверка сетевой безопасности
+
+### Проверка конфигураций
+- [ ] Валидация переменных окружения
+- [ ] Проверка прав доступа
+- [ ] Анализ зависимостей пакетов
+
+### Безопасные паттерны кода
+```bash
+# Автоматические предложения для безопасного кода
+# eval "$VAR" -> die "eval is dangerous"
+# rm -rf "$VAR" -> [[ "$VAR" == /safe/path/* ]] && rm -rf "$VAR"
+# chmod 777 -> chmod 755 или более restrictive
+```
+
+## Инструменты безопасности
+
+### Сканирование на уязвимости
+```bash
+# Проверка установленных пакетов на CVE
+check_vulnerabilities() {
+    if command -v debsecan >/dev/null 2>&1; then
+        debsecan --format detail
+    fi
+}
+
+# Сканирование файлов на malware
+scan_for_malware() {
+    if command -v clamscan >/dev/null 2>&1; then
+        clamscan -r --bell -i /etc /usr/local /opt
+    fi
+}
+```
+
+### Мониторинг целостности
+```bash
+# Настройка AIDE для проверки целостности файлов
+setup_integrity_check() {
+    command -v aide >/dev/null 2>&1 || apt-get install -y aide
+
+    # Инициализация базы данных
+    aideinit
+
+    # Настройка периодических проверок
+    cat > /etc/cron.daily/aide-check << 'EOF'
+#!/bin/bash
+/usr/bin/aide --check --report=stdout | /usr/bin/mail -s "AIDE report" root
+EOF
+
+    chmod +x /etc/cron.daily/aide-check
+}
+```
+
+## Соответствие стандартам
+
+### CIS Benchmarks
+```yaml
+# Проверка соответствия CIS Debian Benchmarks
+cis_compliance_checks:
+  - name: "Ensure root login is restricted to system console"
+    check: "grep -q 'tty[1-6]' /etc/securetty"
+    fix: "echo 'tty1' > /etc/securetty"
+
+  - name: "Ensure permissions on /etc/passwd are configured"
+    check: "stat -c %a /etc/passwd | grep -q '644'"
+    fix: "chmod 644 /etc/passwd"
+```
+
+### STIG Compliance
+```bash
+# Проверка соответствия STIG для Debian
+check_stig_compliance() {
+    # STIG RHEL-08-010000 - Password complexity
+    if grep -q "minlen = 8" /etc/security/pwquality.conf; then
+        echo "✅ Password complexity configured"
+    else
+        echo "❌ Password complexity not configured"
+    fi
+
+    # STIG RHEL-08-010001 - Password history
+    if grep -q "remember = 5" /etc/security/pwquality.conf; then
+        echo "✅ Password history configured"
+    else
+        echo "❌ Password history not configured"
+    fi
+}
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе стандартов безопасности для разработки расширений rpi-image-gen

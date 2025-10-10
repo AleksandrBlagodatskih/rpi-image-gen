@@ -1,0 +1,69 @@
+# METABEGIN
+# X-Env-Layer-Name: unattended-upgrades-monitoring
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Monitoring and alerting for unattended-upgrades activities
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: unattended-upgrades-core-basic
+# X-Env-Layer-Provides: package-updates-monitoring
+# X-Env-VarPrefix: unattended
+# X-Env-Var-monitoring: y
+# X-Env-Var-monitoring-Description: Enable monitoring and alerting for upgrade activities
+# X-Env-Var-monitoring-Required: false
+# X-Env-Var-monitoring-Valid: bool
+# X-Env-Var-monitoring-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_unattended_monitoring || exit 0
+
+      echo "👁️ Installing unattended-upgrades monitoring..."
+
+      # Monitoring and alerting
+      echo "👁️ Setting up upgrade monitoring..."
+
+      # Create monitoring script
+      install -m 644 "templates/security/unattended-upgrades/unattended-upgrades-monitor" "$1/usr/local/bin/unattended-upgrades-monitor"
+
+      chmod +x "$1/usr/local/bin/unattended-upgrades-monitor"
+
+      # Add to cron for periodic monitoring
+      echo "0 */6 * * * root /usr/local/bin/unattended-upgrades-monitor" >> "$1/etc/crontab"
+      echo "✅ Upgrade monitoring configured (runs every 6 hours)"
+
+      # PHASE 9: Status script
+      echo "📊 Creating unattended-upgrades status script..."
+
+      install -m 644 "templates/security/unattended-upgrades/unattended-upgrades-status" "$1/usr/local/bin/unattended-upgrades-status"
+
+      chmod +x "$1/usr/local/bin/unattended-upgrades-status"
+
+      # Add to PATH
+      install -m 644 "templates/security/unattended-upgrades/unattended-upgrades-status.sh" "$1/etc/profile.d/unattended-upgrades-status.sh"
+
+      # PHASE 10: Final validation and testing
+      echo "🔍 Running final validation..."
+
+      # Test configuration syntax
+      if chroot "$1" unattended-upgrade --dry-run >/dev/null 2>&1; then
+        echo "✅ Configuration syntax is valid"
+      else
+        echo "⚠️ Configuration syntax issues detected (may be normal for build environment)"
+      fi
+
+      # Test monitoring if enabled
+      if igconf isy IGconf_unattended_monitoring && [ -f "$1/usr/local/bin/unattended-upgrades-monitor" ]; then
+        if chroot "$1" /usr/local/bin/unattended-upgrades-monitor >/dev/null 2>&1; then
+          echo "✅ Monitoring script functional"
+        else
+          echo "⚠️ Monitoring script may have issues"
+        fi
+      fi
+
+      echo ""
+      echo "✅ Unattended-upgrades monitoring completed!"
+      echo "   Status check: unattended-upgrades-status"
+      echo "   View alerts: tail -f /var/log/unattended-upgrades-alerts.log"
+      echo "   Monitor logs: tail -f /var/log/unattended-upgrades-security.log"

@@ -1,0 +1,195 @@
+# METABEGIN
+# X-Env-Layer-Name: backup-core
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Basic backup strategy for configuration files and user data
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: backup-core
+# X-Env-VarPrefix: backup_core
+#
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable basic backup functionality
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+#
+# X-Env-Var-backup_dir: /var/backups/security
+# X-Env-Var-backup_dir-Description: Directory for storing backup files
+# X-Env-Var-backup_dir-Required: false
+# X-Env-Var-backup_dir-Valid: string
+# X-Env-Var-backup_dir-Set: immediate
+#
+# X-Env-Var-retention_days: 7
+# X-Env-Var-retention_days-Description: Number of days to keep backups before deletion
+# X-Env-Var-retention_days-Required: false
+# X-Env-Var-retention_days-Valid: int:1-30
+# X-Env-Var-retention_days-Set: lazy
+#
+# X-Env-Var-include_configs: y
+# X-Env-Var-include_configs-Description: Backup security-related configuration files
+# X-Env-Var-include_configs-Required: false
+# X-Env-Var-include_configs-Valid: bool
+# X-Env-Var-include_configs-Set: lazy
+#
+# X-Env-Var-include_home: n
+# X-Env-Var-include_home-Description: Backup user home directories (use with caution - large backups)
+# X-Env-Var-include_home-Required: false
+# X-Env-Var-include_home-Valid: bool
+# X-Env-Var-include_home-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - cron
+    - tar
+    - gzip
+  customize-hooks:
+    - |
+      if [ "${IGconf_backup_core_enable:-n}" != "y" ]; then
+        echo "💾 Backup functionality disabled"
+        exit 0
+      fi
+
+      echo "💾 Setting up basic backup strategy..."
+
+      BACKUP_DIR="${IGconf_backup_core_backup_dir:-/var/backups/security}"
+      RETENTION_DAYS="${IGconf_backup_core_retention_days:-7}"
+
+      # Create backup directory
+      uchroot $1 "mkdir -p '$BACKUP_DIR'"
+      uchroot $1 "chmod 700 '$BACKUP_DIR'"
+
+      # Create backup script
+      uchroot $1 "cat > /usr/local/bin/security-backup << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+BACKUP_DIR=\"$BACKUP_DIR\"
+RETENTION_DAYS=\"$RETENTION_DAYS\"
+TIMESTAMP=\"\$(date +%Y%m%d_%H%M%S)\"
+BACKUP_FILE=\"\$BACKUP_DIR/security_backup_\$TIMESTAMP.tar.gz\"
+
+echo \"💾 Creating security backup: \$BACKUP_FILE\"
+
+# Create temporary directory for backup
+TEMP_DIR=\"\$(mktemp -d)\"
+trap \"rm -rf \$TEMP_DIR\" EXIT
+
+EOF"
+
+      # Add configuration backup logic
+      if [ "${IGconf_backup_core_include_configs:-y}" = "y" ]; then
+        uchroot $1 "cat >> /usr/local/bin/security-backup << 'EOF'
+# Backup security configurations
+mkdir -p \"\$TEMP_DIR/configs\"
+
+# Core system configs
+cp -a /etc/passwd \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/shadow \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/group \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+
+# Security-related configs
+cp -a /etc/ufw \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/fail2ban \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/cockpit \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/security \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/pam.d \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/audit \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/sudoers \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+cp -a /etc/sudoers.d \"\$TEMP_DIR/configs/\" 2>/dev/null || true
+
+EOF"
+      fi
+
+      # Add home directory backup logic (optional)
+      if [ "${IGconf_backup_core_include_home:-n}" = "y" ]; then
+        uchroot $1 "cat >> /usr/local/bin/security-backup << 'EOF'
+# Backup user home directories (excluding large files)
+mkdir -p \"\$TEMP_DIR/home\"
+
+# Only backup essential user files, exclude large directories
+for user_home in /home/*; do
+  if [ -d \"\$user_home\" ]; then
+    username=\"\$(basename \"\$user_home\")\"
+    mkdir -p \"\$TEMP_DIR/home/\$username\"
+
+    # Copy important user configs, exclude large files
+    cp -a \"\$user_home/.bashrc\" \"\$TEMP_DIR/home/\$username/\" 2>/dev/null || true
+    cp -a \"\$user_home/.profile\" \"\$TEMP_DIR/home/\$username/\" 2>/dev/null || true
+    cp -a \"\$user_home/.ssh\" \"\$TEMP_DIR/home/\$username/\" 2>/dev/null || true
+
+    # Limit to 10MB per user to prevent huge backups
+    if [ -d \"\$TEMP_DIR/home/\$username\" ]; then
+      size_mb=\"\$(du -sm \"\$TEMP_DIR/home/\$username\" 2>/dev/null | cut -f1)\"
+      if [ \"\${size_mb:-0}\" -gt 10 ]; then
+        echo \"⚠️  User \$username backup too large (\$size_mb MB), skipping\"
+        rm -rf \"\$TEMP_DIR/home/\$username\"
+      fi
+    fi
+  fi
+done
+
+EOF"
+      fi
+
+      # Complete backup script
+      uchroot $1 "cat >> /usr/local/bin/security-backup << 'EOF'
+# Create compressed archive
+tar -czf \"\$BACKUP_FILE\" -C \"\$TEMP_DIR\" .
+
+# Set secure permissions
+chmod 600 \"\$BACKUP_FILE\"
+
+echo \"✅ Backup created: \$BACKUP_FILE\"
+echo \"   Size: \$(du -h \"\$BACKUP_FILE\" | cut -f1)\"
+
+# Clean up old backups
+if [ -d \"\$BACKUP_DIR\" ]; then
+  echo \"🧹 Cleaning up backups older than \$RETENTION_DAYS days...\"
+  find \"\$BACKUP_DIR\" -name \"security_backup_*.tar.gz\" -mtime +\$RETENTION_DAYS -delete
+fi
+
+echo \"💾 Security backup completed successfully\"
+EOF"
+
+      # Make script executable
+      uchroot $1 "chmod +x /usr/local/bin/security-backup"
+
+      # Set up cron job for daily backups at 2 AM
+      uchroot $1 "echo '0 2 * * * root /usr/local/bin/security-backup' > /etc/cron.d/security-backup"
+
+      # Create status script
+      uchroot $1 "cat > /usr/local/bin/backup-status << 'EOF'
+#!/bin/bash
+echo \"=== Security Backup Status ===\"
+echo \"\"
+
+BACKUP_DIR=\"$BACKUP_DIR\"
+if [ -d \"\$BACKUP_DIR\" ]; then
+  echo \"Backup directory: \$BACKUP_DIR\"
+  echo \"Recent backups:\"
+  ls -la \"\$BACKUP_DIR\"/security_backup_*.tar.gz 2>/dev/null | head -5 || echo \"No backups found\"
+
+  echo \"\"
+  echo \"Backup disk usage:\"
+  du -sh \"\$BACKUP_DIR\" 2>/dev/null || echo \"Cannot determine size\"
+
+  echo \"\"
+  echo \"Retention policy: Delete backups older than \$RETENTION_DAYS days\"
+else
+  echo \"❌ Backup directory does not exist\"
+fi
+
+echo \"\"
+echo \"To create manual backup: sudo /usr/local/bin/security-backup\"
+echo \"To check cron status: sudo systemctl status cron\"
+EOF"
+
+      uchroot $1 "chmod +x /usr/local/bin/backup-status"
+
+      echo "✅ Basic backup strategy configured"
+      echo "   Backup directory: $BACKUP_DIR"
+      echo "   Daily backup at 2:00 AM"
+      echo "   Retention: $RETENTION_DAYS days"
+      echo "   Manual backup: /usr/local/bin/security-backup"
+      echo "   Status check: /usr/local/bin/backup-status"

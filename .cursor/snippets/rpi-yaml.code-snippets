@@ -1,0 +1,133 @@
+{
+  "rpi-layer-metadata": {
+    "scope": "yaml",
+    "prefix": "rpi-layer-meta",
+    "body": [
+      "# METABEGIN",
+      "# X-Env-Layer-Name: ${1:extension-name}",
+      "# X-Env-Layer-Category: ${2|extension,device,suite,base|}",
+      "# X-Env-Layer-Description: ${3:Описание расширения}",
+      "# X-Env-Layer-Version: ${4:1.0.0}",
+      "# X-Env-Layer-Requires: ${5:essential,net-misc}",
+      "# X-Env-VarPrefix: ${6:extension}",
+      "#",
+      "# X-Env-Var-${7:setting_name}: ${8:default_value}",
+      "# X-Env-Var-${7:setting_name}-Description: ${9:Описание настройки}",
+      "# X-Env-Var-${7:setting_name}-Required: ${10|false,true|}",
+      "# X-Env-Var-${7:setting_name}-Valid: ${11:validation_rule}",
+      "# METAEND"
+    ],
+    "description": "Шаблон метаданных для слоя rpi-image-gen"
+  },
+
+  "rpi-config-basic": {
+    "scope": "yaml",
+    "prefix": "rpi-config-basic",
+    "body": [
+      "device:",
+      "  layer: ${1:pi5}",
+      "  hostname: rpi-${2:extension}-${3:${HOST_SUFFIX:-01}}",
+      "",
+      "image:",
+      "  layer: ${4:image-rpios}",
+      "  boot_part_size: ${5:200%}",
+      "  root_part_size: ${6:300%}",
+      "",
+      "layer:",
+      "  base: ${7:bookworm-minbase}",
+      "  ${8:extension}: ${9:my-extension-layer}",
+      "  ${10:security}: ${11:security-minimal}",
+      "  ${12:network}: ${13:net-misc}"
+    ],
+    "description": "Базовая конфигурация rpi-image-gen"
+  },
+
+  "rpi-env-var": {
+    "scope": "yaml",
+    "prefix": "rpi-env-var",
+    "body": [
+      "# X-Env-Var-${1:var_name}: ${2:default_value}",
+      "# X-Env-Var-${1:var_name}-Description: ${3:Описание переменной}",
+      "# X-Env-Var-${1:var_name}-Required: ${4|false,true|}",
+      "# X-Env-Var-${1:var_name}-Valid: ${5:validation_rule}",
+      "# X-Env-Var-${1:var_name}-Set: ${6|immediate,lazy|}"
+    ],
+    "description": "Переменная окружения с полной валидацией"
+  },
+
+  "rpi-env-var-simple": {
+    "scope": "yaml",
+    "prefix": "rpi-env-simple",
+    "body": [
+      "# X-Env-Var-${1:var_name}: ${2:default_value}",
+      "# X-Env-Var-${1:var_name}-Description: ${3:Описание переменной}"
+    ],
+    "description": "Простая переменная окружения"
+  },
+
+  "rpi-validation-rules": {
+    "scope": "yaml",
+    "prefix": "rpi-validation",
+    "body": [
+      "# X-Env-Var-${1:field}-Valid: ${2|int:1-65535,string,regex:^.*,true,false|}"
+    ],
+    "description": "Правила валидации для переменных"
+  },
+
+  "rpi-device-config": {
+    "scope": "yaml",
+    "prefix": "rpi-device-config",
+    "body": [
+      "device:",
+      "  layer: ${1:pi5}",
+      "  hostname: ${2:rpi-device}-${3:${HOST_SUFFIX:-01}}",
+      "  user: ${4:pi}",
+      "  ${5:custom_setting}: ${6:value}"
+    ],
+    "description": "Конфигурация устройства"
+  },
+
+  "rpi-image-config": {
+    "scope": "yaml",
+    "prefix": "rpi-image-config",
+    "body": [
+      "image:",
+      "  layer: ${1:image-rpios}",
+      "  boot_part_size: ${2:200%}",
+      "  root_part_size: ${3:300%}",
+      "  name: ${4:deb12-arm64-custom}",
+      "  ${5:custom_option}: ${6:value}"
+    ],
+    "description": "Конфигурация образа"
+  },
+
+  "rpi-layer-mmbdebstrap": {
+    "scope": "yaml",
+    "prefix": "rpi-mmdebstrap",
+    "body": [
+      "mmdebstrap:",
+      "  packages:",
+      "    - ${1:essential-package}",
+      "    - ${2:additional-package}",
+      "  setup-hooks:",
+      "    - |",
+      "      #!/bin/bash",
+      "      set -euo pipefail",
+      "      ",
+      "      ${3:# Настройка перед установкой пакетов}",
+      "  customize-hooks:",
+      "    - |",
+      "      #!/bin/bash",
+      "      set -euo pipefail",
+      "      ",
+      "      ${4:# Кастомизация после установки}",
+      "  cleanup-hooks:",
+      "    - |",
+      "      #!/bin/bash",
+      "      set -euo pipefail",
+      "      ",
+      "      ${5:# Очистка после установки}"
+    ],
+    "description": "Базовый шаблон mmdebstrap с хуками"
+  }
+}

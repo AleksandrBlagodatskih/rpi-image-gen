@@ -1,0 +1,734 @@
+---
+alwaysApply: ${cursor.file.content.includes("network") || cursor.file.content.includes("dns")}
+---
+
+
+# Правило 76: Сетевые приложения Debian
+
+## Назначение правила
+Определяет стандарты настройки и управления сетевыми приложениями в Debian GNU/Linux, исключая специфичные для Raspberry Pi компоненты.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Сетевые приложения Debian
+
+### Настройка веб-сервера
+
+#### Оптимизация Apache/Nginx для универсальных ARM64 систем:
+```bash
+#!/bin/bash
+# Настройка веб-сервера в Debian
+
+web_server_setup() {
+    echo "=== Настройка веб-сервера Debian ==="
+
+    # Выбор и установка веб-сервера
+    choose_web_server() {
+        echo "Выберите веб-сервер:"
+        echo "1) Apache2"
+        echo "2) Nginx"
+        echo "3) Lighttpd"
+        read -p "Ваш выбор (1-3): " choice
+
+        case "$choice" in
+            1)
+                install_apache
+                ;;
+            2)
+                install_nginx
+                ;;
+            3)
+                install_lighttpd
+                ;;
+            *)
+                echo "Неверный выбор"
+                return 1
+                ;;
+        esac
+    }
+
+    # Установка Apache
+    install_apache() {
+        echo "Установка Apache2..."
+
+        apt-get install -y apache2 apache2-utils
+
+        # Базовая конфигурация
+        cat > /etc/apache2/conf-available/security.conf << EOF
+# Security configuration
+ServerTokens Prod
+ServerSignature Off
+TraceEnable Off
+Header always unset X-Powered-By
+EOF
+
+        a2enconf security
+
+        # Оптимизация для ARM64
+        cat > /etc/apache2/conf-available/performance.conf << EOF
+# Performance optimization for ARM64
+StartServers 2
+MinSpareServers 2
+MaxSpareServers 5
+MaxRequestWorkers 50
+MaxConnectionsPerChild 1000
+
+KeepAlive On
+KeepAliveTimeout 5
+MaxKeepAliveRequests 100
+EOF
+
+        a2enconf performance
+
+        # Включение модулей
+        a2enmod rewrite
+        a2enmod ssl
+        a2enmod headers
+
+        systemctl enable apache2
+        systemctl start apache2
+
+        echo "✓ Apache2 установлен и настроен"
+    }
+
+    # Установка Nginx
+    install_nginx() {
+        echo "Установка Nginx..."
+
+        apt-get install -y nginx
+
+        # Основная конфигурация
+        cat > /etc/nginx/nginx.conf << EOF
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # Logging
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                    '\$status \$body_bytes_sent "\$http_referer" '
+                    '"\$http_user_agent" "\$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+    error_log /var/log/nginx/error.log warn;
+
+    # Performance
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 100M;
+
+    # Gzip
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/javascript
+        application/xml+rss
+        application/json;
+
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
+EOF
+
+        # Создание дефолтного сайта
+        cat > /etc/nginx/sites-available/default << EOF
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
+    root /var/www/html;
+    index index.html index.htm index.nginx-debian.html;
+
+    server_name _;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+}
+EOF
+
+        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
+
+        systemctl enable nginx
+        systemctl start nginx
+
+        echo "✓ Nginx установлен и настроен"
+    }
+
+    # Установка Lighttpd
+    install_lighttpd() {
+        echo "Установка Lighttpd..."
+
+        apt-get install -y lighttpd
+
+        # Конфигурация для ARM64
+        cat > /etc/lighttpd/lighttpd.conf << EOF
+server.modules = (
+    "mod_access",
+    "mod_alias",
+    "mod_compress",
+    "mod_redirect",
+)
+
+server.document-root = "/var/www/html"
+server.upload-dirs = ( "/var/cache/lighttpd/uploads" )
+server.errorlog = "/var/log/lighttpd/error.log"
+server.pid-file = "/run/lighttpd.pid"
+server.username = "www-data"
+server.groupname = "www-data"
+server.port = 80
+
+index-file.names = ( "index.php", "index.html", "index.lighttpd.html" )
+url.access-deny = ( "~", ".inc" )
+static-file.exclude-extensions = ( ".php", ".pl", ".fcgi" )
+
+compress.cache-dir = "/var/cache/lighttpd/compress/"
+compress.filetype = ( "application/javascript", "text/css", "text/html", "text/plain" )
+
+# default listening port for IPv6 falls back to the IPv4 port
+include_shell "/usr/share/lighttpd/use-ipv6.pl " + server.port
+include_shell "/usr/share/lighttpd/create-mime.assign.pl"
+include_shell "/usr/share/lighttpd/include-conf-enabled.pl"
+EOF
+
+        systemctl enable lighttpd
+        systemctl start lighttpd
+
+        echo "✓ Lighttpd установлен и настроен"
+    }
+
+    # Основная логика
+    case "$1" in
+        "apache")
+            install_apache
+            ;;
+        "nginx")
+            install_nginx
+            ;;
+        "lighttpd")
+            install_lighttpd
+            ;;
+        "choose")
+            choose_web_server
+            ;;
+        *)
+            echo "Использование: $0 <apache|nginx|lighttpd|choose>"
+            exit 1
+            ;;
+    esac
+}
+
+# Настройка SSL/TLS
+ssl_setup() {
+    echo "=== Настройка SSL/TLS для веб-сервера ==="
+
+    # Генерация самоподписанного сертификата
+    generate_self_signed_cert() {
+        local domain="$1"
+
+        echo "Генерация самоподписанного SSL сертификата для $domain..."
+
+        mkdir -p /etc/ssl/private /etc/ssl/certs
+
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout "/etc/ssl/private/${domain}.key" \
+            -out "/etc/ssl/certs/${domain}.crt" \
+            -subj "/C=US/ST=State/L=City/O=Organization/CN=${domain}"
+
+        echo "✓ Сертификат создан: /etc/ssl/certs/${domain}.crt"
+        echo "✓ Ключ создан: /etc/ssl/private/${domain}.key"
+    }
+
+    # Настройка HTTPS для Apache
+    setup_apache_ssl() {
+        local domain="$1"
+
+        echo "Настройка HTTPS для Apache..."
+
+        a2enmod ssl
+
+        cat > "/etc/apache2/sites-available/${domain}-ssl.conf" << EOF
+<VirtualHost *:443>
+    ServerName ${domain}
+    DocumentRoot /var/www/html
+
+    SSLEngine on
+    SSLCertificateFile /etc/ssl/certs/${domain}.crt
+    SSLCertificateKeyFile /etc/ssl/private/${domain}.key
+
+    <Directory /var/www/html>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog \${APACHE_LOG_DIR}/error.log
+    CustomLog \${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+EOF
+
+        a2ensite "${domain}-ssl"
+        systemctl reload apache2
+
+        echo "✓ HTTPS настроен для Apache"
+    }
+
+    # Настройка HTTPS для Nginx
+    setup_nginx_ssl() {
+        local domain="$1"
+
+        echo "Настройка HTTPS для Nginx..."
+
+        cat > "/etc/nginx/sites-available/${domain}-ssl" << EOF
+server {
+    listen 443 ssl http2;
+    server_name ${domain};
+
+    ssl_certificate /etc/ssl/certs/${domain}.crt;
+    ssl_certificate_key /etc/ssl/private/${domain}.key;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+
+    root /var/www/html;
+    index index.html index.htm;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
+EOF
+
+        ln -sf "/etc/nginx/sites-available/${domain}-ssl" /etc/nginx/sites-enabled/
+        systemctl reload nginx
+
+        echo "✓ HTTPS настроен для Nginx"
+    }
+
+    # Основная логика
+    case "$1" in
+        "cert")
+            generate_self_signed_cert "$2"
+            ;;
+        "apache")
+            setup_apache_ssl "$2"
+            ;;
+        "nginx")
+            setup_nginx_ssl "$2"
+            ;;
+        *)
+            echo "Использование: $0 <cert|apache|nginx> <domain>"
+            exit 1
+            ;;
+    esac
+}
+
+main() {
+    case "$1" in
+        "web")
+            shift
+            web_server_setup "$@"
+            ;;
+        "ssl")
+            shift
+            ssl_setup "$@"
+            ;;
+        *)
+            echo "Использование: $0 <web|ssl> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Настройка прокси-сервера
+
+#### Конфигурация Squid/HAProxy для балансировки нагрузки:
+```bash
+#!/bin/bash
+# Настройка прокси-сервера в Debian
+
+proxy_server_setup() {
+    echo "=== Настройка прокси-сервера Debian ==="
+
+    # Установка Squid
+    install_squid() {
+        echo "Установка Squid..."
+
+        apt-get install -y squid squid-common
+
+        # Базовая конфигурация Squid
+        cat > /etc/squid/squid.conf << EOF
+# Squid configuration for ARM64
+acl localnet src 192.168.0.0/16
+acl localnet src 172.16.0.0/12
+acl localnet src 10.0.0.0/8
+
+acl SSL_ports port 443
+acl Safe_ports port 80          # http
+acl Safe_ports port 21          # ftp
+acl Safe_ports port 443         # https
+acl Safe_ports port 70          # gopher
+acl Safe_ports port 210         # wais
+acl Safe_ports port 1025-65535  # unregistered ports
+acl Safe_ports port 280         # http-mgmt
+acl Safe_ports port 488         # gss-http
+acl Safe_ports port 591         # filemaker
+acl Safe_ports port 777         # multiling http
+acl CONNECT method CONNECT
+
+# Deny requests to certain unsafe ports
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+
+# Only allow cachemgr access from localhost
+http_access allow localhost manager
+http_access deny manager
+
+# We strongly recommend the following be uncommented to protect innocent
+# web applications running on the proxy server who think the only
+# one who can access services on "localhost" is a local user
+http_access deny to_localhost
+
+# Allow local networks
+http_access allow localnet
+http_access allow localhost
+
+# And finally deny all other access to this proxy
+http_access deny all
+
+# Squid normally listens to port 3128
+http_port 3128
+
+# Leave coredumps in the first cache dir
+coredump_dir /var/spool/squid
+
+# Add any of your own refresh_pattern entries above these.
+refresh_pattern ^ftp:           1440    20%     10080
+refresh_pattern ^gopher:        1440    0%      1440
+refresh_pattern -i (/cgi-bin/|\?) 0     0%      0
+refresh_pattern .               0       20%     4320
+
+# Cache settings optimized for ARM64
+cache_dir ufs /var/spool/squid 100 16 256
+maximum_object_size 100 MB
+cache_mem 64 MB
+EOF
+
+        # Создание кэш директории
+        squid -z
+
+        systemctl enable squid
+        systemctl start squid
+
+        echo "✓ Squid установлен и настроен"
+    }
+
+    # Установка HAProxy
+    install_haproxy() {
+        echo "Установка HAProxy..."
+
+        apt-get install -y haproxy
+
+        # Базовая конфигурация HAProxy
+        cat > /etc/haproxy/haproxy.cfg << EOF
+global
+    log /dev/log    local0
+    log /dev/log    local1 notice
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+
+    # Default SSL material locations
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+
+    # Default ciphers to use on SSL-enabled listening sockets.
+    ssl-default-bind-ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384
+    ssl-default-bind-options no-sslv3 no-tlsv10 no-tlsv11
+
+defaults
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    timeout connect 5000
+    timeout client  50000
+    timeout server  50000
+    errorfile 400 /etc/haproxy/errors/400.http
+    errorfile 403 /etc/haproxy/errors/403.http
+    errorfile 408 /etc/haproxy/errors/408.http
+    errorfile 500 /etc/haproxy/errors/500.http
+    errorfile 502 /etc/haproxy/errors/502.http
+    errorfile 503 /etc/haproxy/errors/503.http
+    errorfile 504 /etc/haproxy/errors/504.http
+
+frontend http_front
+    bind *:80
+    default_backend http_back
+
+backend http_back
+    balance roundrobin
+    server web1 127.0.0.1:8080 check
+EOF
+
+        systemctl enable haproxy
+        systemctl start haproxy
+
+        echo "✓ HAProxy установлен и настроен"
+    }
+
+    # Настройка балансировки нагрузки
+    setup_load_balancing() {
+        echo "Настройка балансировки нагрузки..."
+
+        # Обновление HAProxy для балансировки
+        cat >> /etc/haproxy/haproxy.cfg << EOF
+
+frontend https_front
+    bind *:443
+    mode tcp
+    default_backend https_back
+
+backend https_back
+    mode tcp
+    balance source
+    server web1_ssl 127.0.0.1:8443 check
+
+# Statistics page
+listen stats
+    bind *:8404
+    stats enable
+    stats uri /stats
+    stats refresh 10s
+    stats admin if TRUE
+EOF
+
+        systemctl reload haproxy
+
+        echo "✓ Балансировка нагрузки настроена"
+    }
+
+    # Основная логика
+    case "$1" in
+        "squid")
+            install_squid
+            ;;
+        "haproxy")
+            install_haproxy
+            ;;
+        "balance")
+            setup_load_balancing
+            ;;
+        *)
+            echo "Использование: $0 <squid|haproxy|balance>"
+            exit 1
+            ;;
+    esac
+}
+
+# Настройка FTP сервера
+ftp_server_setup() {
+    echo "=== Настройка FTP сервера Debian ==="
+
+    # Установка vsftpd
+    install_vsftpd() {
+        echo "Установка vsftpd..."
+
+        apt-get install -y vsftpd
+
+        # Безопасная конфигурация
+        cat > /etc/vsftpd.conf << EOF
+# vsftpd configuration for ARM64
+listen=YES
+listen_ipv6=YES
+anonymous_enable=NO
+local_enable=YES
+write_enable=YES
+local_umask=022
+dirmessage_enable=YES
+use_localtime=YES
+xferlog_enable=YES
+connect_from_port_20=YES
+chroot_local_user=YES
+secure_chroot_dir=/var/run/vsftpd/empty
+pam_service_name=vsftpd
+rsa_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+rsa_private_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+ssl_enable=NO
+
+# Performance optimizations
+max_clients=50
+max_per_ip=5
+idle_session_timeout=600
+data_connection_timeout=120
+
+# Security
+hide_ids=YES
+EOF
+
+        systemctl enable vsftpd
+        systemctl start vsftpd
+
+        # Настройка firewall (если установлен)
+        if command -v ufw >/dev/null 2>&1; then
+            ufw allow 21
+            ufw reload
+        fi
+
+        echo "✓ vsftpd установлен и настроен"
+    }
+
+    # Установка proftpd
+    install_proftpd() {
+        echo "Установка proftpd..."
+
+        apt-get install -y proftpd-basic
+
+        # Конфигурация proftpd
+        cat > /etc/proftpd/proftpd.conf << EOF
+# proftpd configuration
+Include /etc/proftpd/modules.conf
+UseIPv6 on
+IdentLookups off
+ServerName "Debian FTP Server"
+ServerType standalone
+DeferWelcome off
+
+MultilineRFC2228 on
+DefaultServer on
+ShowSymlinks on
+
+TimeoutNoTransfer 600
+TimeoutStalled 600
+TimeoutIdle 1200
+
+DisplayLogin welcome.msg
+DisplayChdir .message true
+ListOptions "-l"
+
+DenyFilter \*.*/
+
+Port 21
+
+MaxInstances 30
+
+User proftpd
+Group nogroup
+
+Umask 022 022
+AllowOverwrite on
+TransferLog /var/log/proftpd/xferlog
+SystemLog /var/log/proftpd/proftpd.log
+
+<IfModule mod_quotatab.c>
+QuotaEngine off
+</IfModule>
+
+<IfModule mod_ratio.c>
+Ratios off
+</IfModule>
+
+<IfModule mod_delay.c>
+DelayEngine on
+</IfModule>
+
+<IfModule mod_ctrls.c>
+ControlsEngine off
+</IfModule>
+
+<IfModule mod_ctrls_admin.c>
+AdminControlsEngine off
+</IfModule>
+EOF
+
+        systemctl enable proftpd
+        systemctl start proftpd
+
+        echo "✓ proftpd установлен и настроен"
+    }
+
+    # Основная логика
+    case "$1" in
+        "vsftpd")
+            install_vsftpd
+            ;;
+        "proftpd")
+            install_proftpd
+            ;;
+        *)
+            echo "Использование: $0 <vsftpd|proftpd>"
+            exit 1
+            ;;
+    esac
+}
+
+main() {
+    case "$1" in
+        "proxy")
+            shift
+            proxy_server_setup "$@"
+            ;;
+        "ftp")
+            shift
+            ftp_server_setup "$@"
+            ;;
+        *)
+            echo "Использование: $0 <proxy|ftp> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе раздела Debian network applications

@@ -1,0 +1,39 @@
+# METABEGIN
+# X-Env-Layer-Name: auditd-rules
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Auditd security monitoring rules
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: auditd-core
+# X-Env-Layer-Provides: auditd-rules
+# X-Env-VarPrefix: auditd_rules
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable auditd security monitoring rules
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "auditd_rules"
+
+      echo "📋 Installing auditd security monitoring rules..."
+
+      # Install comprehensive audit rules
+      install -m 644 "templates/security/auditd/security-monitoring.rules" "$1/etc/audit/rules.d/security-monitoring.rules"
+
+      # Validate and load rules
+      if [ -f "$1/sbin/auditctl" ]; then
+        echo "🔍 Validating audit rules syntax..."
+        if chroot "$1" auditctl -R /etc/audit/rules.d/security-monitoring.rules >/dev/null 2>&1; then
+          echo "✅ Audit rules loaded successfully"
+        else
+          echo "⚠️ Warning: Could not load audit rules (may be normal during build)"
+        fi
+      fi
+
+      echo "✅ Auditd security monitoring rules installed (35 comprehensive rules)"

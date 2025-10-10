@@ -1,0 +1,36 @@
+# METABEGIN
+# X-Env-Layer-Name: unattended-upgrades-ssh
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: OpenSSH server restart after security updates
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: unattended-upgrades-core-basic
+# X-Env-Layer-Provides: package-updates-ssh-integration
+# X-Env-VarPrefix: unattended
+# X-Env-Var-openssh_restart: y
+# X-Env-Var-openssh_restart-Description: Restart OpenSSH server after security updates
+# X-Env-Var-openssh_restart-Required: false
+# X-Env-Var-openssh_restart-Valid: bool
+# X-Env-Var-openssh_restart-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_unattended_openssh_restart || exit 0
+
+      echo "🔑 Installing unattended-upgrades SSH integration..."
+
+      # Check if SSH is available
+      if [ ! -f "$1/usr/sbin/sshd" ]; then
+        echo "⚠️ OpenSSH server not detected, skipping integration"
+        exit 0
+      fi
+
+      # OpenSSH integration
+      echo "🔑 Adding OpenSSH restart after security updates..."
+      # Add SSH restart to post-update hooks
+      install -m 644 "templates/security/unattended-upgrades/98unattended-upgrades-ssh" "$1/etc/apt/apt.conf.d/98unattended-upgrades-ssh"
+      install -m 644 "templates/security/unattended-upgrades/unattended-upgrades-ssh-restart" "$1/usr/local/bin/unattended-upgrades-ssh-restart"
+      chmod +x "$1/usr/local/bin/unattended-upgrades-ssh-restart"
+      echo "✅ OpenSSH integration configured"

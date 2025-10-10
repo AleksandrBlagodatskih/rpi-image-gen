@@ -1,0 +1,414 @@
+= Distrobox Layer
+
+== Обзор
+
+Этот слой устанавливает **Distrobox** - инструмент для создания контейнеров с различными дистрибутивами Linux внутри терминала. Distrobox по умолчанию использует Docker как backend и обеспечивает тесную интеграцию с хост-системой.
+
+**Ключевые особенности:**
+* Автоматическое создание dev контейнера при установке слоя
+* Настраиваемый набор инструментов разработки через переменные
+* Поддержка Docker и Podman как container manager'ов
+* Интеграция с хост-системой (графика, звук, USB, сеть)
+
+== Container Manager
+
+По умолчанию слой настроен для использования **Docker**. Также поддерживаются:
+
+* `docker` - Docker (по умолчанию)
+* `podman` - Podman
+* `lilipod` - Lilipod
+* `auto` - Автоматическое определение (Docker → Podman → Lilipod)
+
+Автоматическая настройка происходит при первом входе пользователя в систему.
+
+== Зависимости
+
+* **Docker слой**: `docker-debian-bookworm` или `docker-debian-trixie` (выберите один)
+* **rpi-user-credentials**: для настройки пользователей
+* **sys-build-base**: системные утилиты сборки
+
+=== Совместимость с Docker
+
+Слой автоматически определяет совместимость с установленным Docker слоем:
+
+* **docker-debian-bookworm**: Рекомендуется для стабильной работы
+* **docker-debian-trixie**: Для использования новейших функций (экспериментально)
+
+При использовании `IGconf_distrobox_docker_suite=trixie` убедитесь, что также используется слой `docker-debian-trixie`.
+
+== Совместимость
+
+Слой работает с любыми базовыми образами Debian:
+
+* `bookworm-minbase` - Debian Bookworm (стабильный)
+* `trixie-minbase` - Debian Trixie (тестируемый)
+* `rpi-debian-bookworm` - Raspberry Pi Debian Bookworm
+* `rpi-debian-trixie` - Raspberry Pi Debian Trixie
+
+=== Пример конфигурации через YAML
+
+[source,yaml]
+----
+# config/custom-distrobox.yaml
+device:
+  layer: pi5
+
+image:
+  layer: image-rpios
+
+layer:
+  base: bookworm-minbase
+  app-container: distrobox
+  container: docker-debian-bookworm  # Выберите: docker-debian-bookworm ИЛИ docker-debian-trixie
+
+# Настройки distrobox через переменные
+variables:
+  IGconf_distrobox_container_name: ubuntu-dev
+  IGconf_distrobox_container_image: ubuntu:22.04
+  IGconf_distrobox_docker_suite: bookworm  # Совпадает с Docker слоем
+  IGconf_distrobox_dev_packages: build-essential,git,vim,curl,wget,python3,python3-pip,nodejs,npm,rustc,cargo
+  IGconf_distrobox_generate_entry: y
+  IGconf_distrobox_container_manager: docker
+  IGconf_distrobox_enable_host_docker: y  # Включить Docker инструменты
+----
+
+[source,yaml]
+----
+# config/distrobox-trixie.yaml - Конфигурация с Debian Trixie
+device:
+  layer: pi5
+
+image:
+  layer: image-rpios
+
+layer:
+  base: trixie-minbase
+  app-container: distrobox
+  container: docker-debian-trixie   # Выберите: docker-debian-bookworm ИЛИ docker-debian-trixie
+
+variables:
+  IGconf_distrobox_docker_suite: trixie
+  IGconf_distrobox_container_image: debian:trixie
+  IGconf_distrobox_enable_host_docker: y
+----
+
+== Переменные конфигурации
+
+Слой поддерживает следующие переменные окружения для настройки dev контейнера:
+
+* `IGconf_distrobox_enable`: Включить создание dev контейнера [по умолчанию: y] +
+  Установите в `n` чтобы отключить автоматическое создание контейнера
+* `IGconf_distrobox_container_name`: Имя dev контейнера [по умолчанию: dev]
+* `IGconf_distrobox_container_image`: Базовый образ контейнера [по умолчанию: debian:bookworm]
+* `IGconf_distrobox_container_manager`: Менеджер контейнеров (docker/podman) [по умолчанию: docker]
+* `IGconf_distrobox_docker_suite`: Debian suite для совместимости с Docker (bookworm/trixie) [по умолчанию: bookworm]
+* `IGconf_distrobox_dev_packages`: Список пакетов для разработки через запятую [по умолчанию: build-essential,git,vim,curl,wget,python3,python3-pip]
+* `IGconf_distrobox_generate_entry`: Генерировать desktop entries для контейнера [по умолчанию: n]
+* `IGconf_distrobox_enable_host_docker`: Включить доступ к Docker daemon'у хоста из контейнера [по умолчанию: n] +
+  Устанавливает полный набор Docker инструментов: CLI, Buildx, Compose v2, Ctop, Lazydocker, Dive, Hadolint, Regclient
+
+Все переменные опциональны и имеют разумные значения по умолчанию.
+
+=== Настройка через переменные окружения
+
+[source,bash]
+----
+# Создание Ubuntu-based dev контейнера с кастомными пакетами
+export IGconf_distrobox_container_name=ubuntu-dev
+export IGconf_distrobox_container_image=ubuntu:22.04
+export IGconf_distrobox_dev_packages=build-essential,git,vim,nano,curl,wget,python3,python3-pip,nodejs,npm
+export IGconf_distrobox_generate_entry=y
+
+# Сборка образа с этими переменными
+rpi-image-gen build -c config.yaml -- \
+  IGconf_distrobox_container_name="$IGconf_distrobox_container_name" \
+  IGconf_distrobox_container_image="$IGconf_distrobox_container_image" \
+  IGconf_distrobox_dev_packages="$IGconf_distrobox_dev_packages" \
+  IGconf_distrobox_generate_entry="$IGconf_distrobox_generate_entry"
+----
+
+[source,bash]
+----
+# Использование Podman вместо Docker
+export IGconf_distrobox_container_manager=podman
+
+# Использование Debian Trixie для новейших пакетов
+export IGconf_distrobox_docker_suite=trixie
+export IGconf_distrobox_container_image=debian:trixie
+
+# Создание контейнера с минимальным набором инструментов
+export IGconf_distrobox_dev_packages=git,vim,python3
+
+# Включение доступа к Docker хоста
+export IGconf_distrobox_enable_host_docker=y
+----
+
+== Примеры использования
+
+=== Использование автоматически созданного dev контейнера
+
+При установке слоя автоматически создается dev контейнер с настроенными пакетами разработки. Контейнер доступен сразу после загрузки системы:
+
+[source,bash]
+----
+# Войти в автоматически созданный dev контейнер
+distrobox enter dev
+
+# Проверить установленные инструменты
+which git vim python3 pip3
+ls /usr/bin | grep -E "(gcc|clang|node|npm)"
+
+# Начать разработку
+git clone https://github.com/example/my-project.git
+cd my-project
+npm install && npm start
+----
+
+=== Использование с полным доступом к Docker хоста
+
+Если включен `IGconf_distrobox_enable_host_docker=y`, контейнер получает полный доступ к Docker daemon'у хостовой системы и устанавливается полный набор инструментов:
+
+**Установленные инструменты:**
+* `docker` - Docker CLI для управления контейнерами
+* `docker buildx` - Расширенная система сборки образов
+* `docker compose` - Docker Compose v2 для оркестрации
+* `ctop` - Топ-подобный монитор контейнеров
+* `lazydocker` - Терминальный UI для Docker
+* `dive` - Инструмент анализа образов
+* `hadolint` - Линтер Dockerfile
+* `regclient` - Клиент для работы с реестрами
+
+[source,bash]
+----
+# Войти в контейнер с полным набором Docker инструментов
+distrobox enter dev
+
+# Проверить доступ к Docker хоста
+docker ps  # Показать запущенные контейнеры хоста
+docker images  # Показать образы хоста
+
+# Использовать Docker Compose v2
+echo "version: '3.8'
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - '8080:80'
+  db:
+    image: postgres:alpine
+    environment:
+      POSTGRES_PASSWORD: example" > docker-compose.yml
+
+docker compose up -d
+
+# Использовать Buildx для мульти-платформенной сборки
+docker buildx create --use --name multi-arch
+docker buildx build --platform linux/amd64,linux/arm64 -t myapp:multi .
+
+# Мониторить контейнеры с ctop
+ctop
+
+# Использовать lazydocker для управления
+lazydocker
+
+# Анализировать размер образа
+dive nginx:alpine
+
+# Проверить Dockerfile на ошибки
+echo "FROM ubuntu\nRUN apt-get update" > Dockerfile
+hadolint Dockerfile
+
+# Работать с реестрами
+regctl image inspect nginx:alpine
+
+# Выйти из контейнера
+exit
+----
+
+=== Использование с Docker (явно)
+
+[source,bash]
+----
+# Создать контейнер с явным указанием Docker
+distrobox create --name fedora-dev --image fedora:38 --additional-flags "--runtime docker"
+
+# Или через переменную окружения
+CONTAINER_MANAGER=docker distrobox create --name fedora-dev --image fedora:38
+----
+
+=== Использование с assemble файлами
+
+[source,ini]
+----
+# /usr/local/share/doc/distrobox/examples/debian-dev.ini
+[debian-dev]
+image=debian:bookworm
+additional_packages=build-essential git vim curl wget
+init_hooks=~/.config/distrobox/init-hooks/debian-dev.sh
+nvidia=false
+----
+
+[source,bash]
+----
+# Создать контейнер из конфигурации
+distrobox assemble create --file /usr/local/share/doc/distrobox/examples/debian-dev.ini
+----
+
+=== Автоматическое создание контейнеров
+
+[source,bash]
+----
+# Создать временный контейнер (удалится при выходе)
+distrobox ephemeral --image ubuntu:22.04
+
+# Клонировать существующий контейнер
+distrobox create --name dev2 --clone dev1
+----
+
+=== Использование с Debian Trixie
+
+[source,bash]
+----
+# Создать контейнер с Debian Trixie (используйте переменную distrobox_distro=trixie)
+distrobox create --name trixie-dev --image debian:trixie
+
+# Войти в контейнер Trixie
+distrobox enter trixie-dev
+
+# Trixie содержит более новые версии ПО
+sudo apt update && sudo apt install -y python3.11 python3.11-venv
+----
+
+=== Использование assemble файлов
+
+[source,ini]
+----
+# ~/.config/distrobox/assemblies/trixie-dev.ini
+[trixie-dev]
+image=debian:trixie
+additional_packages=build-essential git vim curl wget python3 python3-pip python3-venv nodejs npm clang cmake ninja-build
+init_hooks=~/.config/distrobox/init-hooks/trixie-dev.sh
+nvidia=false
+----
+
+[source,bash]
+----
+# Создать контейнер из конфигурации
+distrobox assemble create --file ~/.config/distrobox/assemblies/trixie-dev.ini
+----
+
+== Интеграция с хост-системой
+
+Distrobox обеспечивает полную интеграцию с хостом:
+
+* **Домашняя директория**: Полный доступ к ~/ пользователя
+* **Графические приложения**: Поддержка X11/Wayland
+* **Аудио**: PulseAudio интеграция
+* **USB устройства**: Доступ к внешним устройствам
+* **Сеть**: Полный сетевой доступ
+
+== Производительность
+
+* **Быстрый вход**: Оптимизированный для минимальной задержки
+* **Совместное использование**: Переиспользование хост-ресурсов
+* **Кеширование**: Docker layers для быстрого запуска
+
+== Безопасность
+
+* **Изоляция**: Контейнеры изолированы от хоста
+* **Привилегии**: Нет автоматического root доступа
+* **Сеть**: Полный сетевой доступ (требует внимания)
+
+== Советы по использованию
+
+=== Настройка init hooks
+
+[source,bash]
+----
+# Создать персональный init hook
+mkdir -p ~/.config/distrobox/init-hooks
+cat > ~/.config/distrobox/init-hooks/my-setup.sh << 'EOF'
+#!/bin/bash
+# Персональная настройка контейнера
+
+# Установить любимые инструменты
+apt update && apt install -y htop neofetch tmux
+
+# Настроить shell
+echo 'export EDITOR=vim' >> ~/.bashrc
+EOF
+
+chmod +x ~/.config/distrobox/init-hooks/my-setup.sh
+----
+
+=== Экспорт приложений
+
+[source,bash]
+----
+# Экспортировать приложение в меню хоста
+distrobox-export --app firefox
+
+# Экспортировать бинарный файл
+distrobox-export --bin /usr/bin/vim --export-path ~/.local/bin
+
+# Экспортировать сервис
+distrobox-export --service ssh
+----
+
+=== Управление ресурсами
+
+[source,bash]
+----
+# Ограничить ресурсы контейнера
+distrobox create --name limited --memory 2GB --cpus 2
+
+# Проверить использование ресурсов
+distrobox enter limited -- podman stats
+----
+
+== Устранение неисправностей
+
+=== Проблемы с доступом к дисплею
+
+[source,bash]
+----
+# Проверить переменные окружения
+distrobox enter container -- env | grep DISPLAY
+
+# Вручную установить DISPLAY
+distrobox enter container -- export DISPLAY=:0
+----
+
+=== Проблемы с Docker
+
+[source,bash]
+----
+# Проверить статус Docker
+systemctl status docker
+
+# Перезапустить Docker
+sudo systemctl restart docker
+
+# Проверить права пользователя
+groups $USER | grep docker
+----
+
+=== Очистка
+
+[source,bash]
+----
+# Остановить все контейнеры
+distrobox stop --all
+
+# Удалить контейнер
+distrobox rm container-name
+
+# Очистить неиспользуемые образы
+docker image prune -f
+----
+
+== Ссылки
+
+* https://distrobox.it/[Официальная документация Distrobox]
+* https://docs.docker.com/[Документация Docker]
+* https://github.com/89luca89/distrobox[Исходный код на GitHub]

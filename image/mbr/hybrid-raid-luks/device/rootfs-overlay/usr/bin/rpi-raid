@@ -1,0 +1,27 @@
+#!/bin/bash
+# Simple LUKS key script for initramfs
+
+set -euo pipefail
+
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Only file-based key storage is supported for security
+if [ -f "/key" ] && [ -r "/key" ]; then
+    # Additional security check: ensure file has secure permissions
+    file_perms=$(stat -c '%a' "/key" 2>/dev/null || echo "unknown")
+    if [ "$file_perms" = "600" ] || [ "$file_perms" = "400" ]; then
+        cat /key
+        exit 0
+    else
+        echo "ERROR: Insecure permissions on LUKS key file ($file_perms)" >&2
+        exit 1
+    fi
+fi
+
+# No key found - fail securely
+echo "ERROR: No LUKS key file available" >&2
+exit 1

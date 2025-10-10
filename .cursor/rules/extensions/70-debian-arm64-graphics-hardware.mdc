@@ -1,0 +1,526 @@
+---
+alwaysApply: ${cursor.file.content.includes("gpu") || cursor.file.content.includes("graphics")}
+---
+
+
+# Правило 70: Графическое оборудование Debian arm64
+
+## Назначение правила
+Определяет стандарты поддержки графического оборудования и дисплеев в Debian GNU/Linux на архитектуру arm64, исключая специфичные для Raspberry Pi компоненты.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Графическое оборудование Debian arm64
+
+### Универсальная поддержка GPU
+
+#### Проверка и настройка графических драйверов:
+```bash
+#!/bin/bash
+# Проверка графического оборудования для Debian arm64
+
+check_graphics_hardware() {
+    echo "=== Проверка графического оборудования ==="
+
+    # Обнаружение GPU
+    if command -v glxinfo >/dev/null 2>&1; then
+        echo "✓ OpenGL доступен"
+        GPU_INFO=$(glxinfo | grep "OpenGL renderer" | cut -d: -f2 | xargs)
+        echo "  GPU: $GPU_INFO"
+    elif command -v vulkaninfo >/dev/null 2>&1; then
+        echo "✓ Vulkan доступен"
+        # Проверка Vulkan
+        vulkaninfo --summary | grep -E "GPU|driver" | head -5
+    else
+        echo "ℹ Графические API не обнаружены (возможно headless система)"
+    fi
+
+    # Проверка DRM устройств
+    if [ -d /sys/class/drm ]; then
+        echo -e "\nDRM устройства:"
+        ls /sys/class/drm/ | grep -v "^card[0-9]$" | while read -r device; do
+            echo "  $device"
+        done
+    fi
+
+    # Проверка видео устройств
+    if [ -d /dev/dri ]; then
+        echo -e "\nDirect Rendering устройства:"
+        ls -la /dev/dri/
+    fi
+}
+
+# Настройка универсальных драйверов
+setup_generic_graphics_drivers() {
+    echo "=== Настройка универсальных графических драйверов ==="
+
+    # Установка базовых драйверов
+    apt-get install -y \
+        xserver-xorg-video-all \
+        mesa-utils \
+        vulkan-tools \
+        libgl1-mesa-glx \
+        libgl1-mesa-dri
+
+    # Для Wayland (современные системы)
+    if [ -n "$WAYLAND_DISPLAY" ] || [ -n "$DISPLAY" ]; then
+        apt-get install -y \
+            weston \
+            sway \
+            wayland-protocols
+    fi
+
+    # Для X11 (традиционные системы)
+    apt-get install -y \
+        xorg \
+        x11-utils \
+        xterm
+
+    echo "✓ Универсальные драйверы установлены"
+}
+
+# Настройка дисплеев
+configure_displays() {
+    echo "=== Настройка дисплеев ==="
+
+    # Установка xrandr для управления дисплеями
+    apt-get install -y x11-xserver-utils
+
+    # Создание скрипта настройки дисплеев
+    cat > /usr/local/bin/configure-displays.sh << 'EOF'
+#!/bin/bash
+# Скрипт настройки дисплеев
+
+# Получение списка подключенных дисплеев
+get_connected_displays() {
+    xrandr | grep " connected" | cut -d' ' -f1
+}
+
+# Автоматическая настройка дисплеев
+auto_configure_displays() {
+    echo "Автоматическая настройка дисплеев..."
+
+    CONNECTED_DISPLAYS=$(get_connected_displays)
+
+    if [ -z "$CONNECTED_DISPLAYS" ]; then
+        echo "Дисплеи не обнаружены"
+        return 1
+    fi
+
+    # Настройка первого дисплея как основного
+    PRIMARY_DISPLAY=$(echo "$CONNECTED_DISPLAYS" | head -1)
+    xrandr --output "$PRIMARY_DISPLAY" --primary --auto
+
+    # Настройка дополнительных дисплеев
+    echo "$CONNECTED_DISPLAYS" | tail -n +2 | while read -r display; do
+        xrandr --output "$display" --auto --right-of "$PRIMARY_DISPLAY"
+    done
+
+    echo "Дисплеи настроены"
+}
+
+# Ручная настройка дисплея
+manual_configure_display() {
+    local display="$1"
+    local mode="${2:-auto}"
+
+    if [ "$mode" = "auto" ]; then
+        xrandr --output "$display" --auto
+    else
+        xrandr --output "$display" --mode "$mode"
+    fi
+}
+
+case "${1:-auto}" in
+    "auto")
+        auto_configure_displays
+        ;;
+    "list")
+        echo "Подключенные дисплеи:"
+        get_connected_displays
+        ;;
+    "manual")
+        shift
+        manual_configure_display "$@"
+        ;;
+    *)
+        echo "Использование: $0 <auto|list|manual> [display] [mode]"
+        exit 1
+        ;;
+esac
+EOF
+
+    chmod +x /usr/local/bin/configure-displays.sh
+
+    echo "✓ Настройка дисплеев завершена"
+}
+
+main() {
+    case "${1:-check}" in
+        "check")
+            check_graphics_hardware
+            ;;
+        "drivers")
+            setup_generic_graphics_drivers
+            ;;
+        "displays")
+            configure_displays
+            ;;
+        "all")
+            check_graphics_hardware
+            echo ""
+            setup_generic_graphics_drivers
+            ;;
+        *)
+            echo "Использование: $0 <check|drivers|displays|all>"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Настройка X Window System
+
+#### Конфигурация X11 для универсальных ARM64 систем:
+```bash
+#!/bin/bash
+# Настройка X Window System для Debian arm64
+
+configure_x11_system() {
+    echo "=== Настройка X Window System ==="
+
+    # Установка X11
+    apt-get install -y \
+        xorg \
+        xserver-xorg \
+        x11-xserver-utils \
+        xterm \
+        twm \
+        xfonts-base
+
+    # Создание базовой конфигурации X11
+    cat > /etc/X11/xorg.conf << 'EOF'
+# Xorg configuration for ARM64
+
+Section "Device"
+    Identifier "Card0"
+    Driver "modesetting"
+    Option "AccelMethod" "glamor"
+EndSection
+
+Section "Screen"
+    Identifier "Screen0"
+    Device "Card0"
+    DefaultDepth 24
+    Subsection "Display"
+        Depth 24
+        Modes "1920x1080" "1680x1050" "1280x1024" "1024x768"
+    EndSubsection
+EndSection
+
+Section "InputDevice"
+    Identifier "Keyboard0"
+    Driver "kbd"
+EndSection
+
+Section "InputDevice"
+    Identifier "Mouse0"
+    Driver "mouse"
+    Option "Protocol" "auto"
+    Option "Device" "/dev/input/mice"
+EndSection
+
+Section "ServerLayout"
+    Identifier "Layout0"
+    Screen "Screen0"
+    InputDevice "Keyboard0" "CoreKeyboard"
+    InputDevice "Mouse0" "CorePointer"
+EndSection
+EOF
+
+    # Настройка xinitrc
+    cat > /etc/X11/xinit/xinitrc << 'EOF'
+#!/bin/sh
+# Xinitrc for ARM64 systems
+
+# Load X resources
+xrdb -merge ~/.Xresources
+
+# Start window manager
+exec twm
+EOF
+
+    chmod +x /etc/X11/xinit/xinitrc
+
+    echo "✓ X Window System настроен"
+}
+
+# Настройка оконных менеджеров
+setup_window_managers() {
+    echo "=== Настройка оконных менеджеров ==="
+
+    # Легкие оконные менеджеры для ARM64
+    apt-get install -y \
+        fluxbox \
+        openbox \
+        icewm \
+        jwm
+
+    # Создание простых конфигураций
+    mkdir -p /etc/X11/fluxbox
+    cat > /etc/X11/fluxbox/init << 'EOF'
+session.screen0.workspaceNames: Work,Web,Term
+EOF
+
+    echo "✓ Оконные менеджеры установлены"
+}
+
+# Настройка шрифтов
+configure_fonts() {
+    echo "=== Настройка шрифтов ==="
+
+    apt-get install -y \
+        fonts-dejavu \
+        fonts-liberation \
+        fonts-noto \
+        xfonts-100dpi \
+        xfonts-75dpi \
+        xfonts-scalable
+
+    # Обновление кэша шрифтов
+    fc-cache -f -v
+
+    echo "✓ Шрифты настроены"
+}
+
+main() {
+    case "${1:-x11}" in
+        "x11")
+            configure_x11_system
+            ;;
+        "wm")
+            setup_window_managers
+            ;;
+        "fonts")
+            configure_fonts
+            ;;
+        "all")
+            configure_x11_system
+            echo ""
+            setup_window_managers
+            echo ""
+            configure_fonts
+            ;;
+        *)
+            echo "Использование: $0 <x11|wm|fonts|all>"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Интеграция в rpi-image-gen
+
+#### Создание слоя для графического оборудования:
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: debian-arm64-graphics-hardware
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Поддержка графического оборудования Debian arm64
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+# X-Env-VarPrefix: graphics
+#
+# X-Env-Var-graphics_enable_x11: false
+# X-Env-Var-graphics_enable_x11-Description: Установить X Window System
+# X-Env-Var-graphics_enable_x11-Required: false
+# X-Env-Var-graphics_enable_x11-Valid: true,false
+#
+# X-Env-Var-graphics_window_manager: fluxbox
+# X-Env-Var-graphics_window_manager-Description: Оконный менеджер для установки
+# X-Env-Var-graphics_window_manager-Required: false
+# X-Env-Var-graphics_window_manager-Valid: fluxbox,openbox,icewm,jwm,none
+#
+# X-Env-Var-graphics_enable_vulkan: false
+# X-Env-Var-graphics_enable_vulkan-Description: Установить Vulkan поддержку
+# X-Env-Var-graphics_enable_vulkan-Required: false
+# X-Env-Var-graphics_enable_vulkan-Valid: true,false
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - libgl1-mesa-glx
+    - mesa-utils
+    - x11-utils
+  customize-hooks:
+    - |
+      # Графическое оборудование Debian arm64
+      setup_debian_graphics_hardware() {
+          echo "Настройка графического оборудования Debian arm64"
+
+          # Установка базовых графических утилит
+          apt-get install -y mesa-utils x11-utils
+
+          # Настройка X11 (опционально)
+          setup_x11() {
+              if [ "${IGconf_graphics_graphics_enable_x11:-false}" = "true" ]; then
+                  echo "Установка X Window System..."
+
+                  apt-get install -y \
+                      xorg \
+                      xserver-xorg \
+                      x11-xserver-utils \
+                      xterm \
+                      xfonts-base
+
+                  # Настройка Xwrapper
+                  cat > /etc/X11/Xwrapper.config << 'EOF'
+allowed_users = anybody
+needs_root_rights = no
+EOF
+              fi
+          }
+
+          # Настройка оконного менеджера
+          setup_window_manager() {
+              local wm="${IGconf_graphics_graphics_window_manager:-fluxbox}"
+
+              case "$wm" in
+                  "fluxbox")
+                      apt-get install -y fluxbox
+                      ;;
+                  "openbox")
+                      apt-get install -y openbox
+                      ;;
+                  "icewm")
+                      apt-get install -y icewm
+                      ;;
+                  "jwm")
+                      apt-get install -y jwm
+                      ;;
+                  "none")
+                      echo "Оконный менеджер не устанавливается"
+                      ;;
+              esac
+          }
+
+          # Настройка Vulkan (опционально)
+          setup_vulkan() {
+              if [ "${IGconf_graphics_graphics_enable_vulkan:-false}" = "true" ]; then
+                  echo "Установка Vulkan поддержки..."
+
+                  apt-get install -y vulkan-tools
+
+                  # Проверка Vulkan
+                  if command -v vulkaninfo >/dev/null 2>&1; then
+                      echo "Vulkan установлен, проверка..."
+                      vulkaninfo --summary | head -10
+                  fi
+              fi
+          }
+
+          # Настройка шрифтов
+          setup_fonts() {
+              apt-get install -y \
+                  fonts-dejavu \
+                  fonts-liberation \
+                  xfonts-100dpi \
+                  xfonts-75dpi
+
+              fc-cache -f
+          }
+
+          # Создание скрипта диагностики графики
+          create_graphics_diagnostic() {
+              cat > /usr/local/bin/graphics-diagnostic.sh << 'EOF'
+#!/bin/bash
+# Диагностика графического оборудования
+
+echo "=== Графическая диагностика Debian arm64 ==="
+
+# Проверка OpenGL
+echo "OpenGL информация:"
+if command -v glxinfo >/dev/null 2>&1; then
+    glxinfo | grep -E "OpenGL vendor|OpenGL renderer|OpenGL version" | head -3
+else
+    echo "glxinfo не установлен"
+fi
+
+# Проверка Vulkan
+echo -e "\nVulkan информация:"
+if command -v vulkaninfo >/dev/null 2>&1; then
+    vulkaninfo --summary | grep -E "GPU|driver" | head -5
+else
+    echo "vulkaninfo не установлен"
+fi
+
+# Проверка DRM
+echo -e "\nDRM устройства:"
+if [ -d /sys/class/drm ]; then
+    ls /sys/class/drm/ | grep "^card"
+else
+    echo "DRM устройства не найдены"
+fi
+
+# Проверка X11
+echo -e "\nX11 статус:"
+if [ -n "$DISPLAY" ]; then
+    echo "X11 дисплей: $DISPLAY"
+    if command -v xdpyinfo >/dev/null 2>&1; then
+        xdpyinfo | grep -E "dimensions|resolution" | head -2
+    fi
+else
+    echo "X11 не запущен"
+fi
+
+# Проверка дисплеев
+echo -e "\nДисплеи:"
+if command -v xrandr >/dev/null 2>&1; then
+    xrandr | grep -E "connected|disconnected" | head -5
+else
+    echo "xrandr не установлен"
+fi
+
+echo -e "\n=== Диагностика завершена ==="
+EOF
+
+              chmod +x /usr/local/bin/graphics-diagnostic.sh
+          }
+
+          # Выполнение всех настроек
+          setup_x11
+          setup_window_manager
+          setup_vulkan
+          setup_fonts
+          create_graphics_diagnostic
+
+          echo "Графическое оборудование Debian arm64 настроено"
+      }
+
+      setup_debian_graphics_hardware
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе раздела Debian arm64 graphics hardware requirements

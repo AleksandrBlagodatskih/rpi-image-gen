@@ -1,0 +1,45 @@
+# METABEGIN
+# X-Env-Layer-Name: sudo-logging-distrobox
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Privileged operations support for Distrobox containers (with security warnings)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: sudo-logging-core
+# X-Env-Layer-Provides: sudo-distrobox-privileged
+# X-Env-VarPrefix: sudo_logging
+# X-Env-Var-distrobox_privileged: n
+# X-Env-Var-distrobox_privileged-Description: Allow privileged operations in Distrobox containers (security risk)
+# X-Env-Var-distrobox_privileged-Required: false
+# X-Env-Var-distrobox_privileged-Valid: bool
+# X-Env-Var-distrobox_privileged-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_sudo_logging_distrobox_privileged || exit 0
+
+      echo "📦 Installing sudo Distrobox privileged operations..."
+
+      # Check if Distrobox is available
+      if ! command -v distrobox >/dev/null 2>&1; then
+        echo "⚠️ Distrobox not detected, skipping privileged operations"
+        exit 0
+      fi
+
+      # Distrobox privileged operations (security warning)
+      echo "📦 ⚠️  WARNING: Enabling privileged operations in Distrobox containers!"
+      echo "   This reduces security and should only be used in trusted environments."
+
+      # Create distrobox sudo configuration
+      install -m 644 "templates/security/sudo-logging/distrobox" "$1/etc/sudoers.d/distrobox"
+      chmod 440 "$1/etc/sudoers.d/distrobox"
+
+      # Create warning script
+      install -m 644 "templates/security/sudo-logging/distrobox-sudo-warning" "$1/usr/local/bin/distrobox-sudo-warning"
+      chmod +x "$1/usr/local/bin/distrobox-sudo-warning"
+
+      # Show warning on login
+      install -m 644 "templates/security/sudo-logging/distrobox-privileged-warning.sh" "$1/etc/profile.d/distrobox-privileged-warning.sh"
+
+      echo "✅ Distrobox privileged operations enabled (with security warnings)"

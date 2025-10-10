@@ -1,0 +1,153 @@
+# METABEGIN
+# X-Env-Layer-Name: ${extension_name}
+# X-Env-Layer-Category: device
+# X-Env-Layer-Description: ${description}
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+# X-Env-VarPrefix: device
+#
+# X-Env-Var-device_type: ${device_type}
+# X-Env-Var-device_type-Description: Тип устройства Raspberry Pi
+# X-Env-Var-device_type-Required: true
+# X-Env-Var-device_type-Valid: pi4,pi5,cm4,zero2w
+#
+# X-Env-Var-firmware_version: latest
+# X-Env-Var-firmware_version-Description: Версия firmware для загрузки
+# X-Env-Var-firmware_version-Required: false
+# X-Env-Var-firmware_version-Valid: latest,stable,beta
+#
+# X-Env-Var-hostname: rpi-${device_type}-${HOST_SUFFIX}
+# X-Env-Var-hostname-Description: Имя хоста устройства
+# X-Env-Var-hostname-Required: false
+# X-Env-Var-hostname-Valid: regex:^[a-zA-Z0-9.-]+$
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - raspberrypi-bootloader
+    - raspberrypi-kernel
+    - linux-firmware-raspi
+    - rpi-eeprom
+  setup-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "Подготовка устройства: ${IGconf_device_device_type}"
+
+      # Создание необходимых директорий
+      mkdir -p /boot/firmware
+      mkdir -p /var/lib/raspberrypi
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      device_type="${IGconf_device_device_type}"
+      firmware_version="${IGconf_device_firmware_version:-latest}"
+      hostname="${IGconf_device_hostname}"
+
+      echo "Настройка устройства $device_type с firmware $firmware_version"
+
+      # Настройка hostname
+      echo "$hostname" > /etc/hostname
+      sed -i "s/127.0.1.1.*/127.0.1.1\t$hostname/" /etc/hosts
+
+      # Специфичная настройка для разных устройств
+      case "$device_type" in
+        "pi4")
+          configure_pi4_specifics
+          ;;
+        "pi5")
+          configure_pi5_specifics
+          ;;
+        "cm4")
+          configure_cm4_specifics
+          ;;
+        "zero2w")
+          configure_zero2w_specifics
+          ;;
+        *)
+          echo "WARN: Неизвестный тип устройства: $device_type" >&2
+          ;;
+      esac
+
+      # Обновление firmware
+      case "$firmware_version" in
+        "latest")
+          rpi-eeprom-update -a
+          ;;
+        "stable")
+          rpi-eeprom-update
+          ;;
+        "beta")
+          rpi-eeprom-update -r
+          ;;
+      esac
+
+      # Настройка специфичных параметров ядра
+      configure_kernel_parameters
+
+      echo "Настройка устройства $device_type завершена"
+
+  cleanup-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      # Очистка временных файлов настройки устройства
+      rm -f /boot/firmware/*.bak
+      rm -f /etc/hostname.bak
+
+      echo "Очистка после настройки устройства завершена"
+
+configure_pi4_specifics() {
+  # Настройка специфичных параметров для Pi 4
+  cat >> /boot/firmware/config.txt << 'EOF'
+
+# Pi 4 specific configuration
+dtoverlay=vc4-fkms-v3d
+max_framebuffers=2
+gpu_mem=256
+EOF
+}
+
+configure_pi5_specifics() {
+  # Настройка специфичных параметров для Pi 5
+  cat >> /boot/firmware/config.txt << 'EOF'
+
+# Pi 5 specific configuration
+dtparam=audio=on
+dtoverlay=vc4-kms-v3d-pi5
+EOF
+}
+
+configure_cm4_specifics() {
+  # Настройка для Compute Module 4
+  cat >> /boot/firmware/config.txt << 'EOF'
+
+# CM4 specific configuration
+dtparam=i2c_arm=on
+dtparam=spi=on
+EOF
+}
+
+configure_zero2w_specifics() {
+  # Настройка для Zero 2 W
+  cat >> /boot/firmware/config.txt << 'EOF'
+
+# Zero 2 W specific configuration
+dtparam=i2c_arm=on
+dtparam=spi=on
+gpu_mem=64
+EOF
+}
+
+configure_kernel_parameters() {
+  # Общие параметры ядра для всех устройств
+  cat >> /etc/sysctl.d/99-rpi.conf << 'EOF'
+# Raspberry Pi specific kernel parameters
+vm.swappiness=1
+vm.vfs_cache_pressure=50
+EOF
+}

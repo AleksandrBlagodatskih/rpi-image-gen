@@ -1,0 +1,80 @@
+# METABEGIN
+# X-Env-Layer-Name: password-policies-core
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Core password policies and PAM configuration
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: password-policies-core
+# X-Env-VarPrefix: password_policies_core
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable core password policies
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-min_length: 8
+# X-Env-Var-min_length-Description: Minimum password length
+# X-Env-Var-min_length-Required: false
+# X-Env-Var-min_length-Valid: int:6-32
+# X-Env-Var-min_length-Set: lazy
+# X-Env-Var-complexity_enable: y
+# X-Env-Var-complexity_enable-Description: Enable password complexity requirements
+# X-Env-Var-complexity_enable-Required: false
+# X-Env-Var-complexity_enable-Valid: bool
+# X-Env-Var-complexity_enable-Set: lazy
+# X-Env-Var-min_upper: 1
+# X-Env-Var-min_upper-Description: Minimum uppercase characters
+# X-Env-Var-min_upper-Required: false
+# X-Env-Var-min_upper-Valid: int:0-5
+# X-Env-Var-min_upper-Set: lazy
+# X-Env-Var-min_lower: 1
+# X-Env-Var-min_lower-Description: Minimum lowercase characters
+# X-Env-Var-min_lower-Required: false
+# X-Env-Var-min_lower-Valid: int:0-5
+# X-Env-Var-min_lower-Set: lazy
+# X-Env-Var-min_digit: 1
+# X-Env-Var-min_digit-Description: Minimum digit characters
+# X-Env-Var-min_digit-Required: false
+# X-Env-Var-min_digit-Valid: int:0-5
+# X-Env-Var-min_digit-Set: lazy
+# X-Env-Var-min_other: 1
+# X-Env-Var-min_other-Description: Minimum other characters (special)
+# X-Env-Var-min_other-Required: false
+# X-Env-Var-min_other-Valid: int:0-5
+# X-Env-Var-min_other-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - libpam-pwquality
+    - libpam-cracklib
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "password_policies_core"
+
+      echo "🔐 Installing core password policies..."
+
+      # Configure pwquality
+      install -m 644 "templates/security/password-policies/pwquality.conf" "$1/etc/security/pwquality.conf"
+
+      # Update pwquality settings
+      MINLEN=${IGconf_password_policies_core_min_length:-8}
+      sed -i "s/^minlen = .*/minlen = $MINLEN/" "$1/etc/security/pwquality.conf"
+
+      if igconf isy IGconf_password_policies_core_complexity_enable; then
+        MIN_UPPER=${IGconf_password_policies_core_min_upper:-1}
+        MIN_LOWER=${IGconf_password_policies_core_min_lower:-1}
+        MIN_DIGIT=${IGconf_password_policies_core_min_digit:-1}
+        MIN_OTHER=${IGconf_password_policies_core_min_other:-1}
+
+        sed -i "s/^ucredit = .*/ucredit = -$MIN_UPPER/" "$1/etc/security/pwquality.conf"
+        sed -i "s/^lcredit = .*/lcredit = -$MIN_LOWER/" "$1/etc/security/pwquality.conf"
+        sed -i "s/^dcredit = .*/dcredit = -$MIN_DIGIT/" "$1/etc/security/pwquality.conf"
+        sed -i "s/^ocredit = .*/ocredit = -$MIN_OTHER/" "$1/etc/security/pwquality.conf"
+
+        echo "✅ Password complexity enabled (upper: $MIN_UPPER, lower: $MIN_LOWER, digit: $MIN_DIGIT, other: $MIN_OTHER)"
+      fi
+
+      echo "✅ Core password policies configured"

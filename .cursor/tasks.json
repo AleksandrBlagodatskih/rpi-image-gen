@@ -1,0 +1,149 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Валидация расширения",
+      "type": "shell",
+      "command": "find layer/ config/ -name '*.yaml' -exec rpi-image-gen metadata --lint {} \\;",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "problemMatcher": ["$tsc"],
+      "detail": "Проверка корректности YAML конфигураций расширений"
+    },
+    {
+      "label": "Тестовая сборка (Dry Run)",
+      "type": "shell",
+      "command": "rpi-image-gen build -c config.yaml --dry-run",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Тестовая сборка без создания образа"
+    },
+    {
+      "label": "Полная сборка с логированием",
+      "type": "shell",
+      "command": "rpi-image-gen build -c config.yaml -v 2>&1 | tee build_$(date +%Y%m%d_%H%M%S).log",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Полная сборка с подробным логированием"
+    },
+    {
+      "label": "Анализ зависимостей слоя",
+      "type": "shell",
+      "command": "find layer/ -name '*.yaml' -exec basename {} \\; | head -5 | xargs -I {} sh -c 'echo \"=== {} ===\"; rpi-image-gen layer --describe \"${1%.*}\" 2>/dev/null || echo \"Слой не найден\"'",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Анализ зависимостей всех слоев проекта"
+    },
+    {
+      "label": "Проверка безопасности",
+      "type": "shell",
+      "command": "find layer/ -name '*.yaml' -exec sh -c 'echo \"Проверка: $1\"; grep -n \"IGconf_\" \"$1\" | head -3 || echo \"Нет переменных окружения\"' _ {} \\;",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Проверка использования переменных окружения"
+    },
+    {
+      "label": "Генерация шаблона расширения",
+      "type": "shell",
+      "command": "echo 'Выберите тип расширения:' && echo '1) Устройство (device)' && echo '2) Приложение (application)' && echo '3) Инфраструктура (infrastructure)' && read -p 'Ваш выбор (1-3): ' choice && case $choice in 1) cp .cursor/rules/extensions/templates/device-extension-template.yaml layer/my-device-extension.yaml && echo 'Создан шаблон device-extension.yaml' ;; 2) cp .cursor/rules/extensions/templates/application-extension-template.yaml layer/my-app-extension.yaml && echo 'Создан шаблон application-extension.yaml' ;; 3) cp .cursor/rules/extensions/templates/infrastructure-extension-template.yaml layer/my-infra-extension.yaml && echo 'Создан шаблон infrastructure-extension.yaml' ;; *) echo 'Неверный выбор' ;; esac",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Интерактивная генерация шаблона расширения"
+    },
+    {
+      "label": "Профилирование сборки",
+      "type": "shell",
+      "command": "echo 'Запуск профилирования сборки...' && time rpi-image-gen build -c config.yaml 2>&1 | tee profile_$(date +%Y%m%d_%H%M%S).log && echo 'Профилирование завершено'",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Профилирование производительности сборки"
+    },
+    {
+      "label": "Очистка результатов сборки",
+      "type": "shell",
+      "command": "echo 'Очистка временных файлов сборки...' && rm -rf work/ build_*.log profile_*.log && echo 'Очистка завершена'",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Очистка результатов и логов сборки"
+    },
+    {
+      "label": "Проверка размера образа",
+      "type": "shell",
+      "command": "echo 'Проверка размера созданных образов:' && find work/ -name '*.img' -exec ls -lh {} \\; 2>/dev/null || echo 'Образы не найдены'",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Проверка размера результирующих образов"
+    },
+    {
+      "label": "Мониторинг ресурсов системы",
+      "type": "shell",
+      "command": "echo 'Текущее использование ресурсов:' && echo \"CPU: $(top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}')%\" && echo \"Память: $(free | awk 'NR==2{printf \"%.1f\", $3*100/$2}')%\" && echo \"Диск: $(df / | awk 'NR==2{print $5}')%\"",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Мониторинг системных ресурсов"
+    },
+    {
+      "label": "Анализ минимализма кода",
+      "type": "shell",
+      "command": ".cursor/commands/analyze-minimalism.sh",
+      "group": "test",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Анализ соответствия принципу минимализма в коде"
+    }
+  ]
+}

@@ -1,0 +1,519 @@
+---
+alwaysApply: ${cursor.file.content.includes("installer") || cursor.file.content.includes("automate")}
+---
+
+
+# Правило 72: Автоматизация установщика Debian arm64
+
+## Назначение правила
+Определяет стандарты автоматизации процесса установки Debian GNU/Linux на архитектуру arm64 с использованием preseeding и других методов.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Автоматизация установщика Debian arm64
+
+### Создание preseed файлов
+
+#### Генерация комплексных preseed конфигураций:
+```bash
+#!/bin/bash
+# Генерация preseed файлов для Debian arm64
+
+generate_preseed_config() {
+    local output_file="$1"
+    local config_type="${2:-basic}"
+
+    echo "=== Генерация preseed файла: $config_type ==="
+
+    # Базовая конфигурация
+    cat > "$output_file" << EOF
+# Debian arm64 preseed file - $config_type configuration
+# Generated automatically for rpi-image-gen
+
+# Localization
+d-i debian-installer/locale string en_US.UTF-8
+d-i keyboard-configuration/xkb-keymap select us
+
+# Network configuration
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string debian-arm64
+d-i netcfg/get_domain string local
+
+# Mirror settings
+d-i mirror/country string manual
+d-i mirror/http/hostname string deb.debian.org
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+
+# Clock and time zone
+d-i time/zone string UTC
+d-i clock-setup/utc boolean true
+EOF
+
+    # Дополнительные секции в зависимости от типа
+    case "$config_type" in
+        "server")
+            add_server_config "$output_file"
+            ;;
+        "desktop")
+            add_desktop_config "$output_file"
+            ;;
+        "minimal")
+            add_minimal_config "$output_file"
+            ;;
+        "basic"|*)
+            add_basic_config "$output_file"
+            ;;
+    esac
+
+    # Общие финальные настройки
+    cat >> "$output_file" << EOF
+
+# Finishing
+d-i finish-install/reboot_in_progress note
+d-i debian-installer/exit/poweroff boolean false
+EOF
+
+    echo "Preseed файл сгенерирован: $output_file"
+}
+
+# Базовая конфигурация
+add_basic_config() {
+    local file="$1"
+
+    cat >> "$file" << EOF
+
+# Basic configuration
+d-i passwd/root-password-crypted password !
+d-i passwd/user-fullname string Debian User
+d-i passwd/username string debian
+d-i passwd/user-password-crypted password !
+
+# Partitioning
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+# Package selection
+tasksel tasksel/first multiselect standard, ssh-server
+d-i pkgsel/include string openssh-server vim curl wget sudo
+d-i pkgsel/upgrade select safe-upgrade
+
+# GRUB
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/with_other_os boolean false
+EOF
+}
+
+# Серверная конфигурация
+add_server_config() {
+    local file="$1"
+
+    cat >> "$file" << EOF
+
+# Server configuration
+d-i passwd/root-password-crypted password !
+d-i passwd/user-fullname string Server Administrator
+d-i passwd/username string admin
+d-i passwd/user-password-crypted password !
+
+# Advanced partitioning
+d-i partman-auto/method string regular
+d-i partman-auto/expert_recipe string \\
+    boot-root :: \\
+        512 512 512 ext4 \\
+            \$primary{ } \\
+            method{ format } \\
+            format{ } \\
+            use_filesystem{ } \\
+            filesystem{ ext4 } \\
+            mountpoint{ / } \\
+        4096 4096 4096 linux-swap \\
+            method{ swap } \\
+            format{ } \\
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+# Server packages
+tasksel tasksel/first multiselect standard, ssh-server
+d-i pkgsel/include string openssh-server apache2 mysql-server php postfix unattended-upgrades
+d-i pkgsel/upgrade select safe-upgrade
+
+# Services
+d-i preseed/late_command string \\
+    systemctl enable apache2; \\
+    systemctl enable mysql; \\
+    systemctl enable postfix
+EOF
+}
+
+# Десктопная конфигурация
+add_desktop_config() {
+    local file="$1"
+
+    cat >> "$file" << EOF
+
+# Desktop configuration
+d-i passwd/root-password-crypted password !
+d-i passwd/user-fullname string Desktop User
+d-i passwd/username string user
+d-i passwd/user-password-crypted password !
+
+# Partitioning with home
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select home
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+# Desktop packages
+tasksel tasksel/first multiselect standard, desktop, gnome-desktop, ssh-server
+d-i pkgsel/include string openssh-server firefox-esr gedit synaptic
+d-i pkgsel/upgrade select safe-upgrade
+
+# X configuration
+d-i preseed/late_command string \\
+    systemctl set-default graphical.target
+EOF
+}
+
+# Минимальная конфигурация
+add_minimal_config() {
+    local file="$1"
+
+    cat >> "$file" << EOF
+
+# Minimal configuration
+d-i passwd/root-password-crypted password !
+d-i passwd/user-fullname string Minimal User
+d-i passwd/username string minimal
+d-i passwd/user-password-crypted password !
+
+# Minimal partitioning
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+# Minimal packages
+tasksel tasksel/first multiselect standard
+d-i pkgsel/include string
+d-i pkgsel/upgrade select none
+EOF
+}
+
+main() {
+    case "${1:-generate}" in
+        "generate")
+            shift
+            generate_preseed_config "$@"
+            ;;
+        *)
+            echo "Использование: $0 generate <output_file> [type]"
+            echo "Типы: basic, server, desktop, minimal"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Автоматизированная установка с preseed
+
+#### Интеграция preseed в процесс установки:
+```bash
+#!/bin/bash
+# Автоматизированная установка Debian arm64 с preseed
+
+automated_installation() {
+    echo "=== Автоматизированная установка Debian arm64 ==="
+
+    local preseed_file="$1"
+    local target_disk="$2"
+
+    if [ ! -f "$preseed_file" ]; then
+        echo "Ошибка: preseed файл не найден: $preseed_file"
+        exit 1
+    fi
+
+    if [ ! -b "$target_disk" ]; then
+        echo "Ошибка: диск не найден: $target_disk"
+        exit 1
+    fi
+
+    # Проверка диска
+    echo "Целевой диск: $target_disk"
+    lsblk "$target_disk"
+
+    echo "ВНИМАНИЕ: $target_disk будет полностью очищен!"
+    read -p "Продолжить? (yes/no): " confirm
+    if [ "$confirm" != "yes" ]; then
+        echo "Установка отменена"
+        exit 0
+    fi
+
+    # Создание разделов
+    create_partitions "$target_disk"
+
+    # Установка базовой системы
+    install_base_system "$target_disk" "$preseed_file"
+
+    # Финализация установки
+    finalize_installation "$target_disk"
+
+    echo "Установка завершена успешно"
+}
+
+create_partitions() {
+    local disk="$1"
+
+    echo "Создание разделов на $disk..."
+
+    # Очистка таблицы разделов
+    parted -s "$disk" mklabel gpt
+
+    # EFI раздел (для универсальных ARM64)
+    parted -s "$disk" mkpart ESP fat32 1MiB 512MiB
+    parted -s "$disk" set 1 boot on
+
+    # Корневой раздел
+    parted -s "$disk" mkpart root ext4 512MiB 100%
+
+    # Форматирование
+    mkfs.fat -F32 "${disk}1"
+    mkfs.ext4 "${disk}2"
+
+    echo "Разделы созданы"
+}
+
+install_base_system() {
+    local disk="$1"
+    local preseed="$2"
+
+    echo "Установка базовой системы..."
+
+    # Монтирование
+    mount "${disk}2" /mnt
+    mkdir -p /mnt/boot/efi
+    mount "${disk}1" /mnt/boot/efi
+
+    # Установка с debootstrap
+    debootstrap --arch=arm64 trixie /mnt http://deb.debian.org/debian/
+
+    # Копирование preseed файла
+    mkdir -p /mnt/var/cache/debconf
+    cp "$preseed" /mnt/preseed.cfg
+
+    # Настройка debconf
+    chroot /mnt debconf-set-selections < /mnt/preseed.cfg
+
+    # Монтирование необходимых файловых систем
+    mount -t proc proc /mnt/proc
+    mount -t sysfs sys /mnt/sys
+    mount --bind /dev /mnt/dev
+    mount --bind /dev/pts /mnt/dev/pts
+
+    # Настройка базовой системы
+    chroot /mnt apt-get update
+    chroot /mnt apt-get install -y linux-image-arm64 grub-efi-arm64
+
+    # Применение preseed настроек
+    chroot /mnt /usr/bin/debconf-set-selections < /mnt/preseed.cfg
+
+    # Очистка
+    umount /mnt/dev/pts
+    umount /mnt/dev
+    umount /mnt/sys
+    umount /mnt/proc
+}
+
+finalize_installation() {
+    local disk="$1"
+
+    echo "Финализация установки..."
+
+    # Настройка fstab
+    cat > /mnt/etc/fstab << EOF
+# /etc/fstab
+${disk}2  /       ext4    errors=remount-ro 0       1
+${disk}1  /boot/efi vfat    umask=0077      0       1
+EOF
+
+    # Настройка hostname
+    echo "debian-arm64" > /mnt/etc/hostname
+
+    # Настройка сети
+    cat > /mnt/etc/network/interfaces << EOF
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+
+    # Установка загрузчика
+    chroot /mnt update-grub
+
+    # Очистка
+    rm /mnt/preseed.cfg
+    umount /mnt/boot/efi
+    umount /mnt
+
+    echo "Финализация завершена"
+}
+
+main() {
+    case "$1" in
+        "install")
+            shift
+            automated_installation "$@"
+            ;;
+        *)
+            echo "Использование: $0 install <preseed_file> <target_disk>"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Тестирование preseed конфигураций
+
+#### Валидация и тестирование preseed файлов:
+```bash
+#!/bin/bash
+# Тестирование preseed конфигураций
+
+test_preseed_config() {
+    local preseed_file="$1"
+
+    echo "=== Тестирование preseed файла ==="
+
+    if [ ! -f "$preseed_file" ]; then
+        echo "Ошибка: файл не найден: $preseed_file"
+        exit 1
+    fi
+
+    local errors=0
+    local warnings=0
+
+    # Проверка синтаксиса
+    echo "Проверка синтаксиса..."
+    while IFS=' ' read -r key value_type value; do
+        case "$key" in
+            "d-i")
+                # Проверка обязательных полей
+                if [ -z "$value_type" ] || [ -z "$value" ]; then
+                    echo "ОШИБКА: Неполная строка d-i"
+                    ((errors++))
+                fi
+
+                # Проверка известных параметров
+                param="${value_type% *}"
+                case "$param" in
+                    "debian-installer/locale"|"keyboard-configuration/xkb-keymap"|\
+                    "netcfg/choose_interface"|"netcfg/get_hostname"|\
+                    "mirror/http/hostname"|"passwd/root-password-crypted"|\
+                    "partman-auto/method"|"pkgsel/include"|\
+                    "grub-installer/only_debian")
+                        # Известные параметры - OK
+                        ;;
+                    *)
+                        echo "ПРЕДУПРЕЖДЕНИЕ: Неизвестный параметр: $param"
+                        ((warnings++))
+                        ;;
+                esac
+                ;;
+            \#*)
+                # Комментарии пропускаем
+                ;;
+        esac
+    done < "$preseed_file"
+
+    # Проверка обязательных секций
+    echo -e "\nПроверка обязательных секций..."
+
+    local required_sections=(
+        "debian-installer/locale"
+        "keyboard-configuration/xkb-keymap"
+        "netcfg/get_hostname"
+        "passwd/root-password-crypted"
+        "partman-auto/method"
+    )
+
+    for section in "${required_sections[@]}"; do
+        if ! grep -q "^d-i $section" "$preseed_file"; then
+            echo "ОШИБКА: Отсутствует обязательная секция: $section"
+            ((errors++))
+        fi
+    done
+
+    # Итоги
+    echo -e "\n=== Результаты тестирования ==="
+    echo "Ошибок: $errors"
+    echo "Предупреждений: $warnings"
+
+    if [ $errors -eq 0 ]; then
+        echo "✓ Preseed файл валиден"
+        return 0
+    else
+        echo "✗ Preseed файл содержит ошибки"
+        return 1
+    fi
+}
+
+# Создание тестовой среды
+create_test_environment() {
+    echo "=== Создание тестовой среды ==="
+
+    # Создание временного chroot
+    local chroot_dir="/tmp/preseed-test"
+    mkdir -p "$chroot_dir"
+
+    # Минимальная установка
+    debootstrap --arch=arm64 --foreign trixie "$chroot_dir" http://deb.debian.org/debian/
+
+    echo "Тестовая среда создана: $chroot_dir"
+    echo "Для тестирования используйте: chroot $chroot_dir /bin/bash"
+}
+
+main() {
+    case "$1" in
+        "test")
+            test_preseed_config "$2"
+            ;;
+        "create-test-env")
+            create_test_environment
+            ;;
+        *)
+            echo "Использование: $0 <test|create-test-env> [preseed_file]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе раздела Debian arm64 installer automation

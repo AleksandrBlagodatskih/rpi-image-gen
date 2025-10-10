@@ -1,0 +1,88 @@
+# METABEGIN
+# X-Env-Layer-Name: apparmor-profiles
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: AppArmor profiles for system services
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: apparmor-core
+# X-Env-Layer-Provides: apparmor-profiles
+# X-Env-VarPrefix: apparmor_profiles
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable AppArmor service profiles
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-cockpit_profiles: y
+# X-Env-Var-cockpit_profiles-Description: Create AppArmor profiles for Cockpit services
+# X-Env-Var-cockpit_profiles-Required: false
+# X-Env-Var-cockpit_profiles-Valid: bool
+# X-Env-Var-cockpit_profiles-Set: lazy
+# X-Env-Var-docker_profiles: y
+# X-Env-Var-docker_profiles-Description: Create AppArmor profiles for Docker daemon and containers
+# X-Env-Var-docker_profiles-Required: false
+# X-Env-Var-docker_profiles-Valid: bool
+# X-Env-Var-docker_profiles-Set: lazy
+# X-Env-Var-openssh_profiles: y
+# X-Env-Var-openssh_profiles-Description: Create AppArmor profiles for OpenSSH server
+# X-Env-Var-openssh_profiles-Required: false
+# X-Env-Var-openssh_profiles-Valid: bool
+# X-Env-Var-openssh_profiles-Set: lazy
+# X-Env-Var-distrobox_profiles: y
+# X-Env-Var-distrobox_profiles-Description: Create AppArmor profiles for Distrobox containers
+# X-Env-Var-distrobox_profiles-Required: false
+# X-Env-Var-distrobox_profiles-Valid: bool
+# X-Env-Var-distrobox_profiles-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "apparmor_profiles"
+
+      echo "🔗 Installing AppArmor service profiles..."
+
+      # Cockpit profiles
+      if igconf isy IGconf_apparmor_profiles_cockpit_profiles; then
+        echo "🎛️ Creating Cockpit AppArmor profiles..."
+        # Create Cockpit AppArmor profile
+        install -m 644 "templates/security/apparmor/usr.libexec.cockpit.cockpit-session" "$1/etc/apparmor.d/usr.libexec.cockpit.cockpit-session"
+        echo "✅ Cockpit AppArmor profile created"
+      fi
+
+      # Docker profiles
+      if igconf isy IGconf_apparmor_profiles_docker_profiles; then
+        echo "🐳 Creating Docker AppArmor profiles..."
+        # Create Docker daemon profile
+        install -m 644 "templates/security/apparmor/usr.bin.docker" "$1/etc/apparmor.d/usr.bin.docker"
+        echo "✅ Docker AppArmor profile created"
+      fi
+
+      # OpenSSH profiles
+      if igconf isy IGconf_apparmor_profiles_openssh_profiles; then
+        echo "🔑 Creating OpenSSH AppArmor profiles..."
+        # Create SSH server profile
+        install -m 644 "templates/security/apparmor/usr.sbin.sshd" "$1/etc/apparmor.d/usr.sbin.sshd"
+        echo "✅ OpenSSH AppArmor profile created"
+      fi
+
+      # Distrobox profiles
+      if igconf isy IGconf_apparmor_profiles_distrobox_profiles; then
+        echo "📦 Creating Distrobox AppArmor profiles..."
+        # Create Distrobox profile
+        install -m 644 "templates/security/apparmor/usr.bin.distrobox" "$1/etc/apparmor.d/usr.bin.distrobox"
+        echo "✅ Distrobox AppArmor profile created"
+      fi
+
+      # Reload AppArmor profiles
+      chroot "$1" apparmor_parser -r /etc/apparmor.d/ 2>/dev/null || true
+
+      echo ""
+      echo "🔗 Service AppArmor Profiles:"
+      echo "   Cockpit profiles: $(igconf isy IGconf_apparmor_profiles_cockpit_profiles && echo "enabled" || echo "disabled")"
+      echo "   Docker profiles: $(igconf isy IGconf_apparmor_profiles_docker_profiles && echo "enabled" || echo "disabled")"
+      echo "   SSH profiles: $(igconf isy IGconf_apparmor_profiles_openssh_profiles && echo "enabled" || echo "disabled")"
+      echo "   Distrobox profiles: $(igconf isy IGconf_apparmor_profiles_distrobox_profiles && echo "enabled" || echo "disabled")"
+
+      echo "✅ AppArmor service profiles configured"

@@ -1,0 +1,267 @@
+# METABEGIN
+# X-Env-Layer-Name: unattended-upgrades-core-basic
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Basic unattended-upgrades configuration and package management
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: package-updates-basic
+# X-Env-VarPrefix: unattended
+# X-Env-Var-upgrades_enable: y
+# X-Env-Var-upgrades_enable-Desc: Enable automatic package updates via unattended-upgrades
+# X-Env-Var-upgrades_enable-Required: n
+# X-Env-Var-upgrades_enable-Valid: bool
+# X-Env-Var-upgrades_enable-Set: y
+# X-Env-Var-origins_pattern: "origin=Debian,codename=${distro_codename},label=Debian-Security"
+# X-Env-Var-origins_pattern-Desc: Origins-Pattern for automatic updates (security updates by default)
+# X-Env-Var-origins_pattern-Required: n
+# X-Env-Var-origins_pattern-Valid: string
+# X-Env-Var-origins_pattern-Set: lazy
+# X-Env-Var-mail: ""
+# X-Env-Var-mail-Desc: Email address for update notifications (leave empty to disable)
+# X-Env-Var-mail-Required: n
+# X-Env-Var-mail-Valid: string
+# X-Env-Var-mail-Set: lazy
+# X-Env-Var-mail_only_on_error: y
+# X-Env-Var-mail_only_on_error-Desc: Send email notifications only on errors (not on successful updates)
+# X-Env-Var-mail_only_on_error-Required: n
+# X-Env-Var-mail_only_on_error-Valid: bool
+# X-Env-Var-mail_only_on_error-Set: lazy
+# X-Env-Var-automatic_reboot: n
+# X-Env-Var-automatic_reboot-Desc: Automatically reboot after successful updates if needed
+# X-Env-Var-automatic_reboot-Required: n
+# X-Env-Var-automatic_reboot-Valid: bool
+# X-Env-Var-automatic_reboot-Set: lazy
+# X-Env-Var-automatic_reboot_time: "02:00"
+# X-Env-Var-automatic_reboot_time-Desc: Time for automatic reboot (HH:MM format)
+# X-Env-Var-automatic_reboot_time-Required: n
+# X-Env-Var-automatic_reboot_time-Valid: string
+# X-Env-Var-automatic_reboot_time-Set: lazy
+# X-Env-Var-remove_unused_dependencies: n
+# X-Env-Var-remove_unused_dependencies-Desc: Remove unused dependencies after updates
+# X-Env-Var-remove_unused_dependencies-Required: n
+# X-Env-Var-remove_unused_dependencies-Valid: bool
+# X-Env-Var-remove_unused_dependencies-Set: lazy
+# X-Env-Var-remove_new_unused_dependencies: n
+# X-Env-Var-remove_new_unused_dependencies-Desc: Remove newly unused dependencies after updates
+# X-Env-Var-remove_new_unused_dependencies-Required: n
+# X-Env-Var-remove_new_unused_dependencies-Valid: bool
+# X-Env-Var-remove_new_unused_dependencies-Set: lazy
+# X-Env-Var-verbose: n
+# X-Env-Var-verbose-Desc: Enable verbose logging for unattended-upgrades
+# X-Env-Var-verbose-Required: n
+# X-Env-Var-verbose-Valid: bool
+# X-Env-Var-verbose-Set: lazy
+# X-Env-Var-debug: n
+# X-Env-Var-debug-Desc: Enable debug logging for unattended-upgrades
+# X-Env-Var-debug-Required: n
+# X-Env-Var-debug-Valid: bool
+# X-Env-Var-debug-Set: lazy
+# X-Env-Var-apt_listchanges_email: ""
+# X-Env-Var-apt_listchanges_email-Desc: Email address for apt-listchanges notifications (leave empty to use same as mail)
+# X-Env-Var-apt_listchanges_email-Required: n
+# X-Env-Var-apt_listchanges_email-Valid: string
+# X-Env-Var-apt_listchanges_email-Set: lazy
+# X-Env-Var-apt_listchanges_frontend: pager
+# X-Env-Var-apt_listchanges_frontend-Desc: Frontend for apt-listchanges (pager, mail, browser, xterm-pager, etc)
+# X-Env-Var-apt_listchanges_frontend-Required: n
+# X-Env-Var-apt_listchanges_frontend-Valid: keywords:pager,mail,browser,xterm-pager,text,none
+# X-Env-Var-apt_listchanges_frontend-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - unattended-upgrades
+    - apt-listchanges
+    - curl
+    - wget
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_unattended_enable || exit 0
+
+      echo "🛡️ Installing unattended-upgrades basic configuration..."
+
+      # PHASE 1: Validation and backup
+      echo "🔍 Validating unattended-upgrades installation..."
+
+      # Check that unattended-upgrades is installed
+      if ! chroot "$1" dpkg -l unattended-upgrades | grep -q "^ii"; then
+        echo "❌ ERROR: unattended-upgrades not installed"
+        exit 1
+      fi
+
+      # Create backup
+      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+      BACKUP_DIR="/root/rpi-image-gen-backups/unattended-upgrades-basic-$TIMESTAMP"
+      mkdir -p "$1$BACKUP_DIR"
+
+      # Backup existing configuration
+      for file in /etc/apt/apt.conf.d/50unattended-upgrades* /etc/apt/apt.conf.d/52unattended-upgrades* /etc/apt/listchanges.conf; do
+        if [ -f "$1$file" ]; then
+          cp -a "$1$file" "$1$BACKUP_DIR/" 2>/dev/null || true
+        fi
+      done
+
+      echo "✅ Backup created: $BACKUP_DIR"
+
+      # PHASE 2: Core configuration
+      echo "🔧 Configuring unattended-upgrades basic settings..."
+
+      # Create local configuration file
+      LOCAL_CONFIG="/etc/apt/apt.conf.d/52unattended-upgrades-local"
+      chroot "$1" cp /usr/share/unattended-upgrades/50unattended-upgrades.Debian "$LOCAL_CONFIG"
+
+      # Configure allowed origins
+      ALLOWED_ORIGINS=$(igconf getval IGconf_unattended_allowed_origins)
+      echo "Setting allowed origins: $ALLOWED_ORIGINS"
+
+      # Configure origins pattern with security hardening
+      chroot "$1" sed -i 's|^//.*Unattended-Upgrade::Origins-Pattern|Unattended-Upgrade::Origins-Pattern {' "$LOCAL_CONFIG"
+      chroot "$1" sed -i "/Unattended-Upgrade::Origins-Pattern {/,/};/c\\Unattended-Upgrade::Origins-Pattern {\n    \"${ALLOWED_ORIGINS}\";\n};" "$LOCAL_CONFIG"
+
+      # Configure minimum package age
+      MIN_AGE_DAYS=$(igconf getval IGconf_unattended_min_age_days)
+      if [ "$MIN_AGE_DAYS" -gt 0 ]; then
+        echo "Setting minimum package age: ${MIN_AGE_DAYS} days"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::MinAge .*|Unattended-Upgrade::MinAge \"${MIN_AGE_DAYS}\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Configure minimum system uptime
+      MIN_UPTIME_DAYS=$(igconf getval IGconf_unattended_min_uptime_days)
+      if [ "$MIN_UPTIME_DAYS" -gt 0 ]; then
+        MIN_UPTIME_SECONDS=$((MIN_UPTIME_DAYS * 24 * 60 * 60))
+        echo "Setting minimum uptime: ${MIN_UPTIME_DAYS} days (${MIN_UPTIME_SECONDS} seconds)"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::MinUptime .*|Unattended-Upgrade::MinUptime \"${MIN_UPTIME_SECONDS}\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Configure random delay
+      MAX_RANDOM_DELAY=$(igconf getval IGconf_unattended_max_random_delay)
+      if [ "$MAX_RANDOM_DELAY" -gt 0 ]; then
+        echo "Setting maximum random delay: ${MAX_RANDOM_DELAY} seconds"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::RandomSleep .*|Unattended-Upgrade::RandomSleep \"${MAX_RANDOM_DELAY}\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Configure download speed limit
+      DOWNLOAD_LIMIT=$(igconf getval IGconf_unattended_download_limit)
+      if [ "$DOWNLOAD_LIMIT" -gt 0 ]; then
+        echo "Setting download limit: ${DOWNLOAD_LIMIT} KB/s"
+        chroot "$1" sed -i "s|^//Acquire::http::Dl-Limit .*|Acquire::http::Dl-Limit \"${DOWNLOAD_LIMIT}\";|" "$LOCAL_CONFIG"
+        chroot "$1" sed -i "s|^//Acquire::https::Dl-Limit .*|Acquire::https::Dl-Limit \"${DOWNLOAD_LIMIT}\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Configure cache cleaning
+      CLEAN_INTERVAL=$(igconf getval IGconf_unattended_clean_interval)
+      if [ "$CLEAN_INTERVAL" -gt 0 ]; then
+        echo "Setting cache clean interval: ${CLEAN_INTERVAL} days"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Clean-Interval .*|Unattended-Upgrade::Clean-Interval \"${CLEAN_INTERVAL}\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Configure install on shutdown
+      if igconf isy IGconf_unattended_install_on_shutdown; then
+        echo "Enabling install on shutdown"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::InstallOnShutdown .*|Unattended-Upgrade::InstallOnShutdown \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Configure kernel cleanup
+      KERNEL_COUNT=$(igconf getval IGconf_unattended_keep_kernel_count)
+      echo "Setting kernel cleanup: keep $KERNEL_COUNT kernels"
+      chroot "$1" sed -i "s|^//Unattended-Upgrade::Keep-Debs-After-Install .*|Unattended-Upgrade::Keep-Debs-After-Install \"false\";|" "$LOCAL_CONFIG"
+      chroot "$1" sed -i "s|^//Unattended-Upgrade::Remove-Unused-Kernel-Packages .*|Unattended-Upgrade::Remove-Unused-Kernel-Packages \"true\";|" "$LOCAL_CONFIG"
+
+      # Configure syslog facility
+      SYSLOG_FACILITY=$(igconf getval IGconf_unattended_syslog_facility)
+      echo "Setting syslog facility: $SYSLOG_FACILITY"
+      chroot "$1" sed -i "s|^//Unattended-Upgrade::SyslogEnable .*|Unattended-Upgrade::SyslogEnable \"true\";|" "$LOCAL_CONFIG"
+      chroot "$1" sed -i "s|^//Unattended-Upgrade::SyslogFacility .*|Unattended-Upgrade::SyslogFacility \"$SYSLOG_FACILITY\";|" "$LOCAL_CONFIG"
+
+      # Configure auto-fix broken packages
+      if igconf isy IGconf_unattended_auto_fix_broken; then
+        echo "Enabling auto-fix broken packages"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::AutoFixInterruptedDpkg .*|Unattended-Upgrade::AutoFixInterruptedDpkg \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      # Configure DPKG options
+      DPKG_OPTIONS=$(igconf getval IGconf_unattended_dpkg_options)
+      echo "Setting DPKG options: $DPKG_OPTIONS"
+      chroot "$1" sed -i "s|^//DPkg::Options .*|DPkg::Options {\n    \"${DPKG_OPTIONS}\";\n};|" "$LOCAL_CONFIG"
+
+      # PHASE 3: Email and notification configuration
+      echo "📧 Configuring notifications and alerts..."
+
+      MAIL=$(igconf getval IGconf_unattended_mail)
+      MAIL_ONLY_ERROR=$(igconf getval IGconf_unattended_mail_only_on_error)
+
+      if [ -n "$MAIL" ]; then
+        echo "Setting up email notifications to: $MAIL"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Mail .*|Unattended-Upgrade::Mail \"$MAIL\";|" "$LOCAL_CONFIG"
+
+        if igconf isy "$MAIL_ONLY_ERROR"; then
+          echo "Email notifications only on errors"
+          chroot "$1" sed -i "s|^//Unattended-Upgrade::MailOnlyOnError .*|Unattended-Upgrade::MailOnlyOnError \"true\";|" "$LOCAL_CONFIG"
+        fi
+      else
+        echo "Email notifications disabled"
+      fi
+
+      # Configure apt-listchanges
+      APT_LISTCHANGES_EMAIL=$(igconf getval IGconf_unattended_apt_listchanges_email)
+      APT_LISTCHANGES_FRONTEND=$(igconf getval IGconf_unattended_apt_listchanges_frontend)
+
+      if [ -z "$APT_LISTCHANGES_EMAIL" ] && [ -n "$MAIL" ]; then
+        APT_LISTCHANGES_EMAIL="$MAIL"
+      fi
+
+      if [ -n "$APT_LISTCHANGES_EMAIL" ]; then
+        echo "Configuring apt-listchanges for email notifications to: $APT_LISTCHANGES_EMAIL"
+
+        # Configure apt-listchanges
+        cat > "$1/etc/apt/listchanges.conf" << EOF
+[apt]
+frontend=$APT_LISTCHANGES_FRONTEND
+email_address=$APT_LISTCHANGES_EMAIL
+confirm=0
+save_seen=/var/lib/apt/listchanges.db
+which=both
+EOF
+
+        chroot "$1" dpkg-reconfigure --frontend=noninteractive apt-listchanges
+      fi
+
+      # PHASE 4: Automatic reboot configuration
+      echo "🔄 Configuring automatic reboot settings..."
+
+      if igconf isy IGconf_unattended_automatic_reboot; then
+        REBOOT_TIME=$(igconf getval IGconf_unattended_automatic_reboot_time)
+        echo "Enabling automatic reboot at: $REBOOT_TIME"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Automatic-Reboot .*|Unattended-Upgrade::Automatic-Reboot \"true\";|" "$LOCAL_CONFIG"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Automatic-Reboot-Time .*|Unattended-Upgrade::Automatic-Reboot-Time \"$REBOOT_TIME\";|" "$LOCAL_CONFIG"
+      fi
+
+      # PHASE 5: Dependency management
+      echo "🧹 Configuring dependency cleanup..."
+
+      if igconf isy IGconf_unattended_remove_unused_dependencies; then
+        echo "Enabling removal of unused dependencies"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Remove-Unused-Dependencies .*|Unattended-Upgrade::Remove-Unused-Dependencies \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      if igconf isy IGconf_unattended_remove_new_unused_dependencies; then
+        echo "Enabling removal of new unused dependencies"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Remove-New-Unused-Dependencies .*|Unattended-Upgrade::Remove-New-Unused-Dependencies \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      # PHASE 6: Logging configuration
+      echo "📝 Configuring logging..."
+
+      if igconf isy IGconf_unattended_verbose; then
+        echo "Enabling verbose logging"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Verbose .*|Unattended-Upgrade::Verbose \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      if igconf isy IGconf_unattended_debug; then
+        echo "Enabling debug logging"
+        chroot "$1" sed -i "s|^//Unattended-Upgrade::Debug .*|Unattended-Upgrade::Debug \"true\";|" "$LOCAL_CONFIG"
+      fi
+
+      echo ""
+      echo "✅ Basic unattended-upgrades configuration completed!"

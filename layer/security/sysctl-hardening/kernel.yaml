@@ -1,0 +1,64 @@
+# METABEGIN
+# X-Env-Layer-Name: sysctl-kernel
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Kernel security hardening parameters
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: sysctl-kernel
+# X-Env-VarPrefix: sysctl_kernel
+# X-Env-Var-ptrace_restrict: y
+# X-Env-Var-ptrace_restrict-Description: Restrict ptrace to prevent debugging of other processes
+# X-Env-Var-ptrace_restrict-Required: false
+# X-Env-Var-ptrace_restrict-Valid: bool
+# X-Env-Var-ptrace_restrict-Set: lazy
+# X-Env-Var-aslr_enable: y
+# X-Env-Var-aslr_enable-Description: Enable Address Space Layout Randomization
+# X-Env-Var-aslr_enable-Required: false
+# X-Env-Var-aslr_enable-Valid: bool
+# X-Env-Var-aslr_enable-Set: lazy
+# X-Env-Var-kptr_restrict: 1
+# X-Env-Var-kptr_restrict-Description: Restrict /proc/kallsyms and kernel pointers (0=unrestricted, 1=restrict, 2=hide)
+# X-Env-Var-kptr_restrict-Required: false
+# X-Env-Var-kptr_restrict-Valid: int:0-2
+# X-Env-Var-kptr_restrict-Set: lazy
+# X-Env-Var-dmesg_restrict: y
+# X-Env-Var-dmesg_restrict-Description: Restrict dmesg to root only (kernel ring buffer protection)
+# X-Env-Var-dmesg_restrict-Required: false
+# X-Env-Var-dmesg_restrict-Valid: bool
+# X-Env-Var-dmesg_restrict-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # Source common functions
+      . "templates/security/common.sh"
+
+      SYSCTL_CONF="/etc/sysctl.d/10-kernel-security.conf"
+
+      echo "🛡️ Applying kernel security hardening..."
+
+      # Kernel security settings
+      if igconf isy IGconf_sysctl_kernel_ptrace_restrict; then
+        echo "kernel.yama.ptrace_scope = 1" >> "$1$SYSCTL_CONF"
+        echo "✅ Set kernel.yama.ptrace_scope = 1 (restrict ptrace)"
+      fi
+
+      if igconf isy IGconf_sysctl_kernel_aslr_enable; then
+        echo "kernel.randomize_va_space = 2" >> "$1$SYSCTL_CONF"
+        echo "✅ Set kernel.randomize_va_space = 2 (enable full ASLR)"
+      fi
+
+      KPTR_RESTRICT=${IGconf_sysctl_kernel_kptr_restrict:-1}
+      echo "kernel.kptr_restrict = $KPTR_RESTRICT" >> "$1$SYSCTL_CONF"
+      echo "✅ Set kernel.kptr_restrict = $KPTR_RESTRICT (kernel pointer restriction)"
+
+      if igconf isy IGconf_sysctl_kernel_dmesg_restrict; then
+        echo "kernel.dmesg_restrict = 1" >> "$1$SYSCTL_CONF"
+        echo "✅ Set kernel.dmesg_restrict = 1 (restrict kernel ring buffer)"
+      fi
+
+      # Apply settings
+      chroot "$1" sysctl -p "$SYSCTL_CONF" >/dev/null 2>&1 || true
+
+      echo "✅ Kernel security hardening applied"

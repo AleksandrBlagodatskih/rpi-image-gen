@@ -1,0 +1,51 @@
+# METABEGIN
+# X-Env-Layer-Name: sudo-logging-monitoring
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Sudo activity monitoring and alerting system
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: sudo-logging-core
+# X-Env-Layer-Provides: sudo-monitoring
+# X-Env-VarPrefix: sudo_logging
+# X-Env-Var-monitoring: y
+# X-Env-Var-monitoring-Description: Enable monitoring and alerting for sudo activity
+# X-Env-Var-monitoring-Required: false
+# X-Env-Var-monitoring-Valid: bool
+# X-Env-Var-monitoring-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_sudo_logging_monitoring || exit 0
+
+      echo "👁️ Installing sudo activity monitoring..."
+
+      # PHASE 1: Monitoring and alerting
+      echo "👁️ Setting up sudo activity monitoring..."
+
+      # Create monitoring script
+      install -m 644 "templates/security/sudo-logging/sudo-monitor" "$1/usr/local/bin/sudo-monitor"
+
+      chmod +x "$1/usr/local/bin/sudo-monitor"
+
+      # Add to cron for periodic monitoring
+      echo "*/30 * * * * root /usr/local/bin/sudo-monitor" >> "$1/etc/crontab"
+      echo "✅ Sudo activity monitoring configured (runs every 30 minutes)"
+
+      # PHASE 2: Create status script
+      echo "📊 Creating sudo security status script..."
+
+      install -m 644 "templates/security/sudo-logging/sudo-security-status" "$1/usr/local/bin/sudo-security-status"
+
+      chmod +x "$1/usr/local/bin/sudo-security-status"
+
+      # Add to PATH
+      install -m 644 "templates/security/sudo-logging/sudo-security-status.sh" "$1/etc/profile.d/sudo-security-status.sh"
+
+      echo ""
+      echo "✅ Sudo activity monitoring completed!"
+      echo "   Monitoring: enabled"
+      echo "   Status check: sudo-security-status"
+      echo "   View alerts: tail -f /var/log/sudo-alerts.log"
+      echo "   Monitor logs: tail -f /var/log/sudo-security.log"

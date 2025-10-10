@@ -1,0 +1,357 @@
+# METABEGIN
+# X-Env-Layer-Name: ${extension_name}
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: ${description}
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,net-misc,security-minimal
+# X-Env-VarPrefix: infra
+#
+# X-Env-Var-monitoring_enabled: true
+# X-Env-Var-monitoring_enabled-Description: Включить мониторинг системы
+# X-Env-Var-monitoring_enabled-Required: false
+# X-Env-Var-monitoring_enabled-Valid: true,false
+#
+# X-Env-Var-logging_level: info
+# X-Env-Var-logging_level-Description: Уровень логирования
+# X-Env-Var-logging_level-Required: false
+# X-Env-Var-logging_level-Valid: debug,info,warn,error
+#
+# X-Env-Var-backup_enabled: true
+# X-Env-Var-backup_enabled-Description: Включить автоматическое резервное копирование
+# X-Env-Var-backup_enabled-Required: false
+# X-Env-Var-backup_enabled-Valid: true,false
+#
+# X-Env-Var-update_policy: security
+# X-Env-Var-update_policy-Description: Политика обновлений
+# X-Env-Var-update_policy-Required: false
+# X-Env-Var-update_policy-Valid: none,security,all
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - prometheus-node-exporter
+    - rsyslog
+    - logrotate
+    - cron
+    - unattended-upgrades
+    - apt-listchanges
+    - needrestart
+    - molly-guard
+    - fail2ban
+    - ufw
+    - curl
+    - wget
+    - htop
+    - iotop
+    - ncdu
+    ${infra_packages:-}
+  setup-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "Подготовка инфраструктурных компонентов"
+
+      # Создание системных пользователей
+      useradd --system --shell /bin/false --no-create-home prometheus || true
+
+      # Создание директорий для логов и конфигураций
+      mkdir -p /var/log/infrastructure
+      mkdir -p /etc/infrastructure
+      mkdir -p /var/lib/infrastructure
+
+      # Настройка прав доступа
+      chown root:root /var/log/infrastructure
+      chown root:root /etc/infrastructure
+      chmod 755 /var/log/infrastructure
+      chmod 755 /etc/infrastructure
+
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      monitoring="${IGconf_infra_monitoring_enabled:-true}"
+      logging_level="${IGconf_infra_logging_level:-info}"
+      backup="${IGconf_infra_backup_enabled:-true}"
+      update_policy="${IGconf_infra_update_policy:-security}"
+
+      echo "Настройка инфраструктурных сервисов"
+
+      # Настройка логирования
+      configure_logging
+
+      # Настройка мониторинга
+      if [ "$monitoring" = "true" ]; then
+        configure_monitoring
+      fi
+
+      # Настройка резервного копирования
+      if [ "$backup" = "true" ]; then
+        configure_backup
+      fi
+
+      # Настройка обновлений системы
+      configure_updates
+
+      # Настройка безопасности
+      configure_security
+
+      # Настройка системных утилит
+      configure_system_utils
+
+      echo "Инфраструктурные сервисы настроены"
+
+  cleanup-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      # Очистка временных файлов установки
+      rm -rf /tmp/infrastructure-setup-*
+      rm -f /etc/apt/sources.list.d/temp-*
+
+      echo "Очистка инфраструктурных компонентов завершена"
+
+configure_logging() {
+  echo "Настройка системы логирования"
+
+  # Настройка rsyslog
+  cat > /etc/rsyslog.d/10-infrastructure.conf << EOF
+# Инфраструктурное логирование
+local0.*    /var/log/infrastructure/infra.log
+local1.*    /var/log/infrastructure/security.log
+local2.*    /var/log/infrastructure/backup.log
+EOF
+
+  # Настройка logrotate
+  cat > /etc/logrotate.d/infrastructure << EOF
+/var/log/infrastructure/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 root root
+    postrotate
+        systemctl reload rsyslog.service || true
+    endscript
+}
+EOF
+
+  # Перезапуск сервисов логирования
+  systemctl restart rsyslog || true
+}
+
+configure_monitoring() {
+  echo "Настройка системы мониторинга"
+
+  # Включение node exporter
+  systemctl enable prometheus-node-exporter
+  systemctl start prometheus-node-exporter || true
+
+  # Создание скрипта мониторинга системы
+  cat > /usr/local/bin/system-monitor.sh << 'EOF'
+#!/bin/bash
+# Скрипт мониторинга системы
+
+LOG_FILE="/var/log/infrastructure/system-monitor.log"
+METRICS_FILE="/var/lib/infrastructure/metrics.txt"
+
+# Сбор метрик
+timestamp=$(date +%s)
+cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2+$4}')
+mem_usage=$(free | awk 'NR==2{printf "%.2f", $3*100/$2}')
+disk_usage=$(df / | awk 'NR==2{print $5}' | sed 's/%//')
+load_avg=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}')
+
+# Сохранение метрик
+echo "$timestamp cpu=$cpu_usage mem=$mem_usage disk=$disk_usage load=$load_avg" >> "$METRICS_FILE"
+
+# Ротация файла метрик (оставляем последние 1000 записей)
+tail -1000 "$METRICS_FILE" > "${METRICS_FILE}.tmp" && mv "${METRICS_FILE}.tmp" "$METRICS_FILE"
+
+echo "$(date): CPU=${cpu_usage}% MEM=${mem_usage}% DISK=${disk_usage}% LOAD=${load_avg}" >> "$LOG_FILE"
+EOF
+
+  chmod +x /usr/local/bin/system-monitor.sh
+
+  # Добавление в cron (каждые 5 минут)
+  cat > /etc/cron.d/system-monitor << EOF
+*/5 * * * * root /usr/local/bin/system-monitor.sh
+EOF
+}
+
+configure_backup() {
+  echo "Настройка системы резервного копирования"
+
+  # Установка rsnapshot
+  apt-get update && apt-get install -y rsnapshot
+
+  # Настройка rsnapshot
+  cat > /etc/rsnapshot.conf << EOF
+config_version	1.2
+snapshot_root	/var/cache/rsnapshot/
+no_create_root	1
+
+retain	daily	7
+retain	weekly	4
+retain	monthly	12
+
+verbose		2
+loglevel	3
+logfile		/var/log/rsnapshot.log
+
+include	/etc/**/*.conf
+include	/var/lib/**/*.db
+exclude	/tmp/**
+exclude	/var/cache/**
+exclude	/var/lib/infrastructure/metrics.txt
+
+link_dest	1
+EOF
+
+  # Создание скрипта резервного копирования
+  cat > /usr/local/bin/backup-system.sh << 'EOF'
+#!/bin/bash
+# Скрипт резервного копирования системы
+
+LOG_FILE="/var/log/infrastructure/backup.log"
+BACKUP_ROOT="/var/backups/system"
+
+# Создание директории для бэкапов
+mkdir -p "$BACKUP_ROOT"
+
+# Создание бэкапа важных директорий
+timestamp=$(date +%Y%m%d_%H%M%S)
+backup_dir="$BACKUP_ROOT/backup_$timestamp"
+
+mkdir -p "$backup_dir"
+
+echo "$(date): Начало резервного копирования" >> "$LOG_FILE"
+
+# Бэкап конфигураций
+tar -czf "$backup_dir/etc.tar.gz" /etc/ 2>/dev/null || true
+tar -czf "$backup_dir/var-lib.tar.gz" /var/lib/ 2>/dev/null || true
+tar -czf "$backup_dir/opt.tar.gz" /opt/ 2>/dev/null || true
+
+# Очистка старых бэкапов (старше 30 дней)
+find "$BACKUP_ROOT" -name "backup_*" -type d -mtime +30 -exec rm -rf {} \; 2>/dev/null || true
+
+echo "$(date): Резервное копирование завершено" >> "$LOG_FILE"
+EOF
+
+  chmod +x /usr/local/bin/backup-system.sh
+
+  # Добавление в cron (ежедневно в 2:00)
+  cat > /etc/cron.d/system-backup << EOF
+0 2 * * * root /usr/local/bin/backup-system.sh
+EOF
+}
+
+configure_updates() {
+  echo "Настройка автоматических обновлений"
+
+  # Настройка unattended-upgrades
+  cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,n=${DISTRO},l=Debian-Security";
+    "origin=Raspberry Pi,n=${DISTRO},l=Raspberry Pi";
+};
+
+Unattended-Upgrade::Package-Blacklist {
+};
+
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::InstallOnShutdown "false";
+Unattended-Upgrade::Mail "root";
+Unattended-Upgrade::MailOnlyOnError "true";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+EOF
+
+  # Настройка периода обновлений
+  case "${IGconf_infra_update_policy:-security}" in
+    "none")
+      systemctl disable unattended-upgrades
+      ;;
+    "security")
+      systemctl enable unattended-upgrades
+      ;;
+    "all")
+      sed -i 's/"origin=Debian,n=${DISTRO},l=Debian-Security";/"origin=Debian,n=${DISTRO}";/' /etc/apt/apt.conf.d/50unattended-upgrades
+      systemctl enable unattended-upgrades
+      ;;
+  esac
+}
+
+configure_security() {
+  echo "Настройка базовой безопасности"
+
+  # Настройка UFW
+  ufw --force enable
+  ufw allow ssh
+  ufw allow 80/tcp || true
+  ufw allow 443/tcp || true
+
+  # Настройка fail2ban
+  systemctl enable fail2ban
+  systemctl start fail2ban || true
+
+  # Настройка sudo с ограничениями
+  cat > /etc/sudoers.d/restrictive << EOF
+# Ограничение использования sudo
+%sudo ALL=(ALL:ALL) ALL
+Defaults env_reset
+Defaults mail_badpass
+Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EOF
+
+  chmod 440 /etc/sudoers.d/restrictive
+}
+
+configure_system_utils() {
+  echo "Настройка системных утилит"
+
+  # Создание алиасов для удобства
+  cat > /etc/bash.bashrc << 'EOF'
+# Системные алиасы для удобства администрирования
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+alias ..='cd ..'
+alias ...='cd ../..'
+
+# Алиасы для мониторинга
+alias top='htop'
+alias df='df -h'
+alias du='du -h'
+alias free='free -h'
+
+# Алиасы для логов
+alias syslog='tail -f /var/log/syslog'
+alias infra-log='tail -f /var/log/infrastructure/infra.log'
+alias security-log='tail -f /var/log/infrastructure/security.log'
+EOF
+
+  # Настройка MOTD (message of the day)
+  cat > /etc/motd << EOF
+
+Добро пожаловать в систему с инфраструктурным расширением rpi-image-gen!
+
+Система мониторинга: ${monitoring:-выключена}
+Резервное копирование: ${backup:-выключено}
+Обновления: ${update_policy:-security}
+
+Полезные команды:
+  infra-log      - логи инфраструктуры
+  security-log   - логи безопасности
+  system-monitor.sh - просмотр метрик системы
+
+$(date)
+EOF
+}

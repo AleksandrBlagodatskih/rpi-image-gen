@@ -1,0 +1,33 @@
+# Radxa SATA Penta HAT modules for Raspberry Pi 5 (BCM2712 SoC)
+# Optimized loading order according to RPi BSP documentation
+
+# Core PCIe support (load first)
+pcie-brcmstb
+pcie-rp1
+pci-host-generic
+
+# ATA/SCSI core (load before controllers)
+libata
+scsi_mod
+sd_mod
+
+# SATA host controllers (AHCI for JMB585)
+ahci
+libahci
+
+# SATA transport layer
+scsi_transport_sata
+
+# GPIO modules for HAT interface (power management)
+gpio_raspberrypi_exp
+gpio_keys
+gpio_keys_polled
+
+# Additional SATA compatibility modules
+ata_piix
+ata_generic
+sg
+sr_mod
+
+# RP1 firmware support
+rpi_poe_firmware

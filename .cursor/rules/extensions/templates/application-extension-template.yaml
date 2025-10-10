@@ -1,0 +1,196 @@
+# METABEGIN
+# X-Env-Layer-Name: ${extension_name}
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: ${description}
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,net-misc
+# X-Env-VarPrefix: app
+#
+# X-Env-Var-app_name: ${app_name}
+# X-Env-Var-app_name-Description: Название приложения
+# X-Env-Var-app_name-Required: true
+# X-Env-Var-app_name-Valid: regex:^[a-zA-Z0-9_-]+$
+#
+# X-Env-Var-service_port: 8080
+# X-Env-Var-service_port-Description: Порт для веб-сервиса
+# X-Env-Var-service_port-Required: false
+# X-Env-Var-service_port-Valid: int:1024-65535
+#
+# X-Env-Var-install_path: /opt/${app_name}
+# X-Env-Var-install_path-Description: Путь установки приложения
+# X-Env-Var-install_path-Required: false
+# X-Env-Var-install_path-Valid: regex:^/opt/|^/usr/local/
+#
+# X-Env-Var-auto_start: true
+# X-Env-Var-auto_start-Description: Автоматический запуск сервиса
+# X-Env-Var-auto_start-Required: false
+# X-Env-Var-auto_start-Valid: true,false
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - python3
+    - python3-pip
+    - python3-venv
+    - nginx
+    - curl
+    - wget
+    - git
+    ${app_packages:-}
+  setup-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      app_name="${IGconf_app_app_name}"
+      install_path="${IGconf_app_install_path:-/opt/$app_name}"
+
+      echo "Подготовка установки приложения: $app_name"
+
+      # Создание пользователя для приложения
+      if ! id -u "$app_name" >/dev/null 2>&1; then
+        useradd --system --shell /bin/false --home "$install_path" --create-home "$app_name"
+      fi
+
+      # Создание директорий
+      mkdir -p "$install_path"
+      mkdir -p "/var/log/$app_name"
+      mkdir -p "/var/lib/$app_name"
+
+      # Настройка прав доступа
+      chown -R "$app_name:$app_name" "$install_path"
+      chown -R "$app_name:$app_name" "/var/log/$app_name"
+      chown -R "$app_name:$app_name" "/var/lib/$app_name"
+
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      app_name="${IGconf_app_app_name}"
+      service_port="${IGconf_app_service_port:-8080}"
+      install_path="${IGconf_app_install_path:-/opt/$app_name}"
+      auto_start="${IGconf_app_auto_start:-true}"
+
+      echo "Установка и настройка приложения: $app_name"
+
+      # Создание виртуального окружения Python
+      python3 -m venv "$install_path/venv"
+      # shellcheck source=/dev/null
+      source "$install_path/venv/bin/activate"
+
+      # Установка Python зависимостей
+      pip install --upgrade pip
+      pip install flask gunicorn
+
+      # Создание базового Flask приложения
+      cat > "$install_path/app.py" << EOF
+from flask import Flask, jsonify
+import socket
+import time
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello():
+    return jsonify({
+        'message': 'Hello from rpi-image-gen extension!',
+        'hostname': socket.gethostname(),
+        'timestamp': time.time(),
+        'app': '$app_name'
+    })
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'healthy'})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=$service_port, debug=False)
+EOF
+
+      # Создание скрипта запуска
+      cat > "$install_path/run.sh" << EOF
+#!/bin/bash
+cd "$install_path"
+source venv/bin/activate
+exec gunicorn --bind 0.0.0.0:$service_port --workers 2 --user $app_name --group $app_name app:app
+EOF
+      chmod +x "$install_path/run.sh"
+
+      # Создание systemd сервиса
+      cat > "/etc/systemd/system/$app_name.service" << EOF
+[Unit]
+Description=$app_name Application Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=$app_name
+Group=$app_name
+WorkingDirectory=$install_path
+ExecStart=$install_path/run.sh
+Restart=always
+RestartSec=5
+
+# Безопасность
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ReadWritePaths=$install_path /var/log/$app_name
+ProtectSystem=strict
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+      # Настройка nginx (опционально)
+      if [ -d "/etc/nginx" ]; then
+        cat > "/etc/nginx/sites-available/$app_name" << EOF
+server {
+    listen 80;
+    server_name localhost;
+
+    location / {
+        proxy_pass http://127.0.0.1:$service_port;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /health {
+        proxy_pass http://127.0.0.1:$service_port/health;
+        access_log off;
+    }
+}
+EOF
+        ln -sf "/etc/nginx/sites-available/$app_name" "/etc/nginx/sites-enabled/"
+        rm -f /etc/nginx/sites-enabled/default
+      fi
+
+      # Включение и запуск сервисов
+      if [ "$auto_start" = "true" ]; then
+        systemctl enable "$app_name"
+        systemctl enable nginx || true
+      fi
+
+      echo "Приложение $app_name успешно установлено"
+
+  cleanup-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      app_name="${IGconf_app_app_name}"
+
+      # Очистка кэша pip
+      rm -rf /root/.cache/pip
+      rm -rf "/home/$app_name/.cache/pip" 2>/dev/null || true
+
+      # Очистка временных файлов
+      find "$install_path" -name "*.pyc" -delete
+      find "$install_path" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+
+      echo "Очистка после установки $app_name завершена"

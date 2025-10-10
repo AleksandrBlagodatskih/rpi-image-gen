@@ -1,0 +1,583 @@
+---
+alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.content.includes("version")}
+---
+
+
+# Правило 38: Улучшенные практики сопровождения и поддержки
+
+## Назначение правила
+Определяет лучшие практики для долгосрочного сопровождения, поддержки и развития расширений rpi-image-gen.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Стратегии версионирования
+
+### Семантическое версионирование
+```bash
+# Система версионирования для слоев
+version-layer() {
+    local layer_name="$1"
+    local change_type="$2"  # major|minor|patch
+
+    # Чтение текущей версии
+    local current_version=$(grep "X-Env-Layer-Version:" "layer/${layer_name}/"*.yaml | head -1 | cut -d: -f2 | tr -d ' ')
+
+    # Разбор версии
+    IFS='.' read -ra version_parts <<< "$current_version"
+    local major="${version_parts[0]}"
+    local minor="${version_parts[1]}"
+    local patch="${version_parts[2]}"
+
+    # Инкремент соответствующей части
+    case "$change_type" in
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        patch)
+            patch=$((patch + 1))
+            ;;
+        *)
+            echo "Invalid change type: $change_type"
+            return 1
+            ;;
+    esac
+
+    local new_version="${major}.${minor}.${patch}"
+
+    # Обновление версии во всех файлах слоя
+    find "layer/${layer_name}" -name "*.yaml" -exec sed -i "s/X-Env-Layer-Version:.*/X-Env-Layer-Version: $new_version/" {} \;
+
+    echo "✅ Layer $layer_name version updated: $current_version -> $new_version"
+
+    # Создание changelog
+    update-changelog "$layer_name" "$new_version" "$change_type"
+}
+
+# Автоматическое определение типа изменения
+auto-determine-version-bump() {
+    local layer_name="$1"
+    local commit_message="$2"
+
+    if echo "$commit_message" | grep -qi "breaking\|major\|incompatible"; then
+        echo "major"
+    elif echo "$commit_message" | grep -qi "feature\|add\|new"; then
+        echo "minor"
+    else
+        echo "patch"
+    fi
+}
+```
+
+### Управление changelog
+```bash
+# Обновление changelog
+update-changelog() {
+    local layer_name="$1"
+    local version="$2"
+    local change_type="$3"
+
+    local changelog_file="layer/${layer_name}/CHANGELOG.md"
+
+    # Создать changelog если не существует
+    if [ ! -f "$changelog_file" ]; then
+        cat > "$changelog_file" << EOF
+# Changelog
+
+All notable changes to ${layer_name} layer will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+EOF
+    fi
+
+    # Добавить новую запись
+    local date=$(date +%Y-%m-%d)
+    local temp_file=$(mktemp)
+
+    # Вставить новую версию после заголовка
+    awk "
+    /^# Changelog/ {
+        print
+        print \"\"
+        print \"## [${version}] - ${date}\"
+        print \"\"
+        print \"### ${change_type^} Changes\"
+        print \"- Version bump to ${version}\"
+        print \"\"
+        next
+    }
+    {print}
+    " "$changelog_file" > "$temp_file"
+
+    mv "$temp_file" "$changelog_file"
+    echo "✅ Changelog updated for $layer_name v$version"
+}
+```
+
+## Управление зависимостями
+
+### Автоматическое обновление зависимостей
+```bash
+# Проверка устаревших зависимостей
+check-outdated-dependencies() {
+    local layer_name="$1"
+
+    echo "=== Checking dependencies for $layer_name ==="
+
+    # Найти все файлы слоя
+    local layer_files=$(find "layer/${layer_name}" -name "*.yaml")
+
+    for file in $layer_files; do
+        echo "Checking $file..."
+
+        # Проверить depends в mmdebstrap
+        if grep -q "^  depends:" "$file"; then
+            local deps=$(sed -n '/^  depends:/,/^  [^ ]/p' "$file" | grep "^    -" | sed 's/^    - //' | tr '\n' ' ')
+            echo "  System dependencies: $deps"
+
+            # Проверить актуальность пакетов (упрощенная проверка)
+            for dep in $deps; do
+                if ! apt-cache show "$dep" >/dev/null 2>&1; then
+                    echo "  ⚠️  Package $dep may not be available"
+                fi
+            done
+        fi
+
+        # Проверить зависимости слоев
+        if grep -q "X-Env-Layer-Requires:" "$file"; then
+            local layer_deps=$(grep "X-Env-Layer-Requires:" "$file" | cut -d: -f2 | tr -d ' ')
+            echo "  Layer dependencies: $layer_deps"
+
+            # Проверить существование зависимых слоев
+            IFS=',' read -ra deps_array <<< "$layer_deps"
+            for dep in "${deps_array[@]}"; do
+                dep=$(echo "$dep" | xargs)  # trim
+                if ! find layer/ -name "*${dep}*" -type f | grep -q .; then
+                    echo "  ⚠️  Layer dependency $dep not found"
+                fi
+            done
+        fi
+    done
+}
+
+# Автоматическое обновление зависимостей
+update-dependencies() {
+    local layer_name="$1"
+
+    echo "=== Updating dependencies for $layer_name ==="
+
+    # Обновить системные зависимости
+    local layer_files=$(find "layer/${layer_name}" -name "*.yaml")
+
+    for file in $layer_files; do
+        # Это упрощенная версия - в реальности нужна более сложная логика
+        echo "Updated dependencies in $file"
+    done
+
+    # Создать миграционный комит
+    git add "layer/${layer_name}"
+    git commit -m "chore: update dependencies for ${layer_name} layer"
+}
+```
+
+### Мониторинг безопасности зависимостей
+```bash
+# Проверка уязвимостей в зависимостях
+check-vulnerabilities() {
+    local layer_name="$1"
+
+    echo "=== Security audit for $layer_name ==="
+
+    # Проверить системные пакеты на известные уязвимости
+    local layer_files=$(find "layer/${layer_name}" -name "*.yaml")
+
+    for file in $layer_files; do
+        if grep -q "^  depends:" "$file"; then
+            local deps=$(sed -n '/^  depends:/,/^  [^ ]/p' "$file" | grep "^    -" | sed 's/^    - //')
+
+            for dep in $deps; do
+                # Проверить через apt (упрощенная проверка)
+                if apt list --installed 2>/dev/null | grep -q "^${dep}/"; then
+                    local installed_version=$(apt list --installed 2>/dev/null | grep "^${dep}/" | cut -d' ' -f2)
+                    local candidate_version=$(apt-cache policy "$dep" 2>/dev/null | grep "Candidate:" | cut -d' ' -f2)
+
+                    if [ "$installed_version" != "$candidate_version" ]; then
+                        echo "⚠️  $dep can be updated: $installed_version -> $candidate_version"
+                    fi
+                fi
+            done
+        fi
+    done
+}
+```
+
+## Стратегии документирования
+
+### Автоматическая генерация документации
+```bash
+# Генерация API документации
+generate-api-docs() {
+    local layer_name="$1"
+
+    local docs_dir="docs/layer/${layer_name}"
+    mkdir -p "$docs_dir"
+
+    # Найти все файлы слоя
+    local layer_files=$(find "layer/${layer_name}" -name "*.yaml")
+
+    cat > "${docs_dir}/index.adoc" << EOF
+= ${layer_name} Layer Documentation
+
+== Overview
+
+Auto-generated documentation for ${layer_name} layer.
+
+== Configuration
+
+EOF
+
+    for file in $layer_files; do
+        local basename=$(basename "$file" .yaml)
+
+        cat >> "${docs_dir}/index.adoc" << EOF
+
+=== $(basename "$file")
+
+==== Metadata
+
+EOF
+
+        # Извлечь метаданные
+        if grep -q "# METABEGIN" "$file"; then
+            sed -n '/# METABEGIN/,/# METAEND/p' "$file" | grep "# X-Env-" | sed 's/# //' >> "${docs_dir}/index.adoc"
+        fi
+
+        cat >> "${docs_dir}/index.adoc" << EOF
+
+==== Dependencies
+
+EOF
+
+        # Извлечь зависимости
+        if grep -q "depends:" "$file"; then
+            sed -n '/depends:/,/^  [^ ]/p' "$file" >> "${docs_dir}/index.adoc"
+        fi
+    done
+
+    echo "✅ API documentation generated: ${docs_dir}/index.adoc"
+}
+
+# Генерация примеров использования
+generate-usage-examples() {
+    local layer_name="$1"
+
+    local examples_dir="examples/${layer_name}"
+    mkdir -p "$examples_dir"
+
+    # Создать базовый пример конфигурации
+    cat > "${examples_dir}/basic.yaml" << EOF
+device:
+  layer: rpi5
+
+image:
+  layer: image-rpios
+
+layer:
+  base: bookworm-minbase
+  ${layer_name}: ${layer_name}
+EOF
+
+    # Создать README для примеров
+    cat > "${examples_dir}/README.adoc" << EOF
+= ${layer_name} Examples
+
+== Basic Usage
+
+[source,yaml]
+----
+include::basic.yaml[]
+----
+
+== Advanced Configuration
+
+=== Custom Settings
+
+[source,yaml]
+----
+// TODO: Add advanced configuration examples
+----
+
+== Troubleshooting
+
+=== Common Issues
+
+// TODO: Add troubleshooting guide
+EOF
+
+    echo "✅ Usage examples generated: ${examples_dir}/"
+}
+```
+
+## Стратегии тестирования
+
+### Автоматизированное тестирование
+```bash
+# Создание тестового набора для слоя
+generate-test-suite() {
+    local layer_name="$1"
+
+    local test_dir="test/${layer_name}"
+    mkdir -p "$test_dir"
+
+    # Создать базовый тест
+    cat > "${test_dir}/basic-test.sh" << EOF
+#!/bin/bash
+# Basic tests for ${layer_name} layer
+
+set -euo pipefail
+
+echo "=== Testing ${layer_name} layer ==="
+
+# Test 1: Configuration validation
+echo "1. Testing configuration validation..."
+if ! rpi-image-gen layer --validate "layer/${layer_name}"/*.yaml; then
+    echo "❌ Configuration validation failed"
+    exit 1
+fi
+echo "✅ Configuration validation passed"
+
+# Test 2: Dependency check
+echo "2. Testing dependencies..."
+if ! check-dependencies "${layer_name}"; then
+    echo "❌ Dependency check failed"
+    exit 1
+fi
+echo "✅ Dependency check passed"
+
+# Test 3: Build test (dry run)
+echo "3. Testing build (dry run)..."
+cat > /tmp/test-config.yaml << 'TEST_CONFIG_EOF'
+device:
+  layer: rpi5
+
+image:
+  layer: image-rpios
+
+layer:
+  base: bookworm-minbase
+  ${layer_name}: ${layer_name}
+TEST_CONFIG_EOF
+
+if ! rpi-image-gen build -c /tmp/test-config.yaml --dry-run >/dev/null 2>&1; then
+    echo "❌ Build test failed"
+    exit 1
+fi
+echo "✅ Build test passed"
+
+echo "🎉 All tests passed for ${layer_name} layer"
+EOF
+
+    chmod +x "${test_dir}/basic-test.sh"
+    echo "✅ Test suite generated: ${test_dir}/"
+}
+
+# Запуск регрессионных тестов
+run-regression-tests() {
+    local layer_name="$1"
+
+    echo "=== Running regression tests for $layer_name ==="
+
+    # Найти все тесты
+    local test_files=$(find "test/${layer_name}" -name "*.sh")
+
+    local passed=0
+    local failed=0
+
+    for test_file in $test_files; do
+        echo "Running $(basename "$test_file")..."
+        if bash "$test_file"; then
+            ((passed++))
+            echo "✅ $(basename "$test_file") passed"
+        else
+            ((failed++))
+            echo "❌ $(basename "$test_file") failed"
+        fi
+    done
+
+    echo ""
+    echo "Results: $passed passed, $failed failed"
+
+    if [ "$failed" -gt 0 ]; then
+        return 1
+    fi
+}
+```
+
+## Мониторинг и оповещения
+
+### Система мониторинга здоровья слоя
+```bash
+# Проверка здоровья слоя
+check-layer-health() {
+    local layer_name="$1"
+
+    echo "=== Layer Health Check: $layer_name ==="
+
+    local issues=0
+
+    # Проверить наличие основных файлов
+    if [ ! -d "layer/${layer_name}" ]; then
+        echo "❌ Layer directory not found"
+        return 1
+    fi
+
+    # Проверить метаданные
+    local yaml_files=$(find "layer/${layer_name}" -name "*.yaml" | wc -l)
+    if [ "$yaml_files" -eq 0 ]; then
+        echo "❌ No YAML files found"
+        ((issues++))
+    fi
+
+    # Проверить документацию
+    if [ ! -f "layer/${layer_name}/README.adoc" ]; then
+        echo "⚠️  No README found"
+        ((issues++))
+    fi
+
+    # Проверить тесты
+    if [ ! -d "test/${layer_name}" ]; then
+        echo "⚠️  No test directory found"
+        ((issues++))
+    fi
+
+    # Проверить актуальность зависимостей
+    if ! check-outdated-dependencies "$layer_name" >/dev/null 2>&1; then
+        echo "⚠️  Dependency issues detected"
+        ((issues++))
+    fi
+
+    # Проверить качество кода
+    local quality_score=$(calculate-maintainability-index "layer/${layer_name}"/*.yaml 2>/dev/null || echo "0")
+    if [ "$quality_score" -lt 50 ]; then
+        echo "⚠️  Low maintainability score: $quality_score"
+        ((issues++))
+    fi
+
+    if [ "$issues" -eq 0 ]; then
+        echo "✅ Layer is healthy"
+        return 0
+    else
+        echo "⚠️  $issues health issues found"
+        return 1
+    fi
+}
+
+# Автоматические оповещения
+setup-health-monitoring() {
+    local layer_name="$1"
+
+    # Создать cron job для мониторинга
+    cat > "/etc/cron.daily/layer-health-${layer_name}" << EOF
+#!/bin/bash
+# Daily health check for ${layer_name} layer
+
+LOG_FILE="/var/log/layer-health-${layer_name}.log"
+
+if ! check-layer-health "${layer_name}" >> "\$LOG_FILE" 2>&1; then
+    # Отправить оповещение (здесь можно добавить email или другие уведомления)
+    echo "WARNING: Health issues detected for ${layer_name} layer" >> "\$LOG_FILE"
+    # mail -s "Layer Health Alert: ${layer_name}" admin@example.com < "\$LOG_FILE"
+fi
+EOF
+
+    chmod +x "/etc/cron.daily/layer-health-${layer_name}"
+    echo "✅ Health monitoring configured for $layer_name"
+}
+```
+
+## Стратегии миграции и обновления
+
+### Автоматическая миграция
+```bash
+# Миграция слоя на новую версию API
+migrate-layer-api() {
+    local layer_name="$1"
+    local from_version="$2"
+    local to_version="$3"
+
+    echo "=== Migrating $layer_name from $from_version to $to_version ==="
+
+    # Создать backup
+    local backup_dir="backups/${layer_name}-migration-$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$backup_dir"
+    cp -r "layer/${layer_name}" "$backup_dir/"
+
+    # Применить миграционные правила
+    case "$from_version:$to_version" in
+        "1.0:2.0")
+            # Миграция с 1.0 на 2.0
+            migrate-1.0-to-2.0 "$layer_name"
+            ;;
+        "2.0:3.0")
+            # Миграция с 2.0 на 3.0
+            migrate-2.0-to-3.0 "$layer_name"
+            ;;
+        *)
+            echo "No migration path defined for $from_version -> $to_version"
+            return 1
+            ;;
+    esac
+
+    # Валидация после миграции
+    if validate-layer "$layer_name"; then
+        echo "✅ Migration completed successfully"
+        # Создать changelog запись
+        update-changelog "$layer_name" "$to_version" "major"
+    else
+        echo "❌ Migration validation failed, restoring backup"
+        rm -rf "layer/${layer_name}"
+        mv "$backup_dir/${layer_name}" "layer/"
+        return 1
+    fi
+}
+
+# Конкретные миграционные функции
+migrate-1.0-to-2.0() {
+    local layer_name="$1"
+
+    # Обновить метаданные
+    find "layer/${layer_name}" -name "*.yaml" -exec sed -i 's/X-Env-Layer-Desc:/X-Env-Layer-Description:/' {} \;
+
+    # Обновить переменные
+    find "layer/${layer_name}" -name "*.yaml" -exec sed -i 's/igconf getval/igconf getval/g' {} \;
+
+    echo "Migrated $layer_name to v2.0 format"
+}
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано для определения лучших практик сопровождения и поддержки расширений rpi-image-gen

@@ -1,0 +1,999 @@
+---
+alwaysApply: ${cursor.file.path.includes("monitoring/") || cursor.file.path.includes("metrics/")}
+---
+
+
+# Правило 09: Метрики и мониторинг расширений
+
+## Назначение правила
+Определяет систему метрик, мониторинга и анализа производительности для расширений rpi-image-gen.
+
+## Метрики качества расширений 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### 1. Метрики разработки
+```bash
+#!/bin/bash
+# Сбор метрик разработки
+
+collect_development_metrics() {
+    local extension_path="$1"
+    local metrics_file="/tmp/dev-metrics-${extension_name}.json"
+
+    echo "Сбор метрик разработки для расширения: $(basename "$extension_path")"
+
+    # Время разработки (дни от первого коммита)
+    local development_time
+    development_time=$(calculate_development_time "$extension_path")
+
+    # Сложность кода (цикломатическая сложность)
+    local code_complexity
+    code_complexity=$(calculate_code_complexity "$extension_path")
+
+    # Покрытие тестами
+    local test_coverage
+    test_coverage=$(calculate_test_coverage "$extension_path")
+
+    # Количество дефектов на 1000 строк кода
+    local defects_per_kiloc
+    defects_per_kiloc=$(calculate_defects_per_kilo_lines "$extension_path")
+
+    # Метрики сопровождаемости
+    local maintainability_index
+    maintainability_index=$(calculate_maintainability_index "$extension_path")
+
+    # Активность разработки
+    local commit_frequency
+    commit_frequency=$(calculate_commit_frequency "$extension_path")
+
+    # Формирование отчета
+    cat > "$metrics_file" << EOF
+    {
+        "extension": "$(basename "$extension_path")",
+        "timestamp": "$(date -Iseconds)",
+        "development_metrics": {
+            "development_time_days": $development_time,
+            "code_complexity": $code_complexity,
+            "test_coverage_percent": $test_coverage,
+            "defects_per_1000_lines": $defects_per_kiloc,
+            "maintainability_index": $maintainability_index,
+            "commits_per_week": $commit_frequency
+        }
+    }
+EOF
+
+    echo "Метрики разработки сохранены: $metrics_file"
+    cat "$metrics_file"
+}
+
+calculate_development_time() {
+    local extension_path="$1"
+
+    # Определение времени разработки на основе git истории
+    if [[ -d "$extension_path/.git" ]]; then
+        local first_commit
+        local last_commit
+
+        first_commit=$(git -C "$extension_path" log --reverse --pretty=format:%ct | head -1)
+        last_commit=$(git -C "$extension_path" log -1 --pretty=format:%ct)
+
+        if [[ -n "$first_commit" && -n "$last_commit" ]]; then
+            echo $(( (last_commit - first_commit) / 86400 ))  # дней
+        else
+            echo "0"
+        fi
+    else
+        echo "0"
+    fi
+}
+
+calculate_code_complexity() {
+    local extension_path="$1"
+    local complexity=0
+
+    # Расчет цикломатической сложности
+    while IFS= read -r -d '' script; do
+        # Подсчет предикатов (if, case, while, for, &&, ||)
+        local predicates
+        predicates=$(grep -c -E "(if |case |while |for |\$\$|\|)" "$script")
+        complexity=$((complexity + predicates))
+    done < <(find "$extension_path" -name "*.sh" -print0)
+
+    echo "$complexity"
+}
+
+calculate_test_coverage() {
+    local extension_path="$1"
+
+    # Расчет покрытия тестами (упрощенная версия)
+    if [[ -d "$extension_path/tests" ]]; then
+        local test_files
+        local script_files
+        local coverage
+
+        test_files=$(find "$extension_path/tests" -name "*.sh" | wc -l)
+        script_files=$(find "$extension_path" -name "*.sh" | wc -l)
+
+        if [[ $script_files -gt 0 ]]; then
+            coverage=$((test_files * 100 / script_files))
+            echo "$coverage"
+        else
+            echo "0"
+        fi
+    else
+        echo "0"
+    fi
+}
+
+calculate_defects_per_kilo_lines() {
+    local extension_path="$1"
+
+    # Подсчет дефектов (упрощенная оценка на основе TODO и FIXME)
+    local total_lines
+    local defect_markers
+
+    total_lines=$(find "$extension_path" -name "*.sh" -exec wc -l {} \; | awk '{sum += $1} END {print sum}')
+    defect_markers=$(grep -r -c -E "(TODO|FIXME|XXX|HACK)" "$extension_path" 2>/dev/null | awk -F: '{sum += $2} END {print sum}')
+
+    if [[ $total_lines -gt 0 ]]; then
+        echo $((defect_markers * 1000 / total_lines))
+    else
+        echo "0"
+    fi
+}
+
+calculate_maintainability_index() {
+    local extension_path="$1"
+
+    # Упрощенный расчет индекса сопровождаемости
+    # Основан на: сложности, дублировании, документации
+
+    local complexity
+    local duplication
+    local documentation
+
+    complexity=$(calculate_code_complexity "$extension_path")
+    duplication=$(calculate_code_duplication "$extension_path")
+    documentation=$(calculate_documentation_ratio "$extension_path")
+
+    # Формула: MI = 171 - 5.2*ln(V) - 0.23*G - 16.2*ln(L) + 50*sin(sqrt(2.4*CM))
+    # Упрощенная версия
+    local mi=$((171 - complexity - duplication + documentation))
+
+    # Ограничение диапазона 0-171
+    if [[ $mi -lt 0 ]]; then
+        echo "0"
+    elif [[ $mi -gt 171 ]]; then
+        echo "171"
+    else
+        echo "$mi"
+    fi
+}
+
+calculate_commit_frequency() {
+    local extension_path="$1"
+
+    if [[ -d "$extension_path/.git" ]]; then
+        local weeks
+        local commits
+
+        weeks=$(git -C "$extension_path" log --pretty=format:%ct | awk '
+            function weeks_since_epoch(t) {
+                return int(t / 604800)
+            }
+            {
+                weeks[weeks_since_epoch($1)]++
+            }
+            END {
+                print length(weeks)
+            }
+        ')
+
+        commits=$(git -C "$extension_path" rev-list --count HEAD)
+
+        if [[ $weeks -gt 0 ]]; then
+            echo $((commits / weeks))
+        else
+            echo "0"
+        fi
+    else
+        echo "0"
+    fi
+}
+```
+
+### 2. Метрики производительности
+```bash
+#!/bin/bash
+# Сбор метрик производительности
+
+collect_performance_metrics() {
+    local extension_name="$1"
+    local metrics_file="/tmp/perf-metrics-${extension_name}.json"
+
+    echo "Сбор метрик производительности для расширения: $extension_name"
+
+    # Время сборки образа
+    local build_time
+    build_time=$(measure_build_time "$extension_name")
+
+    # Размер результирующего образа
+    local image_size
+    image_size=$(measure_image_size "$extension_name")
+
+    # Использование памяти во время сборки
+    local memory_usage
+    memory_usage=$(measure_memory_usage "$extension_name")
+
+    # Время загрузки системы
+    local boot_time
+    boot_time=$(measure_boot_time "$extension_name")
+
+    # CPU использование
+    local cpu_usage
+    cpu_usage=$(measure_cpu_usage "$extension_name")
+
+    # I/O операции
+    local io_operations
+    io_operations=$(measure_io_operations "$extension_name")
+
+    # Сетевой трафик
+    local network_traffic
+    network_traffic=$(measure_network_traffic "$extension_name")
+
+    # Формирование отчета
+    cat > "$metrics_file" << EOF
+    {
+        "extension": "$extension_name",
+        "timestamp": "$(date -Iseconds)",
+        "performance_metrics": {
+            "build_time_seconds": $build_time,
+            "image_size_mb": $image_size,
+            "memory_usage_mb": $memory_usage,
+            "boot_time_seconds": $boot_time,
+            "cpu_usage_percent": $cpu_usage,
+            "io_operations_per_second": $io_operations,
+            "network_traffic_mb": $network_traffic
+        }
+    }
+EOF
+
+    echo "Метрики производительности сохранены: $metrics_file"
+    cat "$metrics_file"
+}
+
+measure_build_time() {
+    local extension_name="$1"
+
+    # Измерение времени сборки
+    local start_time
+    local end_time
+
+    start_time=$(date +%s)
+    if rpi-image-gen build -c "config/${extension_name}.yaml" --dry-run >/dev/null 2>&1; then
+        end_time=$(date +%s)
+        echo $((end_time - start_time))
+    else
+        echo "0"
+    fi
+}
+
+measure_image_size() {
+    local extension_name="$1"
+
+    # Измерение размера образа
+    if [[ -f "work/image-*/image-*.img" ]]; then
+        local size_bytes
+        size_bytes=$(stat -f%z "work/image-*/image-*.img" 2>/dev/null || stat -c%s "work/image-*/image-*.img" 2>/dev/null || echo "0")
+        echo $((size_bytes / 1024 / 1024))  # MB
+    else
+        echo "0"
+    fi
+}
+
+measure_memory_usage() {
+    local extension_name="$1"
+
+    # Мониторинг использования памяти во время сборки
+    local max_memory=0
+
+    # Запуск сборки в фоне и мониторинг
+    rpi-image-gen build -c "config/${extension_name}.yaml" --dry-run >/dev/null 2>&1 &
+    local build_pid=$!
+
+    while kill -0 $build_pid 2>/dev/null; do
+        local current_mem
+        current_mem=$(ps -o rss= -p $build_pid 2>/dev/null || echo "0")
+        current_mem=$((current_mem / 1024))  # MB
+
+        if [[ $current_mem -gt $max_memory ]]; then
+            max_memory=$current_mem
+        fi
+
+        sleep 1
+    done
+
+    echo "$max_memory"
+}
+
+measure_boot_time() {
+    local extension_name="$1"
+
+    # Измерение времени загрузки (симуляция)
+    # В реальности требует эмуляции или физического устройства
+    echo "30"  # Заглушка
+}
+
+measure_cpu_usage() {
+    local extension_name="$1"
+
+    # Измерение CPU использования во время сборки
+    local total_cpu=0
+    local samples=0
+
+    rpi-image-gen build -c "config/${extension_name}.yaml" --dry-run >/dev/null 2>&1 &
+    local build_pid=$!
+
+    while kill -0 $build_pid 2>/dev/null; do
+        local current_cpu
+        current_cpu=$(ps -o pcpu= -p $build_pid 2>/dev/null || echo "0.0")
+
+        total_cpu=$(echo "$total_cpu + $current_cpu" | bc 2>/dev/null || echo "$total_cpu")
+        ((samples++))
+
+        sleep 1
+    done
+
+    if [[ $samples -gt 0 ]]; then
+        echo "scale=2; $total_cpu / $samples" | bc 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+measure_io_operations() {
+    local extension_name="$1"
+
+    # Измерение I/O операций (упрощенная версия)
+    if command -v iotop >/dev/null 2>&1; then
+        # В реальности требует более сложного мониторинга
+        echo "100"  # Заглушка
+    else
+        echo "0"
+    fi
+}
+
+measure_network_traffic() {
+    local extension_name="$1"
+
+    # Измерение сетевого трафика во время сборки
+    local interface="eth0"
+    local rx_before
+    local tx_before
+    local rx_after
+    local tx_after
+
+    if [[ -f "/sys/class/net/$interface/statistics/rx_bytes" ]]; then
+        rx_before=$(cat "/sys/class/net/$interface/statistics/rx_bytes")
+        tx_before=$(cat "/sys/class/net/$interface/statistics/tx_bytes")
+
+        rpi-image-gen build -c "config/${extension_name}.yaml" --dry-run >/dev/null 2>&1
+
+        rx_after=$(cat "/sys/class/net/$interface/statistics/rx_bytes")
+        tx_after=$(cat "/sys/class/net/$interface/statistics/tx_bytes")
+
+        local total_traffic=$(( (rx_after - rx_before + tx_after - tx_before) / 1024 / 1024 ))
+        echo "$total_traffic"
+    else
+        echo "0"
+    fi
+}
+```
+
+### 3. Метрики безопасности
+```bash
+#!/bin/bash
+# Сбор метрик безопасности
+
+collect_security_metrics() {
+    local extension_path="$1"
+    local metrics_file="/tmp/security-metrics-${extension_name}.json"
+
+    echo "Сбор метрик безопасности для расширения: $(basename "$extension_path")"
+
+    # Количество уязвимостей (CVE)
+    local cve_count
+    cve_count=$(count_cve_vulnerabilities "$extension_path")
+
+    # Рейтинг безопасности SBOM
+    local sbom_security_score
+    sbom_security_score=$(calculate_sbom_security_score "$extension_path")
+
+    # Количество пакетов с известными уязвимостями
+    local vulnerable_packages
+    vulnerable_packages=$(count_vulnerable_packages "$extension_path")
+
+    # Время реакции на обновления безопасности
+    local security_update_time
+    security_update_time=$(measure_security_update_response "$extension_path")
+
+    # Метрики статического анализа безопасности
+    local security_issues
+    security_issues=$(analyze_security_issues "$extension_path")
+
+    # Оценка поверхности атаки
+    local attack_surface
+    attack_surface=$(calculate_attack_surface "$extension_path")
+
+    # Формирование отчета
+    cat > "$metrics_file" << EOF
+    {
+        "extension": "$(basename "$extension_path")",
+        "timestamp": "$(date -Iseconds)",
+        "security_metrics": {
+            "cve_count": $cve_count,
+            "sbom_security_score": $sbom_security_score,
+            "vulnerable_packages": $vulnerable_packages,
+            "security_update_response_days": $security_update_time,
+            "security_issues_count": $security_issues,
+            "attack_surface_score": $attack_surface
+        }
+    }
+EOF
+
+    echo "Метрики безопасности сохранены: $metrics_file"
+    cat "$metrics_file"
+}
+
+count_cve_vulnerabilities() {
+    local extension_path="$1"
+
+    # Анализ зависимостей на наличие CVE
+    if [[ -f "$extension_path/sbom-report.json" ]]; then
+        jq '.vulnerabilities | length' "$extension_path/sbom-report.json" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+calculate_sbom_security_score() {
+    local extension_path="$1"
+
+    # Расчет рейтинга безопасности SBOM
+    if [[ -f "$extension_path/sbom-report.json" ]]; then
+        local critical
+        local high
+        local medium
+        local low
+
+        critical=$(jq '.vulnerabilities | map(select(.severity == "CRITICAL")) | length' "$extension_path/sbom-report.json" 2>/dev/null || echo "0")
+        high=$(jq '.vulnerabilities | map(select(.severity == "HIGH")) | length' "$extension_path/sbom-report.json" 2>/dev/null || echo "0")
+        medium=$(jq '.vulnerabilities | map(select(.severity == "MEDIUM")) | length' "$extension_path/sbom-report.json" 2>/dev/null || echo "0")
+        low=$(jq '.vulnerabilities | map(select(.severity == "LOW")) | length' "$extension_path/sbom-report.json" 2>/dev/null || echo "0")
+
+        # Расчет скора: 100 - (critical*20 + high*10 + medium*5 + low*1)
+        local score=$((100 - critical * 20 - high * 10 - medium * 5 - low * 1))
+
+        if [[ $score -lt 0 ]]; then
+            echo "0"
+        else
+            echo "$score"
+        fi
+    else
+        echo "100"  # Если SBOM недоступен, предполагаем максимальный скор
+    fi
+}
+
+count_vulnerable_packages() {
+    local extension_path="$1"
+
+    # Подсчет пакетов с уязвимостями
+    if [[ -f "$extension_path/sbom-report.json" ]]; then
+        jq '.packages | map(select(.vulnerabilities | length > 0)) | length' "$extension_path/sbom-report.json" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+measure_security_update_response() {
+    local extension_path="$1"
+
+    # Измерение времени реакции на обновления безопасности
+    if [[ -d "$extension_path/.git" ]]; then
+        # Поиск последнего обновления безопасности
+        local last_security_commit
+        last_security_commit=$(git -C "$extension_path" log --grep="security\|CVE\|vulnerability" --pretty=format:%ct | head -1)
+
+        if [[ -n "$last_security_commit" ]]; then
+            local days_since=$(( ( $(date +%s) - last_security_commit ) / 86400 ))
+            echo "$days_since"
+        else
+            echo "999"  # Нет обновлений безопасности
+        fi
+    else
+        echo "999"
+    fi
+}
+
+analyze_security_issues() {
+    local extension_path="$1"
+
+    # Статический анализ на проблемы безопасности
+    local issues=0
+
+    # Поиск потенциально опасных паттернов
+    if grep -r -q "eval\|exec.*\$" "$extension_path" 2>/dev/null; then
+        ((issues++))
+    fi
+
+    if grep -r -q "chmod 777\|chmod a+rwx" "$extension_path" 2>/dev/null; then
+        ((issues++))
+    fi
+
+    if grep -r -q "curl.*|.*bash\|wget.*|.*sh" "$extension_path" 2>/dev/null; then
+        ((issues++))
+    fi
+
+    if grep -r -q "sudo.*\$" "$extension_path" 2>/dev/null; then
+        ((issues++))
+    fi
+
+    echo "$issues"
+}
+
+calculate_attack_surface() {
+    local extension_path="$1"
+
+    # Оценка поверхности атаки
+    local score=0
+
+    # Анализ открытых портов
+    if grep -r -q "listen\|port\|bind" "$extension_path" 2>/dev/null; then
+        ((score += 20))
+    fi
+
+    # Анализ сетевых соединений
+    if grep -r -q "curl\|wget\|http\|tcp\|udp" "$extension_path" 2>/dev/null; then
+        ((score += 15))
+    fi
+
+    # Анализ прав доступа
+    if grep -r -q "sudo\|su\|chmod\|chown" "$extension_path" 2>/dev/null; then
+        ((score += 25))
+    fi
+
+    # Анализ обработки входных данных
+    if grep -r -q "read\|input\|arg" "$extension_path" 2>/dev/null; then
+        ((score += 10))
+    fi
+
+    # Анализ использования внешних зависимостей
+    local dep_count
+    dep_count=$(grep -c "packages:" "$extension_path/layer/"*.yaml 2>/dev/null || echo "0")
+
+    score=$((score + dep_count * 5))
+
+    # Ограничение диапазона 0-100
+    if [[ $score -gt 100 ]]; then
+        echo "100"
+    else
+        echo "$score"
+    fi
+}
+```
+
+## Инструменты мониторинга 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### 1. Мониторинг сборки
+```bash
+#!/bin/bash
+# Скрипт мониторинга процесса сборки
+
+monitor_build_process() {
+    local extension_name="$1"
+    local log_file="/tmp/build-monitor-${extension_name}.log"
+
+    echo "Мониторинг сборки расширения: $extension_name"
+
+    BUILD_START=$(date +%s)
+    echo "Начало сборки: $(date)" | tee "$log_file"
+
+    # Инициализация метрик
+    local cpu_samples=()
+    local mem_samples=()
+    local disk_samples=()
+
+    # Мониторинг использования ресурсов
+    (
+        while ps aux | grep -q "rpi-image-gen.*build"; do
+            # CPU использование
+            local cpu_usage
+            cpu_usage=$(top -bn1 | grep -E "(rpi-image-gen|build)" | awk '{print $9}' | head -1 || echo "0.0")
+            cpu_samples+=("$cpu_usage")
+
+            # Память
+            local mem_usage
+            mem_usage=$(free | awk 'NR==2{printf "%.2f", $3*100/$2}' || echo "0.0")
+            mem_samples+=("$mem_usage")
+
+            # Диск I/O
+            local disk_io
+            disk_io=$(iostat -x sda 1 1 2>/dev/null | awk 'NR==4{print $4 + $5}' || echo "0.0")
+            disk_samples+=("$disk_io")
+
+            echo "$(date +%H:%M:%S): CPU ${cpu_usage}% MEM ${mem_usage}% DISK_IO ${disk_io}" >> "$log_file"
+            sleep 5
+        done
+    ) &
+
+    local monitor_pid=$!
+
+    # Выполнение сборки
+    if rpi-image-gen build -c "config/${extension_name}.yaml"; then
+        BUILD_RESULT="SUCCESS"
+    else
+        BUILD_RESULT="FAILED"
+    fi
+
+    BUILD_END=$(date +%s)
+
+    # Остановка мониторинга
+    kill $monitor_pid 2>/dev/null || true
+    wait $monitor_pid 2>/dev/null || true
+
+    # Расчет итоговых метрик
+    local build_duration=$((BUILD_END - BUILD_START))
+    local avg_cpu=$(calculate_average "${cpu_samples[@]}")
+    local max_cpu=$(calculate_max "${cpu_samples[@]}")
+    local avg_mem=$(calculate_average "${mem_samples[@]}")
+    local max_mem=$(calculate_max "${mem_samples[@]}")
+    local avg_disk=$(calculate_average "${disk_samples[@]}")
+
+    # Сохранение итогового отчета
+    cat >> "$log_file" << EOF
+
+=== ИТОГОВЫЙ ОТЧЕТ СБОРКИ ===
+Время сборки: ${build_duration} секунд
+Результат: ${BUILD_RESULT}
+Среднее CPU: ${avg_cpu}%
+Максимальное CPU: ${max_cpu}%
+Средняя память: ${avg_mem}%
+Максимальная память: ${max_mem}%
+Средний диск I/O: ${avg_disk}
+EOF
+
+    echo "Мониторинг завершен. Отчет: $log_file"
+    echo "Время сборки: ${build_duration}с, Результат: ${BUILD_RESULT}"
+
+    return $([[ "$BUILD_RESULT" = "SUCCESS" ]] && echo 0 || echo 1)
+}
+
+calculate_average() {
+    local sum=0
+    local count=0
+
+    for value in "$@"; do
+        sum=$(echo "$sum + $value" | bc 2>/dev/null || echo "$sum")
+        ((count++))
+    done
+
+    if [[ $count -gt 0 ]]; then
+        echo "scale=2; $sum / $count" | bc 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+calculate_max() {
+    local max=0
+
+    for value in "$@"; do
+        if [[ $(echo "$value > $max" | bc 2>/dev/null) -eq 1 ]]; then
+            max=$value
+        fi
+    done
+
+    echo "$max"
+}
+```
+
+### 2. Мониторинг развернутых систем
+```yaml
+# Prometheus метрики для расширения
+# metrics.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'rpi-image-gen-extensions'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: '/metrics'
+
+# Собственные метрики расширения
+custom_metrics:
+  - name: extension_uptime_seconds
+    type: counter
+    help: Время работы расширения в секундах
+    labels:
+      extension_name: ""
+      extension_version: ""
+
+  - name: extension_requests_total
+    type: counter
+    help: Общее количество запросов к расширению
+    labels:
+      extension_name: ""
+      method: ""
+      status: ""
+
+  - name: extension_errors_total
+    type: counter
+    help: Общее количество ошибок расширения
+    labels:
+      extension_name: ""
+      error_type: ""
+
+  - name: extension_performance_duration_seconds
+    type: histogram
+    help: Время выполнения операций расширения
+    labels:
+      extension_name: ""
+      operation: ""
+    buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60, 120]
+
+  - name: extension_resources_usage
+    type: gauge
+    help: Использование ресурсов расширением
+    labels:
+      extension_name: ""
+      resource_type: "cpu|memory|disk|network"
+
+  - name: extension_health_status
+    type: gauge
+    help: Статус здоровья расширения (0=unhealthy, 1=healthy)
+    labels:
+      extension_name: ""
+      component: ""
+```
+
+### Система сбора и анализа метрик
+```bash
+#!/bin/bash
+# Централизованная система метрик
+
+metrics_collector() {
+    local metrics_dir="/var/lib/rpi-image-gen/metrics"
+    local retention_days=30
+
+    mkdir -p "$metrics_dir"
+
+    # Сбор всех типов метрик
+    collect_all_metrics() {
+        local timestamp
+        timestamp=$(date +%Y%m%d_%H%M%S)
+
+        # Метрики разработки
+        collect_development_metrics "$extension_path" > "${metrics_dir}/dev_${timestamp}.json"
+
+        # Метрики производительности
+        collect_performance_metrics "$extension_name" > "${metrics_dir}/perf_${timestamp}.json"
+
+        # Метрики безопасности
+        collect_security_metrics "$extension_path" > "${metrics_dir}/security_${timestamp}.json"
+
+        # Системные метрики
+        collect_system_metrics > "${metrics_dir}/system_${timestamp}.json"
+
+        echo "Метрики собраны: $timestamp"
+    }
+
+    # Анализ трендов
+    analyze_metrics_trends() {
+        echo "Анализ трендов метрик..."
+
+        # Анализ производительности
+        analyze_performance_trends
+
+        # Анализ безопасности
+        analyze_security_trends
+
+        # Анализ качества кода
+        analyze_quality_trends
+
+        # Генерация рекомендаций
+        generate_recommendations
+    }
+
+    # Очистка старых метрик
+    cleanup_old_metrics() {
+        find "$metrics_dir" -name "*.json" -mtime +$retention_days -delete
+        echo "Старые метрики очищены (старше ${retention_days} дней)"
+    }
+
+    # Основной цикл сбора метрик
+    while true; do
+        collect_all_metrics
+        analyze_metrics_trends
+        cleanup_old_metrics
+
+        sleep 3600  # Сбор каждый час
+    done
+}
+
+# Анализ трендов производительности
+analyze_performance_trends() {
+    local perf_files
+    mapfile -t perf_files < <(find "$metrics_dir" -name "perf_*.json" -mtime -7 | sort)
+
+    if [[ ${#perf_files[@]} -lt 2 ]]; then
+        echo "Недостаточно данных для анализа трендов производительности"
+        return
+    fi
+
+    echo "Анализ трендов производительности за неделю..."
+
+    local build_times=()
+    local memory_usage=()
+
+    for file in "${perf_files[@]}"; do
+        build_times+=($(jq -r '.performance_metrics.build_time_seconds' "$file"))
+        memory_usage+=($(jq -r '.performance_metrics.memory_usage_mb' "$file"))
+    done
+
+    # Анализ трендов
+    local build_trend
+    build_trend=$(calculate_trend "${build_times[@]}")
+
+    local memory_trend
+    memory_trend=$(calculate_trend "${memory_usage[@]}")
+
+    echo "Тренд времени сборки: $build_trend"
+    echo "Тренд использования памяти: $memory_trend"
+
+    # Генерация предупреждений
+    if [[ "$build_trend" = "increasing" ]]; then
+        warn "Время сборки увеличивается - требуется оптимизация"
+    fi
+
+    if [[ "$memory_trend" = "increasing" ]]; then
+        warn "Использование памяти увеличивается - проверить на утечки"
+    fi
+}
+
+calculate_trend() {
+    local values=("$@")
+    local length=${#values[@]}
+
+    if [[ $length -lt 2 ]]; then
+        echo "insufficient_data"
+        return
+    fi
+
+    local first_half_sum=0
+    local second_half_sum=0
+    local mid=$((length / 2))
+
+    for ((i = 0; i < mid; i++)); do
+        first_half_sum=$((first_half_sum + values[i]))
+    done
+
+    for ((i = mid; i < length; i++)); do
+        second_half_sum=$((second_half_sum + values[i]))
+    done
+
+    local first_avg=$((first_half_sum / mid))
+    local second_avg=$((second_half_sum / (length - mid)))
+
+    if [[ $second_avg -gt $((first_avg * 110 / 100)) ]]; then
+        echo "increasing"
+    elif [[ $second_avg -lt $((first_avg * 90 / 100)) ]]; then
+        echo "decreasing"
+    else
+        echo "stable"
+    fi
+}
+
+# Анализ трендов безопасности
+analyze_security_trends() {
+    local security_files
+    mapfile -t security_files < <(find "$metrics_dir" -name "security_*.json" -mtime -30 | sort)
+
+    if [[ ${#security_files[@]} -lt 2 ]]; then
+        echo "Недостаточно данных для анализа трендов безопасности"
+        return
+    fi
+
+    echo "Анализ трендов безопасности за месяц..."
+
+    local cve_counts=()
+    local vuln_packages=()
+
+    for file in "${security_files[@]}"; do
+        cve_counts+=($(jq -r '.security_metrics.cve_count' "$file"))
+        vuln_packages+=($(jq -r '.security_metrics.vulnerable_packages' "$file"))
+    done
+
+    local cve_trend
+    cve_trend=$(calculate_trend "${cve_counts[@]}")
+
+    local vuln_trend
+    vuln_trend=$(calculate_trend "${vuln_packages[@]}")
+
+    echo "Тренд CVE: $cve_trend"
+    echo "Тренд уязвимых пакетов: $vuln_trend"
+
+    # Критические предупреждения
+    if [[ "$cve_trend" = "increasing" ]]; then
+        error "Количество CVE увеличивается - срочно обновить зависимости!"
+    fi
+
+    if [[ $(tail -1 <<< "${cve_counts[*]}") -gt 5 ]]; then
+        warn "Обнаружено более 5 CVE - требуется внимание"
+    fi
+}
+
+# Генерация рекомендаций на основе метрик
+generate_recommendations() {
+    local recommendations_file="/tmp/metrics-recommendations.txt"
+
+    echo "Генерация рекомендаций на основе метрик..." > "$recommendations_file"
+
+    # Анализ последних метрик
+    local latest_perf
+    latest_perf=$(find "$metrics_dir" -name "perf_*.json" | sort | tail -1)
+
+    if [[ -f "$latest_perf" ]]; then
+        local build_time
+        build_time=$(jq -r '.performance_metrics.build_time_seconds' "$latest_perf")
+
+        if [[ $build_time -gt 1800 ]]; then  # > 30 минут
+            echo "- Оптимизировать время сборки (текущее: ${build_time}с)" >> "$recommendations_file"
+        fi
+
+        local memory_usage
+        memory_usage=$(jq -r '.performance_metrics.memory_usage_mb' "$latest_perf")
+
+        if [[ $memory_usage -gt 1024 ]]; then  # > 1GB
+            echo "- Оптимизировать использование памяти (текущее: ${memory_usage}MB)" >> "$recommendations_file"
+        fi
+    fi
+
+    local latest_security
+    latest_security=$(find "$metrics_dir" -name "security_*.json" | sort | tail -1)
+
+    if [[ -f "$latest_security" ]]; then
+        local cve_count
+        cve_count=$(jq -r '.security_metrics.cve_count' "$latest_security")
+
+        if [[ $cve_count -gt 0 ]]; then
+            echo "- Исправить ${cve_count} CVE уязвимостей" >> "$recommendations_file"
+        fi
+    fi
+
+    echo "Рекомендации сохранены: $recommendations_file"
+}
+```
+
+## Метрики соблюдения правила 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Обязательные метрики для сбора
+- [ ] Регулярный сбор метрик разработки (время, сложность, покрытие)
+- [ ] Мониторинг производительности (время сборки, ресурсы)
+- [ ] Оценка безопасности (CVE, уязвимости, поверхность атаки)
+- [ ] Анализ трендов и тенденций
+- [ ] Генерация отчетов и рекомендаций
+
+### Качественные показатели
+- [ ] Метрики собираются автоматически
+- [ ] Анализ трендов выявляет проблемы заранее
+- [ ] Рекомендации основаны на данных
+- [ ] Система масштабируема для множества расширений
+- [ ] Интеграция с внешними системами мониторинга
+
+### Непрерывное улучшение
+- [ ] Регулярный анализ эффективности метрик
+- [ ] Обновление пороговых значений
+- [ ] Добавление новых типов метрик
+- [ ] Улучшение алгоритмов анализа
+- [ ] Автоматизация действий на основе метрик

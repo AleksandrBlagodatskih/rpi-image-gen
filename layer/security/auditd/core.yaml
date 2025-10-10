@@ -1,0 +1,91 @@
+# METABEGIN
+# X-Env-Layer-Name: auditd-core
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Auditd core installation and basic configuration
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: auditd-core
+# X-Env-VarPrefix: auditd_core
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable auditd core installation
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-buffer_size: 1024
+# X-Env-Var-buffer_size-Description: Audit buffer size (512-16384, affects memory usage)
+# X-Env-Var-buffer_size-Required: false
+# X-Env-Var-buffer_size-Valid: int:512-16384
+# X-Env-Var-buffer_size-Set: lazy
+# X-Env-Var-max_log_file: 5
+# X-Env-Var-max_log_file-Description: Maximum log files to keep (1-99)
+# X-Env-Var-max_log_file-Required: false
+# X-Env-Var-max_log_file-Valid: int:1-99
+# X-Env-Var-max_log_file-Set: lazy
+# X-Env-Var-failure_mode: 1
+# X-Env-Var-failure_mode-Description: Failure mode (0=quiet,1=printk,2=panic)
+# X-Env-Var-failure_mode-Required: false
+# X-Env-Var-failure_mode-Valid: int:0-2
+# X-Env-Var-failure_mode-Set: lazy
+# X-Env-Var-boot_audit: y
+# X-Env-Var-boot_audit-Description: Enable audit=1 boot parameter for full process coverage
+# X-Env-Var-boot_audit-Required: false
+# X-Env-Var-boot_audit-Valid: bool
+# X-Env-Var-boot_audit-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - auditd
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "auditd_core"
+
+      echo "🔍 Installing auditd core..."
+
+      # Create backup directory
+      BACKUP_DIR=$(create_backup_dir "auditd-core" "$1")
+
+      # Backup existing audit configuration
+      if [ -d "$1/etc/audit" ]; then
+        cp -a "$1/etc/audit" "$1$BACKUP_DIR/" 2>/dev/null || true
+        echo "📁 Backup created: $BACKUP_DIR/audit"
+      fi
+
+      # Configure auditd.conf
+      install -m 644 "templates/security/auditd/auditd.conf" "$1/etc/audit/auditd.conf"
+
+      # Apply configuration variables
+      BUFFER_SIZE=${IGconf_auditd_core_buffer_size:-1024}
+      MAX_LOG_FILE=${IGconf_auditd_core_max_log_file:-5}
+      FAILURE_MODE=${IGconf_auditd_core_failure_mode:-1}
+
+      sed -i "s|^num_logs = .*|num_logs = $MAX_LOG_FILE|" "$1/etc/audit/auditd.conf"
+      sed -i "s|^failure_mode = .*|failure_mode = $FAILURE_MODE|" "$1/etc/audit/auditd.conf"
+      sed -i "s|^buffer_size = .*|buffer_size = $BUFFER_SIZE|" "$1/etc/audit/auditd.conf"
+
+      # Boot parameter configuration
+      if igconf isy IGconf_auditd_core_boot_audit; then
+        if [ -f "$1/boot/firmware/cmdline.txt" ]; then
+          if ! grep -q "audit=1" "$1/boot/firmware/cmdline.txt"; then
+            sed -i 's/$/ audit=1/' "$1/boot/firmware/cmdline.txt"
+            echo "⚙️ audit=1 boot parameter added to cmdline.txt"
+          else
+            echo "⚙️ audit=1 boot parameter already present"
+          fi
+        fi
+      fi
+
+      # Enable auditd service
+      chroot "$1" systemctl enable auditd
+
+      # Create audit status script
+      install_component_script "templates/security/auditd/audit-status" "/usr/local/bin/audit-status" "$1"
+      install_component_script "templates/security/auditd/audit-status.sh" "/etc/profile.d/audit-status.sh" "$1"
+
+      echo "✅ Auditd core installed and configured"

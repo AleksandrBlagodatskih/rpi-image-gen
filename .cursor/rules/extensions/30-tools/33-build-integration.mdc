@@ -1,0 +1,348 @@
+---
+alwaysApply: ${cursor.file.path.includes("build/") || cursor.file.path.includes("ci/") || cursor.file.path.includes("scripts/")}
+---
+
+
+# Правило 33: Интеграция с системой сборки rpi-image-gen
+
+## Назначение правила
+Обеспечивает интеграцию с командами и процессами сборки rpi-image-gen в Cursor IDE.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Быстрые команды для разработки
+
+### Основные команды сборки
+```bash
+# Тестовая сборка без создания образа
+rpi-image-gen build -c config.yaml --dry-run
+
+# Полная сборка с логированием
+rpi-image-gen build -c config.yaml -v
+
+# Сборка с пользовательскими переменными
+IGconf_extension_debug=true IGconf_extension_test_mode=true \
+rpi-image-gen build -c config.yaml
+
+# Параллельная сборка нескольких конфигураций
+parallel 'rpi-image-gen build -c {}' ::: config/*.yaml
+```
+
+### Команды валидации и анализа
+```bash
+# Валидация всех слоев проекта
+find layer/ -name "*.yaml" -exec rpi-image-gen metadata --lint {} \;
+
+# Анализ зависимостей слоя
+rpi-image-gen layer --describe my-extension-layer
+
+# Проверка зависимостей между слоями
+rpi-image-gen layer --list --depends my-extension-layer
+
+# Валидация переменных окружения
+rpi-image-gen metadata --validate-vars layer/my-layer.yaml
+```
+
+### Отладочные команды
+```bash
+# Детальное логирование сборки
+export VERBOSE=1
+export DEBUG=1
+rpi-image-gen build -c config.yaml 2>&1 | tee build.log
+
+# Профилирование производительности
+time rpi-image-gen build -c config.yaml
+
+# Анализ использования диска
+du -sh work/image-*/* 2>/dev/null || echo "No images found"
+
+# Проверка переменных окружения
+env | grep '^IGconf_' | sort
+```
+
+## Интеграция с Cursor Tasks
+
+### Автоматизированные задачи сборки
+```json
+// .cursor/tasks.json
+{
+  "tasks": [
+    {
+      "name": "Validate Extension",
+      "command": "find layer/ config/ -name '*.yaml' -exec rpi-image-gen metadata --lint {} \\;",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "name": "Test Build (Dry Run)",
+      "command": "rpi-image-gen build -c config.yaml --dry-run",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "name": "Full Build with Logging",
+      "command": "rpi-image-gen build -c config.yaml -v 2>&1 | tee build_$(date +%Y%m%d_%H%M%S).log",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    }
+  ]
+}
+```
+
+### Переменные окружения для сборки
+```bash
+# Отладка и тестирование
+export IGconf_extension_debug=true
+export IGconf_extension_test_mode=true
+export IGconf_extension_verbose=true
+
+# Производительность
+export IGconf_extension_parallel_jobs=$(nproc)
+export IGconf_extension_compression_level=6
+
+# Безопасность
+export IGconf_extension_secure_boot=true
+export IGconf_extension_encrypted_root=true
+```
+
+## Система шаблонов для быстрого старта
+
+### Шаблон базовой конфигурации
+```yaml
+# config/basic-extension.yaml
+device:
+  layer: pi5
+  hostname: rpi-extension-${HOST_SUFFIX:-01}
+
+image:
+  layer: image-rpios
+  boot_part_size: 200%
+  root_part_size: 300%
+
+layer:
+  base: bookworm-minbase
+  extension: my-extension-layer
+  security: security-minimal
+  network: net-misc
+```
+
+### Шаблон расширения устройства
+```yaml
+# layer/device-extension.yaml
+# METABEGIN
+# X-Env-Layer-Name: device-extension
+# X-Env-Layer-Category: device
+# X-Env-Layer-Description: Расширение для специфического устройства
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+# X-Env-VarPrefix: device
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - raspberrypi-bootloader
+    - raspberrypi-kernel
+    - linux-firmware-raspi
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      echo "Настройка устройства: ${IGconf_device_type:-unknown}"
+      # Специфичная настройка устройства
+```
+
+### Шаблон расширения приложения
+```yaml
+# layer/app-extension.yaml
+# METABEGIN
+# X-Env-Layer-Name: app-extension
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Расширение с прикладным ПО
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,net-misc
+# X-Env-VarPrefix: app
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - python3
+    - python3-pip
+    - nginx
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      # Установка Python зависимостей
+      pip3 install --break-system-packages flask gunicorn
+
+      # Настройка systemd сервиса
+      cat > /etc/systemd/system/my-app.service << 'EOF'
+[Unit]
+Description=My Application
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/var/www/my-app
+ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:8000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+      systemctl enable my-app
+```
+
+## Система мониторинга сборки
+
+### Логи сборки в реальном времени
+```bash
+# Мониторинг прогресса сборки
+rpi-image-gen build -c config.yaml 2>&1 | \
+while IFS= read -r line; do
+    echo "$(date '+%H:%M:%S') $line"
+done | tee "build_$(date +%Y%m%d_%H%M%S).log"
+```
+
+### Анализ результатов сборки
+```bash
+# Проверка успешности сборки
+if [ -f "work/image-*/image-*.img" ]; then
+    echo "✅ Сборка успешна"
+    ls -lh work/image-*/*.img
+
+    # Проверка размера образа
+    image_size=$(stat -c%s work/image-*/*.img)
+    if [ "$image_size" -gt 4294967296 ]; then # 4GB
+        echo "⚠️  Размер образа превышает 4GB: $(numfmt --to=iec-i --suffix=B "$image_size")"
+    fi
+else
+    echo "❌ Сборка не удалась"
+    tail -20 build.log
+fi
+```
+
+### Профилирование ресурсов
+```bash
+# Мониторинг ресурсов во время сборки
+#!/bin/bash
+LOG_FILE="resource_usage_$(date +%Y%m%d_%H%M%S).log"
+
+echo "Время;CPU%;Память%;Диск I/O" > "$LOG_FILE"
+
+rpi-image-gen build -c config.yaml &
+BUILD_PID=$!
+
+while kill -0 "$BUILD_PID" 2>/dev/null; do
+    cpu=$(top -bn1 | grep -E "^(CPU|%Cpu)" | awk '{print $2+$4}')
+    mem=$(free | awk 'NR==2{printf "%.1f", $3*100/$2}')
+    disk=$(iostat -x sda 1 1 2>/dev/null | awk 'NR==4{print $4+$5}' || echo "0")
+
+    echo "$(date +%H:%M:%S);$cpu;$mem;$disk" >> "$LOG_FILE"
+    sleep 5
+done
+
+wait "$BUILD_PID"
+echo "Сборка завершена. Лог ресурсов: $LOG_FILE"
+```
+
+## Интеграция с внешними инструментами
+
+### Docker для изолированной сборки
+```dockerfile
+# Dockerfile для сборки расширений
+FROM debian:bookworm
+
+# Установка зависимостей
+RUN apt-get update && apt-get install -y \
+    qemu-user-static \
+    binfmt-support \
+    mmdebstrap \
+    genimage \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копирование исходников
+COPY . /workspace
+WORKDIR /workspace
+
+# Команда сборки
+CMD ["rpi-image-gen", "build", "-c", "config.yaml"]
+```
+
+```bash
+# Сборка в Docker контейнере
+docker build -t rpi-builder .
+docker run --privileged -v $(pwd):/workspace rpi-builder
+```
+
+### CI/CD интеграция
+```yaml
+# .github/workflows/build-extension.yml
+name: Build Extension
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support
+
+      - name: Validate extension
+        run: |
+          find layer/ -name "*.yaml" -exec rpi-image-gen metadata --lint {} \;
+
+      - name: Build extension
+        run: |
+          rpi-image-gen build -c config.yaml --dry-run
+
+      - name: Upload artifacts
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: extension-image
+          path: work/image-*/*.img
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано для интеграции разработки расширений с системой сборки rpi-image-gen

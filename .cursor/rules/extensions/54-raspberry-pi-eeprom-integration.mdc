@@ -1,0 +1,294 @@
+---
+alwaysApply: ${cursor.file.path.includes("eeprom") || cursor.file.content.includes("eeprom")}
+---
+
+
+# Правило 54: Интеграция Raspberry Pi EEPROM
+
+## Назначение правила
+Определяет стандарты интеграции инструментов обновления EEPROM загрузчика Raspberry Pi 4 и 5 в расширения rpi-image-gen для обеспечения безопасного и надежного управления firmware.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Интеграция Raspberry Pi EEPROM
+
+### Управление EEPROM загрузчика
+
+#### Автоматическое обновление EEPROM:
+```bash
+#!/bin/bash
+# update-rpi-eeprom.sh
+
+set -euo pipefail
+
+# Конфигурация
+EEPROM_PACKAGE="rpi-eeprom"
+EEPROM_IMAGES_URL="https://github.com/raspberrypi/rpi-eeprom/releases/latest/download/"
+BOOTFS_MOUNT="/boot/firmware"
+
+# Определение модели устройства
+detect_pi_model() {
+    if grep -q "Raspberry Pi 5" /proc/device-tree/model 2>/dev/null; then
+        echo "pi5"
+    elif grep -q "Raspberry Pi 4" /proc/device-tree/model 2>/dev/null; then
+        echo "pi4"
+    else
+        echo "unknown"
+    fi
+}
+
+# Проверка необходимости обновления
+check_eeprom_update_needed() {
+    local current_version
+    local latest_version
+
+    if ! command -v rpi-eeprom-update >/dev/null 2>&1; then
+        echo "Инструмент rpi-eeprom-update не найден"
+        return 1
+    fi
+
+    current_version=$(rpi-eeprom-update -l | grep "CURRENT:" | awk '{print $2}')
+    latest_version=$(rpi-eeprom-update -l | grep "LATEST:" | awk '{print $2}')
+
+    if [ "$current_version" != "$latest_version" ]; then
+        echo "Доступно обновление EEPROM: $current_version -> $latest_version"
+        return 0
+    fi
+
+    echo "EEPROM уже обновлен до последней версии: $current_version"
+    return 1
+}
+
+# Безопасное обновление EEPROM
+safe_eeprom_update() {
+    local model=$(detect_pi_model)
+    local backup_file="/tmp/eeprom-backup-$(date +%Y%m%d-%H%M%S).bin"
+
+    echo "Обновление EEPROM для Raspberry Pi $model"
+
+    # Создание резервной копии
+    if [ -f "$BOOTFS_MOUNT/recovery.bin" ]; then
+        cp "$BOOTFS_MOUNT/recovery.bin" "$backup_file"
+        echo "Резервная копия EEPROM создана: $backup_file"
+    fi
+
+    # Обновление EEPROM
+    case "$model" in
+        "pi5")
+            rpi-eeprom-update -a -f "$BOOTFS_MOUNT/pieeprom.upd"
+            ;;
+        "pi4")
+            rpi-eeprom-update -d -f "$BOOTFS_MOUNT/pieeprom.upd"
+            ;;
+        *)
+            echo "Обновление EEPROM не поддерживается для модели: $model"
+            return 1
+            ;;
+    esac
+
+    # Проверка успешности обновления
+    if rpi-eeprom-update -l | grep -q "status=0"; then
+        echo "EEPROM успешно обновлен"
+        return 0
+    else
+        echo "Ошибка обновления EEPROM"
+
+        # Восстановление из резервной копии при неудаче
+        if [ -f "$backup_file" ]; then
+            echo "Восстановление из резервной копии..."
+            cp "$backup_file" "$BOOTFS_MOUNT/recovery.bin"
+        fi
+
+        return 1
+    fi
+}
+
+# Настройка параметров EEPROM
+configure_eeprom_settings() {
+    local config_file="$BOOTFS_MOUNT/config.txt"
+    local eeprom_config="$BOOTFS_MOUNT/eeprom-config.txt"
+
+    cat > "$eeprom_config" << EOF
+# Конфигурация EEPROM для оптимизации загрузки
+BOOT_UART=0
+WAKE_ON_GPIO=1
+POWER_OFF_ON_HALT=0
+BOOT_ORDER=0xf41
+EOF
+
+    # Применение конфигурации
+    rpi-eeprom-config --apply "$eeprom_config"
+
+    echo "Конфигурация EEPROM применена"
+}
+
+# Основная функция
+main() {
+    echo "Управление EEPROM Raspberry Pi"
+
+    if check_eeprom_update_needed; then
+        echo "Запуск обновления EEPROM..."
+        safe_eeprom_update
+        configure_eeprom_settings
+    else
+        echo "Обновление EEPROM не требуется"
+    fi
+}
+
+main "$@"
+```
+
+#### Интеграция в процесс сборки образа:
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: rpi-eeprom-management
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Управление EEPROM загрузчика Raspberry Pi
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,bootloader
+# X-Env-VarPrefix: eeprom
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - rpi-eeprom
+    - rpi-eeprom-images
+    - curl
+    - wget
+  customize-hooks:
+    - |
+      # Установка и настройка EEPROM
+      setup_eeprom_management() {
+          echo "Настройка управления EEPROM"
+
+          # Создание директории для EEPROM
+          mkdir -p /opt/rpi-eeprom
+
+          # Установка скрипта управления
+          cat > /usr/local/bin/manage-eeprom.sh << 'EEPROM_SCRIPT_EOF'
+#!/bin/bash
+# Управление EEPROM в собранном образе
+
+set -euo pipefail
+
+EEPROM_DIR="/opt/rpi-eeprom"
+LOG_FILE="/var/log/eeprom-management.log"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG_FILE"
+}
+
+update_eeprom_if_needed() {
+    log "Проверка обновлений EEPROM"
+
+    if rpi-eeprom-update -a 2>&1 | tee -a "$LOG_FILE"; then
+        log "EEPROM успешно обновлен"
+        return 0
+    else
+        log "Ошибка обновления EEPROM"
+        return 1
+    fi
+}
+
+# Выполнение обновления при первой загрузке
+if [ ! -f "$EEPROM_DIR/.updated" ]; then
+    if update_eeprom_if_needed; then
+        touch "$EEPROM_DIR/.updated"
+    fi
+fi
+EEPROM_SCRIPT_EOF
+
+          chmod +x /usr/local/bin/manage-eeprom.sh
+
+          # Создание systemd сервиса
+          cat > /etc/systemd/system/rpi-eeprom-management.service << EOF
+[Unit]
+Description=Raspberry Pi EEPROM Management
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/manage-eeprom.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+          systemctl enable rpi-eeprom-management.service
+      }
+
+      setup_eeprom_management
+```
+
+#### Мониторинг состояния EEPROM:
+```bash
+#!/bin/bash
+# monitor-eeprom-status.sh
+
+# Мониторинг состояния EEPROM загрузчика
+
+check_eeprom_status() {
+    echo "=== Состояние EEPROM ==="
+
+    # Версия EEPROM
+    echo "Версия EEPROM:"
+    rpi-eeprom-update -l || echo "Информация недоступна"
+
+    # Статус обновления
+    echo -e "\nСтатус обновления:"
+    if [ -f /opt/rpi-eeprom/.updated ]; then
+        echo "EEPROM был обновлен при первой загрузке"
+    else
+        echo "EEPROM еще не обновлялся"
+    fi
+
+    # Проверка на наличие резервных копий
+    echo -e "\nРезервные копии EEPROM:"
+    find /boot/firmware -name "recovery.bin*" -o -name "pieeprom*.bak" | head -5 || echo "Резервные копии не найдены"
+}
+
+check_eeprom_health() {
+    echo "=== Проверка работоспособности EEPROM ==="
+
+    # Проверка контрольных сумм
+    if command -v sha256sum >/dev/null 2>&1; then
+        echo "Контрольная сумма EEPROM:"
+        sha256sum /boot/firmware/recovery.bin 2>/dev/null || echo "EEPROM недоступен"
+    fi
+
+    # Проверка логов загрузки
+    echo -e "\nПоследние сообщения о загрузке:"
+    dmesg | grep -i eeprom | tail -5 || echo "Сообщения о EEPROM не найдены"
+}
+
+main() {
+    check_eeprom_status
+    echo ""
+    check_eeprom_health
+}
+
+main "$@"
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе анализа репозитория: https://github.com/raspberrypi/rpi-eeprom

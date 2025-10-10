@@ -1,0 +1,110 @@
+# METABEGIN
+# X-Env-Layer-Name: sudo-logging-core-basic
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Basic sudo logging configuration with core settings
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: sudo-logging-basic
+# X-Env-VarPrefix: sudo_logging
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable sudo logging core functionality
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-enable-Set: immediate
+# X-Env-Var-logfile: /var/log/sudo.log
+# X-Env-Var-logfile-Description: Path to sudo log file
+# X-Env-Var-logfile-Required: false
+# X-Env-Var-logfile-Valid: string
+# X-Env-Var-logfile-Set: lazy
+# X-Env-Var-syslog_facility: local2
+# X-Env-Var-syslog_facility-Description: Syslog facility for sudo logging
+# X-Env-Var-syslog_facility-Required: false
+# X-Env-Var-syslog_facility-Valid: keywords:auth,authpriv,daemon,user,local0,local1,local2,local3,local4,local5,local6,local7
+# X-Env-Var-syslog_facility-Set: lazy
+# X-Env-Var-syslog_priority: notice
+# X-Env-Var-syslog_priority-Description: Syslog priority for sudo logging
+# X-Env-Var-syslog_priority-Required: false
+# X-Env-Var-syslog_priority-Valid: keywords:emerg,alert,crit,err,warning,notice,info,debug
+# X-Env-Var-syslog_priority-Set: lazy
+# X-Env-Var-password_tries: 3
+# X-Env-Var-password_tries-Description: Number of password attempts allowed
+# X-Env-Var-password_tries-Required: false
+# X-Env-Var-password_tries-Valid: int:1-10
+# X-Env-Var-password_tries-Set: lazy
+# X-Env-Var-secure_path: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# X-Env-Var-secure_path-Description: Secure PATH for sudo commands
+# X-Env-Var-secure_path-Required: false
+# X-Env-Var-secure_path-Valid: string
+# X-Env-Var-secure_path-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      if [ "${IGconf_sudo_logging_enable:-n}" != "y" ]; then
+        echo "🔐 sudo logging disabled by configuration"
+        exit 0
+      fi
+
+      echo "🔐 Installing sudo logging basic configuration..."
+
+      # PHASE 1: Validation
+      echo "🔍 Validating sudo installation..."
+
+      # Check that sudo is installed
+      if ! chroot "$1" dpkg -l sudo | grep -q "^ii"; then
+        echo "❌ ERROR: sudo package not installed"
+        exit 1
+      fi
+
+      # Check for required commands
+      for cmd in sudo visudo; do
+        if ! chroot "$1" command -v "$cmd" >/dev/null 2>&1; then
+          echo "❌ ERROR: $cmd not available in chroot"
+          exit 1
+        fi
+      done
+
+      echo "✅ sudo validated successfully"
+
+      # PHASE 2: Backup
+      echo "💾 Creating backup..."
+      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+      BACKUP_DIR="/root/rpi-image-gen-backups/sudo-logging-basic-$TIMESTAMP"
+      mkdir -p "$1$BACKUP_DIR"
+
+      # Backup existing sudo configuration
+      for file in /etc/sudoers /etc/sudoers.d/*; do
+        if [ -f "$1$file" ]; then
+          cp -a "$1$file" "$1$BACKUP_DIR/" 2>/dev/null || true
+        fi
+      done
+
+      echo "✅ Backup created: $BACKUP_DIR"
+
+      # PHASE 3: Core Configuration
+      echo "🔧 Configuring sudo logging basic settings..."
+
+      # Configure syslog for sudo
+      SYSLOG_FACILITY=$(igconf getval IGconf_sudo_logging_syslog_facility)
+      SYSLOG_PRIORITY=$(igconf getval IGconf_sudo_logging_syslog_priority)
+
+      # Configure rsyslog for sudo if available
+      if chroot "$1" command -v rsyslogd >/dev/null 2>&1; then
+        install -m 644 "templates/security/sudo-logging/rsyslog-sudo.conf" "$1/etc/rsyslog.d/50-sudo.conf"
+      fi
+
+      # Configure password tries
+      PASSWORD_TRIES=$(igconf getval IGconf_sudo_logging_password_tries)
+
+      # Configure secure PATH
+      SECURE_PATH=$(igconf getval IGconf_sudo_logging_secure_path)
+
+      echo "✅ sudo basic configuration:"
+      echo "   Password tries: ${PASSWORD_TRIES}"
+      echo "   Syslog facility: ${SYSLOG_FACILITY}"
+      echo "   Secure PATH: ${SECURE_PATH}"
+
+      echo ""
+      echo "✅ sudo logging basic configuration completed!"

@@ -1,0 +1,64 @@
+# METABEGIN
+# X-Env-Layer-Name: sysctl-security
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: System security hardening parameters
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: sysctl-security
+# X-Env-VarPrefix: sysctl_security
+# X-Env-Var-core_dump_restrict: y
+# X-Env-Var-core_dump_restrict-Description: Restrict core dumps to prevent memory disclosure
+# X-Env-Var-core_dump_restrict-Required: false
+# X-Env-Var-core_dump_restrict-Valid: bool
+# X-Env-Var-core_dump_restrict-Set: lazy
+# X-Env-Var-perf_event_paranoid: 2
+# X-Env-Var-perf_event_paranoid-Description: Restrict perf events (0=unrestricted, 1=restrict user space, 2=restrict all)
+# X-Env-Var-perf_event_paranoid-Required: false
+# X-Env-Var-perf_event_paranoid-Valid: int:0-2
+# X-Env-Var-perf_event_paranoid-Set: lazy
+# X-Env-Var-kernel_modules_disable: y
+# X-Env-Var-kernel_modules_disable-Description: Disable kernel module loading after boot
+# X-Env-Var-kernel_modules_disable-Required: false
+# X-Env-Var-kernel_modules_disable-Valid: bool
+# X-Env-Var-kernel_modules_disable-Set: lazy
+# X-Env-Var-magic_sysrq_disable: y
+# X-Env-Var-magic_sysrq_disable-Description: Disable Magic SysRq key (prevents system manipulation)
+# X-Env-Var-magic_sysrq_disable-Required: false
+# X-Env-Var-magic_sysrq_disable-Valid: bool
+# X-Env-Var-magic_sysrq_disable-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      SYSCTL_CONF="/etc/sysctl.d/30-system-security.conf"
+
+      echo "🔒 Applying system security hardening..."
+
+      # Core dump restrictions
+      if igconf isy IGconf_sysctl_security_core_dump_restrict; then
+        echo "fs.suid_dumpable = 0" >> "$1$SYSCTL_CONF"
+        echo "✅ Set fs.suid_dumpable = 0 (restrict core dumps)"
+      fi
+
+      # Performance event restrictions
+      PERF_PARANOID=${IGconf_sysctl_security_perf_event_paranoid:-2}
+      echo "kernel.perf_event_paranoid = $PERF_PARANOID" >> "$1$SYSCTL_CONF"
+      echo "✅ Set kernel.perf_event_paranoid = $PERF_PARANOID (perf events restriction)"
+
+      # Kernel module loading
+      if igconf isy IGconf_sysctl_security_kernel_modules_disable; then
+        echo "kernel.modules_disabled = 1" >> "$1$SYSCTL_CONF"
+        echo "✅ Set kernel.modules_disabled = 1 (disable module loading after boot)"
+      fi
+
+      # Magic SysRq key
+      if igconf isy IGconf_sysctl_security_magic_sysrq_disable; then
+        echo "kernel.sysrq = 0" >> "$1$SYSCTL_CONF"
+        echo "✅ Set kernel.sysrq = 0 (disable Magic SysRq key)"
+      fi
+
+      # Apply settings
+      chroot "$1" sysctl -p "$SYSCTL_CONF" >/dev/null 2>&1 || true
+
+      echo "✅ System security hardening applied"

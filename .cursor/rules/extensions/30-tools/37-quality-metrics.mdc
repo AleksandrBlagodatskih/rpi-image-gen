@@ -1,0 +1,455 @@
+---
+alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.path.includes("metrics")}
+---
+
+
+# Правило 37: Метрики качества и производительности кода
+
+## Назначение правила
+Предоставляет комплексные метрики для оценки качества, производительности и поддерживаемости кода расширений rpi-image-gen.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Метрики качества кода
+
+### Структурные метрики
+```bash
+# Расчет цикломатической сложности
+calculate-cyclomatic-complexity() {
+    local file="$1"
+
+    # Подсчет управляющих конструкций
+    local conditions=$(grep -c "if \|elif \|while \|for \|case \|&& \||| " "$file" || echo "0")
+    local functions=$(grep -c "^[a-zA-Z_][a-zA-Z0-9_]*()" "$file" || echo "0")
+
+    local complexity=$((conditions + functions + 1))
+
+    echo "$complexity"
+}
+
+# Метрика поддерживаемости
+calculate-maintainability-index() {
+    local file="$1"
+
+    local lines=$(wc -l < "$file")
+    local comments=$(grep -c "^#" "$file" || echo "0")
+    local functions=$(grep -c "^[a-zA-Z_][a-zA-Z0-9_]*()" "$file" || echo "0")
+    local complexity=$(calculate-cyclomatic-complexity "$file")
+
+    # Формула MI = 171 - 5.2 * ln(Halstead) - 0.23 * CC - 16.2 * ln(LOC)
+    # Упрощенная версия для bash
+    local mi=$((171 - complexity - lines/10 + comments*2 + functions*3))
+
+    # Ограничить диапазон 0-171
+    if [ "$mi" -lt 0 ]; then mi=0; fi
+    if [ "$mi" -gt 171 ]; then mi=171; fi
+
+    echo "$mi"
+}
+
+# Метрика дублирования кода
+calculate-code-duplication() {
+    local file="$1"
+
+    # Найти повторяющиеся строки (минимум 3 повторения)
+    local total_duplicates=$(sort "$file" | uniq -c | awk '$1 >= 3 {sum += $1} END {print sum+0}')
+
+    echo "$total_duplicates"
+}
+```
+
+### Метрики читаемости
+```bash
+# Метрика читаемости кода
+calculate-readability-score() {
+    local file="$1"
+
+    local lines=$(wc -l < "$file")
+    local avg_line_length=$(awk '{sum += length} END {print int(sum/NR)}' "$file")
+    local comments_ratio=$(awk '/^#/ {comments++} END {print int(comments/NR*100)}' "$file")
+    local functions_per_100_lines=$(( $(grep -c "^[a-zA-Z_][a-zA-Z0-9_]*()" "$file") * 100 / lines ))
+
+    # Составная метрика (0-100)
+    local score=$((comments_ratio + functions_per_100_lines))
+    if [ "$avg_line_length" -gt 80 ]; then
+        score=$((score - (avg_line_length - 80)/2))
+    fi
+
+    if [ "$score" -lt 0 ]; then score=0; fi
+    if [ "$score" -gt 100 ]; then score=100; fi
+
+    echo "$score"
+}
+
+# Метрика именования
+calculate-naming-quality() {
+    local file="$1"
+
+    local total_vars=$(grep -o '\$[a-zA-Z_][a-zA-Z0-9_]*' "$file" | wc -l)
+    local bad_names=$(grep -o '\$[a-z]\|[a-z][A-Z]\|[0-9]$' "$file" | wc -l)
+
+    if [ "$total_vars" -eq 0 ]; then
+        echo "100"
+    else
+        local quality=$((100 - bad_names * 100 / total_vars))
+        echo "$quality"
+    fi
+}
+```
+
+## Метрики производительности
+
+### Метрики времени выполнения
+```bash
+# Измерение времени сборки
+measure-build-time() {
+    local config_file="$1"
+
+    local start_time=$(date +%s)
+
+    if rpi-image-gen build -c "$config_file" --dry-run >/dev/null 2>&1; then
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+        echo "$duration"
+    else
+        echo "failed"
+    fi
+}
+
+# Анализ производительности скриптов
+analyze-script-performance() {
+    local file="$1"
+
+    echo "=== Performance Analysis: $(basename "$file") ==="
+
+    # Подсчет внешних команд
+    local external_commands=$(grep -c "^\s*[a-zA-Z_][a-zA-Z0-9_]*\|\$\(" "$file" || echo "0")
+    echo "External commands: $external_commands"
+
+    # Подсчет операций с файлами
+    local file_operations=$(grep -c ">\|<\|tee\|cat\|cp\|mv\|rm" "$file" || echo "0")
+    echo "File operations: $file_operations"
+
+    # Оценка сложности ввода-вывода
+    local io_complexity=$((external_commands + file_operations))
+    echo "I/O complexity: $io_complexity"
+
+    # Рекомендации
+    if [ "$io_complexity" -gt 20 ]; then
+        echo "⚠️  High I/O complexity - consider optimization"
+    fi
+}
+```
+
+### Метрики ресурсов
+```bash
+# Анализ использования памяти
+analyze-memory-usage() {
+    local file="$1"
+
+    # Подсчет переменных
+    local variables=$(grep -c "^[a-zA-Z_][a-zA-Z0-9_]*=" "$file" || echo "0")
+    echo "Variables defined: $variables"
+
+    # Подсчет массивов
+    local arrays=$(grep -c "declare -a\|=()" "$file" || echo "0")
+    echo "Arrays used: $arrays"
+
+    # Подсчет больших структур данных
+    local large_structures=$(grep -c "for.*in.*\$\|while.*read" "$file" || echo "0")
+    echo "Large data structures: $large_structures"
+
+    # Оценка потребления памяти
+    local memory_score=$((variables + arrays * 5 + large_structures * 10))
+    echo "Memory usage score: $memory_score"
+
+    if [ "$memory_score" -gt 50 ]; then
+        echo "⚠️  High memory usage - consider optimization"
+    fi
+}
+
+# Анализ эффективности алгоритмов
+analyze-algorithm-efficiency() {
+    local file="$1"
+
+    # Поиск неэффективных паттернов
+    local nested_loops=$(grep -c "for.*do.*for\|while.*do.*for" "$file" || echo "0")
+    local sequential_searches=$(grep -c "grep.*for\|for.*grep" "$file" || echo "0")
+    local unnecessary_forks=$(grep -c "cat.*|\|echo.*|" "$file" || echo "0")
+
+    echo "Nested loops: $nested_loops"
+    echo "Sequential searches: $sequential_searches"
+    echo "Unnecessary forks: $unnecessary_forks"
+
+    local efficiency_score=$((nested_loops * 5 + sequential_searches * 3 + unnecessary_forks * 2))
+    echo "Algorithm efficiency score: $efficiency_score"
+
+    if [ "$efficiency_score" -gt 10 ]; then
+        echo "⚠️  Inefficient algorithms detected"
+    fi
+}
+```
+
+## Метрики безопасности
+
+### Метрики безопасности кода
+```bash
+# Расчет security score
+calculate-security-score() {
+    local file="$1"
+
+    local score=100
+
+    # Вычитаем баллы за проблемы
+    if ! grep -q "set -euo pipefail" "$file"; then
+        score=$((score - 20))
+    fi
+
+    if grep -q "\$[a-zA-Z_][a-zA-Z0-9_]*\s*[^\"']" "$file"; then
+        score=$((score - 15))
+    fi
+
+    if grep -q "chmod 777\|chmod a+rwx" "$file"; then
+        score=$((score - 25))
+    fi
+
+    if grep -q "curl.*|.*bash" "$file"; then
+        score=$((score - 30))
+    fi
+
+    if grep -q "eval " "$file"; then
+        score=$((score - 40))
+    fi
+
+    if [ "$score" -lt 0 ]; then score=0; fi
+
+    echo "$score"
+}
+
+# Анализ поверхности атаки
+analyze-attack-surface() {
+    local file="$1"
+
+    echo "=== Attack Surface Analysis ==="
+
+    # Подсчет точек входа
+    local inputs=$(grep -c "read \|\\\$1\|\\\$2\|\\\$@" "$file" || echo "0")
+    echo "Input points: $inputs"
+
+    # Подсчет привилегированных операций
+    local privileged_ops=$(grep -c "sudo\|su\|chmod\|chown" "$file" || echo "0")
+    echo "Privileged operations: $privileged_ops"
+
+    # Подсчет сетевых операций
+    local network_ops=$(grep -c "curl\|wget\|ssh\|scp\|nc" "$file" || echo "0")
+    echo "Network operations: $network_ops"
+
+    # Подсчет операций с файлами
+    local file_ops=$(grep -c "rm \|> \|>> \|tee " "$file" || echo "0")
+    echo "File operations: $file_ops"
+
+    local attack_surface=$((inputs + privileged_ops * 2 + network_ops * 3 + file_ops))
+    echo "Attack surface score: $attack_surface"
+
+    if [ "$attack_surface" -gt 20 ]; then
+        echo "⚠️  Large attack surface - review security controls"
+    fi
+}
+```
+
+## Метрики поддерживаемости
+
+### Метрики покрытия тестами
+```bash
+# Анализ покрытия тестами
+analyze-test-coverage() {
+    local layer_name="$1"
+
+    # Найти тестовые файлы
+    local test_files=$(find . -name "*${layer_name}*test*" -o -name "*test*${layer_name}*" | wc -l)
+    echo "Test files found: $test_files"
+
+    # Найти основные файлы
+    local main_files=$(find layer/ -name "*${layer_name}*.yaml" | wc -l)
+    echo "Main files: $main_files"
+
+    # Расчет покрытия
+    if [ "$main_files" -gt 0 ]; then
+        local coverage=$((test_files * 100 / main_files))
+        echo "Test coverage: ${coverage}%"
+
+        if [ "$coverage" -lt 50 ]; then
+            echo "⚠️  Low test coverage"
+        elif [ "$coverage" -gt 100 ]; then
+            echo "ℹ️  Over-testing (more test files than main files)"
+        fi
+    fi
+}
+
+# Анализ документации
+analyze-documentation() {
+    local layer_name="$1"
+
+    # Проверить наличие README
+    if [ -f "layer/${layer_name}/README.adoc" ]; then
+        local readme_lines=$(wc -l < "layer/${layer_name}/README.adoc")
+        echo "README lines: $readme_lines"
+
+        if [ "$readme_lines" -lt 10 ]; then
+            echo "⚠️  Insufficient documentation"
+        fi
+    else
+        echo "❌ No README found"
+    fi
+
+    # Проверить комментарии в коде
+    local code_files=$(find "layer/${layer_name}" -name "*.yaml" | wc -l)
+    local total_comments=$(find "layer/${layer_name}" -name "*.yaml" -exec grep -c "^#" {} \; | awk '{sum+=$1} END {print sum}')
+
+    if [ "$code_files" -gt 0 ]; then
+        local avg_comments=$((total_comments / code_files))
+        echo "Average comments per file: $avg_comments"
+
+        if [ "$avg_comments" -lt 5 ]; then
+            echo "⚠️  Low code commenting"
+        fi
+    fi
+}
+```
+
+## Комплексный анализ качества
+
+### Генерация отчетов о качестве
+```bash
+# Полный отчет о качестве
+generate-quality-report() {
+    local layer_name="$1"
+    local output_file="${2:-quality-report.txt}"
+
+    echo "=== Code Quality Report: $layer_name ===" > "$output_file"
+    echo "Generated: $(date)" >> "$output_file"
+    echo "" >> "$output_file"
+
+    # Найти файлы слоя
+    local layer_files=$(find "layer/${layer_name}" -name "*.yaml")
+
+    for file in $layer_files; do
+        echo "File: $(basename "$file")" >> "$output_file"
+
+        # Метрики качества
+        local complexity=$(calculate-cyclomatic-complexity "$file")
+        local maintainability=$(calculate-maintainability-index "$file")
+        local readability=$(calculate-readability-score "$file")
+        local naming=$(calculate-naming-quality "$file")
+        local security=$(calculate-security-score "$file")
+        local duplication=$(calculate-code-duplication "$file")
+
+        echo "  Complexity: $complexity" >> "$output_file"
+        echo "  Maintainability: $maintainability/171" >> "$output_file"
+        echo "  Readability: $readability/100" >> "$output_file"
+        echo "  Naming quality: $naming/100" >> "$output_file"
+        echo "  Security score: $security/100" >> "$output_file"
+        echo "  Code duplication: $duplication lines" >> "$output_file"
+
+        # Анализ производительности
+        analyze-script-performance "$file" >> "$output_file" 2>&1
+        analyze-memory-usage "$file" >> "$output_file" 2>&1
+        analyze-algorithm-efficiency "$file" >> "$output_file" 2>&1
+
+        echo "" >> "$output_file"
+    done
+
+    # Общие метрики слоя
+    analyze-test-coverage "$layer_name" >> "$output_file"
+    analyze-documentation "$layer_name" >> "$output_file"
+
+    echo "Quality report generated: $output_file"
+}
+
+# Сравнение качества со временем
+track-quality-trends() {
+    local layer_name="$1"
+
+    # Создать запись в истории качества
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local history_file="quality-history/${layer_name}_${timestamp}.json"
+
+    mkdir -p quality-history
+
+    # Собирать метрики
+    local metrics=$(cat <<EOF
+{
+  "timestamp": "$timestamp",
+  "layer": "$layer_name",
+  "complexity": $(calculate-cyclomatic-complexity "layer/${layer_name}/*.yaml" 2>/dev/null || echo "0"),
+  "maintainability": $(calculate-maintainability-index "layer/${layer_name}/*.yaml" 2>/dev/null || echo "0"),
+  "security": $(calculate-security-score "layer/${layer_name}/*.yaml" 2>/dev/null || echo "0"),
+  "files": $(find "layer/${layer_name}" -name "*.yaml" | wc -l)
+}
+EOF
+)
+
+    echo "$metrics" > "$history_file"
+    echo "Quality metrics tracked: $history_file"
+}
+```
+
+## Интеграция с CI/CD
+
+### Автоматический мониторинг качества
+```yaml
+# .github/workflows/quality-gate.yml
+name: Quality Gate
+on: [push, pull_request]
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run quality analysis
+        run: |
+          # Создать отчеты о качестве
+          for layer in $(find layer/ -maxdepth 1 -type d | tail -n +2); do
+            layer_name=$(basename "$layer")
+            generate-quality-report "$layer_name" "reports/${layer_name}-quality.txt"
+          done
+
+      - name: Quality gate
+        run: |
+          # Проверить пороговые значения
+          if grep -q "Maintainability: [0-9]\|Security score: [0-9][0-9]" reports/*quality.txt; then
+            echo "❌ Quality gate failed"
+            exit 1
+          else
+            echo "✅ Quality gate passed"
+          fi
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: quality-reports
+          path: reports/
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано для комплексного анализа качества и производительности кода расширений rpi-image-gen

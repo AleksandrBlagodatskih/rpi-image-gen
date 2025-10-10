@@ -1,0 +1,156 @@
+# METABEGIN
+# X-Env-Layer-Name: cockpit
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Cockpit web interface for system management and monitoring
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: systemd-net-min
+#
+# X-Env-VarRequires: IGconf_device_user1
+# X-Env-VarRequires-Valid: string
+#
+# X-Env-VarPrefix: cockpit
+#
+# X-Env-Var-port: 9090
+# X-Env-Var-port-Desc: Port for Cockpit web interface
+# X-Env-Var-port-Required: n
+# X-Env-Var-port-Valid: int
+# X-Env-Var-port-Set: immediate
+#
+# X-Env-Var-allow_unprivileged: n
+# X-Env-Var-allow_unprivileged-Desc: Allow unprivileged users to access Cockpit
+# X-Env-Var-allow_unprivileged-Required: n
+# X-Env-Var-allow_unprivileged-Valid: bool
+# X-Env-Var-allow_unprivileged-Set: immediate
+#
+# X-Env-Var-max_startup_time: 120
+# X-Env-Var-max_startup_time-Desc: Maximum startup time in seconds
+# X-Env-Var-max_startup_time-Required: n
+# X-Env-Var-max_startup_time-Valid: int
+# X-Env-Var-max_startup_time-Set: immediate
+#
+# X-Env-Var-login_banner: "Welcome to $(hostname)"
+# X-Env-Var-login_banner-Desc: Login banner message
+# X-Env-Var-login_banner-Required: n
+# X-Env-Var-login_banner-Valid: string
+# X-Env-Var-login_banner-Set: immediate
+#
+# X-Env-Var-enable_ssl: y
+# X-Env-Var-enable_ssl-Desc: Enable SSL/TLS for Cockpit web interface
+# X-Env-Var-enable_ssl-Required: n
+# X-Env-Var-enable_ssl-Valid: bool
+# X-Env-Var-enable_ssl-Set: immediate
+#
+# X-Env-Var-ssl_cert_file: "/etc/cockpit/ws-certs.d/0-self-signed.cert"
+# X-Env-Var-ssl_cert_file-Desc: Path to SSL certificate file
+# X-Env-Var-ssl_cert_file-Required: n
+# X-Env-Var-ssl_cert_file-Valid: string
+# X-Env-Var-ssl_cert_file-Set: lazy
+#
+# X-Env-Var-ssl_key_file: "/etc/cockpit/ws-certs.d/0-self-signed.key"
+# X-Env-Var-ssl_key_file-Desc: Path to SSL private key file
+# X-Env-Var-ssl_key_file-Required: n
+# X-Env-Var-ssl_key_file-Valid: string
+# X-Env-Var-ssl_key_file-Set: lazy
+#
+# X-Env-Var-generate_self_signed: y
+# X-Env-Var-generate_self_signed-Desc: Generate self-signed SSL certificate if custom cert not provided
+# X-Env-Var-generate_self_signed-Required: n
+# X-Env-Var-generate_self_signed-Valid: bool
+# X-Env-Var-generate_self_signed-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - cockpit
+    - cockpit-ws
+    - cockpit-bridge
+    - openssl
+  customize-hooks:
+    - |-
+      # Enable and start cockpit socket
+      $BDEBSTRAP_HOOKS/enable-units "$1" cockpit.socket
+    - |-
+      # Configure firewall for cockpit port
+      if command -v ufw >/dev/null 2>&1; then
+        uchroot $1 'ufw allow 9090/tcp'
+      elif command -v firewall-cmd >/dev/null 2>&1; then
+        uchroot $1 'firewall-cmd --permanent --add-port=9090/tcp'
+        uchroot $1 'firewall-cmd --reload'
+      fi
+    - |-
+      # Create cockpit configuration directory
+      uchroot $1 'mkdir -p /etc/cockpit'
+    - |-
+      #!/bin/bash
+      set -euo pipefail
+
+      # Apply cockpit configuration based on variables
+      COCKPIT_CONF="$1/etc/cockpit/cockpit.conf"
+
+      # Start WebService section
+      cat > "$COCKPIT_CONF" << 'EOF'
+      [WebService]
+      EOF
+
+      # Configure port
+      if igconf isy cockpit_port && [ "${IGconf_cockpit_port:-9090}" != "9090" ]; then
+        echo "Port = ${IGconf_cockpit_port}" >> "$COCKPIT_CONF"
+      fi
+
+      # Configure max startup time
+      if igconf isy cockpit_max_startup_time && [ "${IGconf_cockpit_max_startup_time:-120}" != "120" ]; then
+        echo "MaxStartupTime = ${IGconf_cockpit_max_startup_time}" >> "$COCKPIT_CONF"
+      fi
+
+      # Configure unprivileged access
+      if igconf isy cockpit_allow_unprivileged; then
+        echo "AllowUnprivileged = true" >> "$COCKPIT_CONF"
+      fi
+
+      # Configure SSL/TLS
+      if igconf isy cockpit_enable_ssl; then
+        echo "✅ Configuring SSL/TLS for Cockpit"
+
+        # Create certificates directory
+        uchroot $1 'mkdir -p /etc/cockpit/ws-certs.d'
+
+        SSL_CERT_FILE="${IGconf_cockpit_ssl_cert_file:-/etc/cockpit/ws-certs.d/0-self-signed.cert}"
+        SSL_KEY_FILE="${IGconf_cockpit_ssl_key_file:-/etc/cockpit/ws-certs.d/0-self-signed.key}"
+
+        # Generate self-signed certificate if requested and cert doesn't exist
+        if igconf isy cockpit_generate_self_signed && [ ! -f "$1$SSL_CERT_FILE" ]; then
+          echo "🔐 Generating self-signed SSL certificate for Cockpit"
+
+          # Generate certificate valid for 10 years
+          uchroot $1 "openssl req -x509 -newkey rsa:4096 -keyout '$SSL_KEY_FILE' -out '$SSL_CERT_FILE' -days 3650 -nodes -subj '/C=US/ST=State/L=City/O=Organization/CN=$(hostname)'"
+
+          # Set proper permissions
+          uchroot $1 "chmod 600 '$SSL_KEY_FILE'"
+          uchroot $1 "chmod 644 '$SSL_CERT_FILE'"
+          uchroot $1 "chown root:root '$SSL_KEY_FILE' '$SSL_CERT_FILE'"
+
+          echo "✅ Self-signed certificate generated"
+        fi
+
+        # Configure Cockpit to use SSL
+        if [ -f "$1$SSL_CERT_FILE" ] && [ -f "$1$SSL_KEY_FILE" ]; then
+          echo "Certificates = $SSL_CERT_FILE $SSL_KEY_FILE" >> "$COCKPIT_CONF"
+          echo "✅ SSL certificates configured for Cockpit"
+        else
+          echo "⚠️  SSL certificate files not found, SSL not configured"
+        fi
+      fi
+
+      # Configure login banner
+      if igconf isy cockpit_login_banner && [ -n "${IGconf_cockpit_login_banner:-}" ]; then
+        cat >> "$COCKPIT_CONF" << EOF
+
+        [Session]
+        Banner = ${IGconf_cockpit_login_banner}
+        EOF
+      fi
+    - |-
+      # Restart cockpit service to apply configuration
+      if [ -f "$1/etc/systemd/system/multi-user.target.wants/cockpit.socket" ]; then
+        uchroot $1 'systemctl restart cockpit.socket'
+      fi

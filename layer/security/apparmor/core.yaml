@@ -1,0 +1,132 @@
+# METABEGIN
+# X-Env-Layer-Name: apparmor-core
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: AppArmor core installation and basic configuration
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: apparmor-core
+# X-Env-VarPrefix: apparmor_core
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable AppArmor core installation
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-mode: enforce
+# X-Env-Var-mode-Desc: Default mode for AppArmor profiles (enforce/complain)
+# X-Env-Var-mode-Required: n
+# X-Env-Var-mode-Valid: enforce,complain
+# X-Env-Var-mode-Set: lazy
+# X-Env-Var-auditd: y
+# X-Env-Var-auditd-Desc: Enable auditd for detailed AppArmor logging
+# X-Env-Var-auditd-Required: n
+# X-Env-Var-auditd-Valid: bool
+# X-Env-Var-auditd-Set: lazy
+# X-Env-Var-notify: y
+# X-Env-Var-notify-Desc: Enable desktop notifications for policy violations
+# X-Env-Var-notify-Required: n
+# X-Env-Var-notify-Valid: bool
+# X-Env-Var-notify-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - apparmor
+    - apparmor-utils
+    - apparmor-profiles
+    - apparmor-profiles-extra
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "apparmor_core"
+
+      echo "🛡️ Installing AppArmor core..."
+
+      # Define paths
+      APPARMOR_DIR="/etc/apparmor.d"
+      CMDLINE_FILE="/boot/firmware/cmdline.txt"
+
+      # Create backup directory
+      BACKUP_DIR=$(create_backup_dir "apparmor-core" "$1")
+
+      # Backup existing AppArmor configuration
+      if [ -d "$1$APPARMOR_DIR" ]; then
+        cp -a "$1$APPARMOR_DIR" "$1$BACKUP_DIR/" 2>/dev/null || true
+        echo "📁 Backup created: $BACKUP_DIR/apparmor.d"
+      fi
+
+      # Enable AppArmor in kernel boot parameters (Raspberry Pi specific)
+      if [ -f "$1$CMDLINE_FILE" ]; then
+        if ! grep -q "apparmor=1" "$1$CMDLINE_FILE"; then
+          sed -i 's/$/ apparmor=1 security=apparmor/' "$1$CMDLINE_FILE"
+          echo "⚙️ AppArmor kernel parameters added to cmdline.txt"
+        else
+          echo "⚙️ AppArmor kernel parameters already present"
+        fi
+      fi
+
+      # Function to configure AppArmor mode
+      configure_apparmor_mode() {
+        local mode="$1"
+        local target="$2"
+
+        case "$mode" in
+          "complain")
+            echo "📝 Setting all AppArmor profiles to complain mode"
+            chroot "$target" aa-complain "$APPARMOR_DIR"/*
+            ;;
+          "enforce")
+            echo "🔒 Setting all AppArmor profiles to enforce mode"
+            chroot "$target" aa-enforce "$APPARMOR_DIR"/*
+            ;;
+          *)
+            echo "⚠️ Unknown mode '$mode', defaulting to enforce"
+            chroot "$target" aa-enforce "$APPARMOR_DIR"/*
+            ;;
+        esac
+      }
+
+      # Configure AppArmor profiles based on mode setting
+      configure_apparmor_mode "${IGconf_apparmor_core_mode:-enforce}" "$1"
+
+      # Configure auditd for detailed AppArmor logging
+      if igconf isy IGconf_apparmor_core_auditd; then
+        echo "📊 Installing and configuring auditd for AppArmor logging"
+        chroot "$1" apt-get install -y auditd
+
+        # Enable auditd service
+        chroot "$1" systemctl enable auditd
+
+        # Configure audit rules for AppArmor
+        cat >> "$1/etc/audit/rules.d/apparmor.rules" << 'EOF'
+-w /etc/apparmor.d/ -p wa -k apparmor
+-w /etc/apparmor/ -p wa -k apparmor
+EOF
+        echo "📋 AppArmor audit rules added"
+      fi
+
+      # Configure desktop notifications for policy violations
+      if igconf isy IGconf_apparmor_core_notify; then
+        echo "🔔 Installing apparmor-notify for desktop notifications"
+        chroot "$1" apt-get install -y apparmor-notify
+
+        # Configure notification service
+        if [ -f "$1/etc/xdg/autostart/apparmor-notify.desktop" ]; then
+          if command -v auditd >/dev/null 2>&1; then
+            sed -i 's|Exec=.*|Exec=sudo aa-notify -p -f /var/log/audit/audit.log|' "$1/etc/xdg/autostart/apparmor-notify.desktop"
+          fi
+        fi
+      fi
+
+      # Enable AppArmor service
+      chroot "$1" systemctl enable apparmor
+
+      # Create AppArmor status script
+      install_component_script "templates/security/apparmor/apparmor-status" "/usr/local/bin/apparmor-status" "$1"
+      install_component_script "templates/security/apparmor/apparmor-status.sh" "/etc/profile.d/apparmor-status.sh" "$1"
+
+      echo "✅ AppArmor core configured"

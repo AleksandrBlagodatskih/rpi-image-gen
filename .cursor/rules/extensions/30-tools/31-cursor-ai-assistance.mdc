@@ -1,0 +1,318 @@
+---
+alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.path.includes("config/") || cursor.file.isNew}
+---
+
+
+# Правило 31: AI-ассистируемая разработка в Cursor
+
+## Назначение правила
+Предоставляет интеграцию с Cursor AI Assistant для автоматизированной разработки расширений rpi-image-gen.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Cursor AI Prompts для разработки расширений
+
+### Генерация базового расширения
+```
+Создай расширение rpi-image-gen для [функциональность] со следующими характеристиками:
+- Тип расширения: [device|application|infrastructure]
+- Базовый слой: [указать из layer/]
+- Переменные конфигурации: [список переменных]
+- Хуки: setup, customize, cleanup
+- Документация на русском языке
+- Тесты для функциональности
+```
+
+### Валидация конфигурации
+```
+Проверь корректность YAML конфигурации rpi-image-gen:
+- Структура соответствует стандартам (device/image/layer секции)
+- Переменные имеют правильные префиксы IGconf_*
+- Зависимости слоев указаны правильно в X-Env-Layer-Requires
+- Метаданные заполнены полностью (X-Env-Layer-*)
+- Переменные окружения имеют валидацию (X-Env-Var-*-Valid)
+```
+
+### Оптимизация производительности
+```
+Оптимизируй расширение rpi-image-gen для производительности:
+- Анализируй использование CPU/памяти в хуках
+- Предложи параллельное выполнение независимых операций
+- Оптимизируй размер образа (удали неиспользуемые пакеты)
+- Добавь кэширование для повторяющихся операций
+```
+
+### Отладка проблем сборки
+```
+Найди и исправь проблему в сборке rpi-image-gen:
+- Анализируй логи сборки на ошибки
+- Проверь зависимости между слоями
+- Валидируй переменные окружения
+- Предложи решения для типичных проблем
+```
+
+## Улучшенные автоматизированные шаблоны
+
+### Быстрая генерация слоев
+
+#### Интерактивный генератор слоев
+```bash
+# Создание нового слоя с интерактивным мастером
+rpi-image-gen layer --create --interactive
+
+# Генерация на основе шаблона
+rpi-image-gen layer --template security-core --name my-security-layer
+
+# Создание слоя с зависимостями
+rpi-image-gen layer --create --depends "apparmor-core,auditd-core" --category security
+```
+
+#### Автоматическая генерация метаданных
+```yaml
+# Автоматически генерируется из параметров
+# X-Env-Layer-Name: my-extension
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Auto-generated security extension
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-VarPrefix: my_extension
+```
+
+### Device Extension Template
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: ${extension_name}
+# X-Env-Layer-Category: device
+# X-Env-Layer-Description: ${description}
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+# X-Env-VarPrefix: device
+#
+# X-Env-Var-firmware_version: latest
+# X-Env-Var-firmware_version-Description: Версия firmware для устройства
+# X-Env-Var-firmware_version-Required: false
+# X-Env-Var-firmware_version-Valid: latest,stable,beta
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - raspberrypi-bootloader
+    - raspberrypi-kernel
+    - linux-firmware-raspi
+  customize-hooks:
+    - |
+      # Настройка специфичных параметров устройства
+      configure_device_specifics() {
+        local firmware_version="${IGconf_device_firmware_version:-latest}"
+
+        case "$firmware_version" in
+          "latest") rpi-eeprom-update -a ;;
+          "stable") rpi-eeprom-update ;;
+          "beta") rpi-eeprom-update -r ;;
+        esac
+
+        # Дополнительная настройка устройства
+        echo "Настройка устройства ${IGconf_device_type:-unknown} завершена"
+      }
+
+      configure_device_specifics
+```
+
+### Application Extension Template
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: ${extension_name}
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: ${description}
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,net-misc
+# X-Env-VarPrefix: app
+#
+# X-Env-Var-service_port: 8080
+# X-Env-Var-service_port-Description: Порт для веб-сервиса
+# X-Env-Var-service_port-Required: false
+# X-Env-Var-service_port-Valid: int:1024-65535
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - ${app_packages:-curl wget}
+  customize-hooks:
+    - |
+      # Установка и настройка приложения
+      install_application() {
+        local port="${IGconf_app_service_port:-8080}"
+
+        # Создание пользователя для приложения
+        useradd --system --shell /bin/false --home /var/lib/${IGconf_app_name} ${IGconf_app_name}
+
+        # Настройка сервиса
+        cat > /etc/systemd/system/${IGconf_app_name}.service << EOF
+[Unit]
+Description=${IGconf_app_description:-Application Service}
+After=network.target
+
+[Service]
+User=${IGconf_app_name}
+ExecStart=/usr/local/bin/${IGconf_app_name} --port $port
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        systemctl enable ${IGconf_app_name}
+      }
+
+      install_application
+```
+
+## Быстрые команды для Cursor
+
+### Тестирование расширения
+```bash
+# Валидация слоя
+rpi-image-gen layer --describe ${layer_name}
+
+# Тестовая сборка
+rpi-image-gen build -c ${config_file} --dry-run
+
+# Линтинг конфигурации
+rpi-image-gen metadata --lint ${layer_file}
+```
+
+### Отладка сборки
+```bash
+# Детальное логирование
+export VERBOSE=1
+rpi-image-gen build -c ${config_file}
+
+# Проверка зависимостей
+rpi-image-gen layer --list --depends ${layer_name}
+
+# Анализ переменных окружения
+env | grep IGconf_ | sort
+```
+
+### Профилирование производительности
+```bash
+# Мониторинг ресурсов во время сборки
+time rpi-image-gen build -c ${config_file}
+
+# Анализ размера образа
+ls -lh work/image-*/image-*.img
+```
+
+## Интеграция с Cursor IDE
+
+### Автодополнение переменных
+- `IGconf_extension_*` - переменные расширения
+- `IGconf_device_*` - переменные устройства
+- `IGconf_image_*` - переменные образа
+
+### Автоматическая валидация
+- Синтаксис YAML при сохранении
+- Проверка префиксов переменных
+- Валидация зависимостей слоев
+- Предупреждения о лучших практиках
+
+---
+
+### Автоматизация генерации кода
+
+#### Умные сниппеты для быстрого создания
+```bash
+# Генерация полного слоя безопасности
+generate-security-layer() {
+    local name="$1"
+    local category="${2:-security}"
+
+    # Автоматическая генерация структуры
+    mkdir -p "layer/${category}/${name}"
+    generate-metadata "$name" "$category"
+    generate-config "$name"
+    generate-hooks "$name"
+    generate-tests "$name"
+}
+
+# Генерация переменных окружения
+generate-variables() {
+    local prefix="$1"
+    local vars="$2"
+
+    echo "# X-Env-VarPrefix: $prefix"
+    for var in $vars; do
+        echo "# X-Env-Var-${var}: \${default_value}"
+        echo "# X-Env-Var-${var}-Desc: Description for $var"
+        echo "# X-Env-Var-${var}-Required: n"
+        echo "# X-Env-Var-${var}-Valid: string"
+        echo "# X-Env-Var-${var}-Set: lazy"
+        echo "#"
+    done
+}
+
+# Пример использования
+generate-security-layer "my-hardening" "security"
+generate-variables "my_hardening" "enable mode level"
+```
+
+#### Автоматическая генерация функций
+```bash
+# Генерация типовых функций
+generate-error-handling() {
+    cat << 'EOF'
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+warn() {
+    echo "WARN: $*" >&2
+}
+EOF
+}
+
+generate-validation() {
+    local component="$1"
+    cat << EOF
+# Validate component enablement
+validate_component_enabled() {
+    local component="\$1"
+    igconf isy "IGconf_\${component}_enable" || {
+        echo "Component \$component is disabled"
+        exit 0
+    }
+}
+EOF
+}
+
+# Автоматическая вставка в новые файлы
+generate-boilerplate() {
+    echo "#!/bin/bash"
+    echo "set -euo pipefail"
+    echo ""
+    generate-error-handling
+    echo ""
+    generate-validation "component_name"
+}
+```
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано для оптимизации работы с rpi-image-gen в Cursor IDE

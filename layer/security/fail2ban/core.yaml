@@ -1,0 +1,65 @@
+# METABEGIN
+# X-Env-Layer-Name: fail2ban-core
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Fail2Ban core installation and basic configuration
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: fail2ban-core
+# X-Env-VarPrefix: fail2ban_core
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable Fail2Ban core installation
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Valid: bool
+# X-Env-Var-loglevel: INFO
+# X-Env-Var-loglevel-Desc: Fail2Ban logging level (DEBUG, INFO, WARNING, ERROR)
+# X-Env-Var-loglevel-Required: n
+# X-Env-Var-loglevel-Valid: DEBUG,INFO,WARNING,ERROR
+# X-Env-Var-loglevel-Set: lazy
+# X-Env-Var-logtarget: /var/log/fail2ban.log
+# X-Env-Var-logtarget-Desc: Fail2Ban log file location
+# X-Env-Var-logtarget-Required: n
+# X-Env-Var-logtarget-Valid: string
+# X-Env-Var-logtarget-Set: lazy
+# X-Env-Var-dbfile: /var/lib/fail2ban/fail2ban.sqlite3
+# X-Env-Var-dbfile-Desc: Fail2Ban database file location
+# X-Env-Var-dbfile-Required: n
+# X-Env-Var-dbfile-Valid: string
+# X-Env-Var-dbfile-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - fail2ban
+  customize-hooks:
+    - |
+      #!/bin/bash
+      set -euo pipefail
+
+      # Source common functions
+      . "templates/security/common.sh"
+
+      # Validate component enablement
+      validate_component_enabled "fail2ban_core"
+
+      echo "🛡️ Installing Fail2Ban core..."
+
+      # Create backup directory
+      BACKUP_DIR=$(create_backup_dir "fail2ban-core" "$1")
+
+      # Configure basic jail.local
+      install -m 644 "templates/security/fail2ban/jail.local" "$1/etc/fail2ban/jail.local"
+
+      # Apply configuration variables
+      LOGLEVEL=${IGconf_fail2ban_core_loglevel:-INFO}
+      LOGTARGET=${IGconf_fail2ban_core_logtarget:-/var/log/fail2ban.log}
+      DBFILE=${IGconf_fail2ban_core_dbfile:-/var/lib/fail2ban/fail2ban.sqlite3}
+
+      # Update jail.local with custom settings
+      sed -i "s|^loglevel = .*|loglevel = $LOGLEVEL|" "$1/etc/fail2ban/jail.local"
+      sed -i "s|^logtarget = .*|logtarget = $LOGTARGET|" "$1/etc/fail2ban/jail.local"
+      sed -i "s|^dbfile = .*|dbfile = $DBFILE|" "$1/etc/fail2ban/jail.local"
+
+      # Enable fail2ban service
+      chroot "$1" systemctl enable fail2ban
+
+      echo "✅ Fail2Ban core installed and configured"

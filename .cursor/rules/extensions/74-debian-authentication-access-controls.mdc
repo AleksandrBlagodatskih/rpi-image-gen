@@ -1,0 +1,613 @@
+---
+alwaysApply: ${cursor.file.content.includes("auth") || cursor.file.content.includes("pam")}
+---
+
+
+# Правило 74: Аутентификация и контроль доступа Debian
+
+## Назначение правила
+Определяет стандарты систем аутентификации, авторизации и контроля доступа в Debian GNU/Linux.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Аутентификация и контроль доступа Debian
+
+### Настройка пользователей и групп
+
+#### Управление учетными записями пользователей:
+```bash
+#!/bin/bash
+# Управление пользователями и группами Debian
+
+user_management() {
+    echo "=== Управление пользователями и группами Debian ==="
+
+    # Создание пользователя с расширенными опциями
+    create_user() {
+        local username="$1"
+        local fullname="$2"
+        local shell="${3:-/bin/bash}"
+        local groups="${4:-}"
+
+        echo "Создание пользователя: $username"
+
+        # Проверка существования пользователя
+        if id "$username" >/dev/null 2>&1; then
+            echo "Пользователь $username уже существует"
+            return 1
+        fi
+
+        # Создание пользователя
+        useradd -m -s "$shell" -c "$fullname" "$username"
+
+        # Добавление в группы
+        if [ -n "$groups" ]; then
+            usermod -aG "$groups" "$username"
+        fi
+
+        # Настройка пароля
+        echo "Установка пароля для $username"
+        passwd "$username"
+
+        # Создание домашней директории с правильными правами
+        chown -R "$username:$username" "/home/$username"
+        chmod 755 "/home/$username"
+
+        echo "✓ Пользователь $username создан"
+    }
+
+    # Настройка sudo для пользователя
+    setup_sudo() {
+        local username="$1"
+
+        echo "Настройка sudo для пользователя: $username"
+
+        # Создание файла sudoers для пользователя
+        cat > "/etc/sudoers.d/$username" << EOF
+# Sudo configuration for $username
+$username ALL=(ALL) ALL
+EOF
+
+        chmod 440 "/etc/sudoers.d/$username"
+
+        # Проверка синтаксиса
+        if visudo -c -f "/etc/sudoers.d/$username"; then
+            echo "✓ Sudo настроен для $username"
+        else
+            echo "✗ Ошибка в конфигурации sudo"
+            rm "/etc/sudoers.d/$username"
+            return 1
+        fi
+    }
+
+    # Создание группы
+    create_group() {
+        local groupname="$1"
+        local gid="${2:-}"
+
+        echo "Создание группы: $groupname"
+
+        if [ -n "$gid" ]; then
+            groupadd -g "$gid" "$groupname"
+        else
+            groupadd "$groupname"
+        fi
+
+        echo "✓ Группа $groupname создана"
+    }
+
+    # Управление членством в группах
+    manage_group_membership() {
+        local action="$1"
+        local username="$2"
+        local groupname="$3"
+
+        case "$action" in
+            "add")
+                usermod -aG "$groupname" "$username"
+                echo "✓ Пользователь $username добавлен в группу $groupname"
+                ;;
+            "remove")
+                gpasswd -d "$username" "$groupname"
+                echo "✓ Пользователь $username удален из группы $groupname"
+                ;;
+            *)
+                echo "Использование: manage_group_membership <add|remove> <user> <group>"
+                return 1
+                ;;
+        esac
+    }
+
+    # Основная логика
+    case "$1" in
+        "create")
+            create_user "$2" "$3" "$4" "$5"
+            ;;
+        "sudo")
+            setup_sudo "$2"
+            ;;
+        "group")
+            create_group "$2" "$3"
+            ;;
+        "membership")
+            shift
+            manage_group_membership "$@"
+            ;;
+        *)
+            echo "Использование: $0 <create|sudo|group|membership> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+# Аудит пользователей
+audit_users() {
+    echo "=== Аудит пользователей системы ==="
+
+    # Активные пользователи
+    echo "Активные пользователи:"
+    who | awk '{print $1}' | sort | uniq | while read -r user; do
+        echo "  $user"
+    done
+
+    # Пользователи с UID >= 1000
+    echo -e "\nОбычные пользователи:"
+    getent passwd | awk -F: '$3 >= 1000 {print $1 " (UID: " $3 ")"}' | sort
+
+    # Пользователи с sudo правами
+    echo -e "\nПользователи с sudo правами:"
+    getent group sudo | cut -d: -f4 | tr ',' '\n' | while read -r user; do
+        [ -n "$user" ] && echo "  $user"
+    done
+
+    # Проверка пустых паролей
+    echo -e "\nПроверка пустых паролей:"
+    awk -F: '($2 == "" ) { print $1 " не имеет пароля!"}' /etc/shadow
+
+    # Проверка пользователей без паролей
+    echo -e "\nПользователи без паролей:"
+    awk -F: '($2 == "!" || $2 == "*") { print $1 " отключен"}' /etc/shadow
+}
+
+main() {
+    case "$1" in
+        "user")
+            shift
+            user_management "$@"
+            ;;
+        "audit")
+            audit_users
+            ;;
+        *)
+            echo "Использование: $0 <user|audit> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Настройка PAM (Pluggable Authentication Modules)
+
+#### Конфигурация многофакторной аутентификации:
+```bash
+#!/bin/bash
+# Настройка PAM для Debian
+
+configure_pam() {
+    echo "=== Настройка PAM (Pluggable Authentication Modules) ==="
+
+    # Резервное копирование PAM конфигураций
+    backup_pam_configs() {
+        local backup_dir="/etc/pam.d/backup.$(date +%Y%m%d%H%M%S)"
+        mkdir -p "$backup_dir"
+
+        cp -r /etc/pam.d/* "$backup_dir/"
+        echo "Резервная копия PAM создана: $backup_dir"
+    }
+
+    # Настройка PAM для SSH
+    configure_ssh_pam() {
+        echo "Настройка PAM для SSH..."
+
+        cat > /etc/pam.d/sshd << EOF
+# PAM configuration for SSH
+@include common-auth
+@include common-account
+@include common-session
+@include common-password
+
+# Additional security measures
+auth required pam_faildelay.so delay=2000000
+auth required pam_tally2.so deny=3 unlock_time=600
+account required pam_tally2.so
+session required pam_limits.so
+EOF
+
+        echo "✓ PAM для SSH настроен"
+    }
+
+    # Настройка PAM для sudo
+    configure_sudo_pam() {
+        echo "Настройка PAM для sudo..."
+
+        cat > /etc/pam.d/sudo << EOF
+# PAM configuration for sudo
+@include common-auth
+@include common-account
+@include common-session
+
+# Sudo specific configuration
+auth required pam_wheel.so use_uid
+auth required pam_tally2.so deny=5 unlock_time=900
+account required pam_tally2.so
+EOF
+
+        echo "✓ PAM для sudo настроен"
+    }
+
+    # Настройка многофакторной аутентификации
+    setup_mfa() {
+        echo "Настройка многофакторной аутентификации..."
+
+        # Установка необходимых пакетов
+        apt-get install -y libpam-google-authenticator
+
+        # Добавление MFA в common-auth
+        if ! grep -q "pam_google_authenticator.so" /etc/pam.d/common-auth; then
+            sed -i '/@include common-auth/a auth required pam_google_authenticator.so' /etc/pam.d/common-auth
+        fi
+
+        echo "✓ MFA настроен (требуется настройка для каждого пользователя: google-authenticator)"
+    }
+
+    # Настройка лимитов сеанса
+    configure_session_limits() {
+        echo "Настройка лимитов сеанса..."
+
+        cat > /etc/security/limits.d/debian-hardening.conf << EOF
+# Session limits for security
+* soft core 0
+* hard core 0
+* soft nofile 1024
+* hard nofile 2048
+* soft nproc 512
+* hard nproc 1024
+
+# Root limits
+root soft nofile 2048
+root hard nofile 4096
+EOF
+
+        echo "✓ Лимиты сеанса настроены"
+    }
+
+    # Основная логика
+    case "$1" in
+        "backup")
+            backup_pam_configs
+            ;;
+        "ssh")
+            configure_ssh_pam
+            ;;
+        "sudo")
+            configure_sudo_pam
+            ;;
+        "mfa")
+            setup_mfa
+            ;;
+        "limits")
+            configure_session_limits
+            ;;
+        "all")
+            backup_pam_configs
+            configure_ssh_pam
+            configure_sudo_pam
+            configure_session_limits
+            ;;
+        *)
+            echo "Использование: $0 <backup|ssh|sudo|mfa|limits|all>"
+            exit 1
+            ;;
+    esac
+}
+
+# Управление ключами SSH
+ssh_key_management() {
+    echo "=== Управление SSH ключами ==="
+
+    # Генерация SSH ключа
+    generate_ssh_key() {
+        local username="$1"
+        local key_type="${2:-ed25519}"
+        local key_file="/home/$username/.ssh/id_$key_type"
+
+        echo "Генерация SSH ключа для пользователя: $username"
+
+        # Создание директории .ssh
+        mkdir -p "/home/$username/.ssh"
+        chown "$username:$username" "/home/$username/.ssh"
+        chmod 700 "/home/$username/.ssh"
+
+        # Генерация ключа
+        case "$key_type" in
+            "rsa")
+                su - "$username" -c "ssh-keygen -t rsa -b 4096 -f '$key_file' -N '' -C '$username@$(hostname)'"
+                ;;
+            "ed25519")
+                su - "$username" -c "ssh-keygen -t ed25519 -f '$key_file' -N '' -C '$username@$(hostname)'"
+                ;;
+            "ecdsa")
+                su - "$username" -c "ssh-keygen -t ecdsa -b 521 -f '$key_file' -N '' -C '$username@$(hostname)'"
+                ;;
+            *)
+                echo "Неподдерживаемый тип ключа: $key_type"
+                return 1
+                ;;
+        esac
+
+        # Настройка authorized_keys
+        cat "${key_file}.pub" >> "/home/$username/.ssh/authorized_keys"
+        chmod 600 "/home/$username/.ssh/authorized_keys"
+        chown "$username:$username" "/home/$username/.ssh/authorized_keys"
+
+        echo "✓ SSH ключ сгенерирован: $key_file"
+        echo "Публичный ключ добавлен в authorized_keys"
+    }
+
+    # Управление authorized_keys
+    manage_authorized_keys() {
+        local action="$1"
+        local username="$2"
+        local key="$3"
+
+        local auth_file="/home/$username/.ssh/authorized_keys"
+
+        case "$action" in
+            "add")
+                echo "$key" >> "$auth_file"
+                echo "✓ Ключ добавлен для пользователя $username"
+                ;;
+            "remove")
+                sed -i "\|$key|d" "$auth_file"
+                echo "✓ Ключ удален для пользователя $username"
+                ;;
+            "list")
+                echo "Authorized keys для пользователя $username:"
+                cat "$auth_file" 2>/dev/null || echo "Файл не найден"
+                ;;
+            *)
+                echo "Использование: manage_authorized_keys <add|remove|list> <user> [key]"
+                return 1
+                ;;
+        esac
+    }
+
+    # Основная логика
+    case "$1" in
+        "generate")
+            generate_ssh_key "$2" "$3"
+            ;;
+        "auth")
+            shift
+            manage_authorized_keys "$@"
+            ;;
+        *)
+            echo "Использование: $0 <generate|auth> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main() {
+    case "$1" in
+        "pam")
+            shift
+            configure_pam "$@"
+            ;;
+        "ssh")
+            shift
+            ssh_key_management "$@"
+            ;;
+        *)
+            echo "Использование: $0 <pam|ssh> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+### Мониторинг доступа и аудита
+
+#### Система мониторинга и логирования доступа:
+```bash
+#!/bin/bash
+# Мониторинг доступа и аудита Debian
+
+access_monitoring() {
+    echo "=== Мониторинг доступа и аудита Debian ==="
+
+    # Настройка auditd
+    setup_auditd() {
+        echo "Настройка auditd для мониторинга доступа..."
+
+        # Установка auditd
+        apt-get install -y auditd audispd-plugins
+
+        # Настройка правил аудита
+        cat > /etc/audit/rules.d/access-monitoring.rules << EOF
+# Audit rules for access monitoring
+
+# Monitor login/logout events
+-w /var/log/wtmp -p wa -k logins
+-w /var/run/utmp -p wa -k logins
+-w /var/log/btmp -p wa -k logins
+
+# Monitor sudo usage
+-w /etc/sudoers -p wa -k sudo
+-w /etc/sudoers.d/ -p wa -k sudo
+
+# Monitor user/group modifications
+-w /etc/passwd -p wa -k user_mod
+-w /etc/group -p wa -k group_mod
+-w /etc/shadow -p wa -k shadow
+
+# Monitor SSH access
+-w /etc/ssh/sshd_config -p wa -k ssh_config
+-w /var/log/auth.log -p wa -k auth_log
+
+# Monitor PAM configuration
+-w /etc/pam.d/ -p wa -k pam_config
+
+# Monitor file access
+-a always,exit -F arch=b64 -S open,openat,creat -F exit=-EPERM -k file_access_denied
+-a always,exit -F arch=b64 -S open,openat,creat -F exit=-EACCES -k file_access_denied
+EOF
+
+        # Перезагрузка правил
+        augenrules --load
+
+        # Включение auditd
+        systemctl enable auditd
+        systemctl start auditd
+
+        echo "✓ Auditd настроен для мониторинга доступа"
+    }
+
+    # Мониторинг неудачных попыток входа
+    monitor_failed_logins() {
+        echo "Мониторинг неудачных попыток входа..."
+
+        # Проверка последних неудачных входов
+        echo "Последние неудачные попытки входа:"
+        lastb | head -10 2>/dev/null || echo "Нет записей о неудачных входах"
+
+        # Проверка блокировки учетных записей
+        echo -e "\nПроверка блокировки учетных записей:"
+        pam_tally2 2>/dev/null | while read -r line; do
+            echo "  $line"
+        done
+    }
+
+    # Анализ логов аутентификации
+    analyze_auth_logs() {
+        echo "Анализ логов аутентификации..."
+
+        local log_file="/var/log/auth.log"
+
+        if [ ! -f "$log_file" ]; then
+            echo "Файл лога не найден: $log_file"
+            return 1
+        fi
+
+        echo "Статистика аутентификации за последние 24 часа:"
+        echo "Успешных входов: $(grep -c "session opened" "$log_file" 2>/dev/null || echo '0')"
+        echo "Неудачных попыток: $(grep -c "FAILED" "$log_file" 2>/dev/null || echo '0')"
+        echo "SSH подключений: $(grep -c "sshd.*Accepted" "$log_file" 2>/dev/null || echo '0')"
+
+        # Топ неудачных попыток по IP
+        echo -e "\nТоп неудачных попыток по IP:"
+        grep "Failed password" "$log_file" 2>/dev/null | \
+            grep -oE "from [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" | \
+            cut -d' ' -f2 | sort | uniq -c | sort -nr | head -5 || echo "Нет данных"
+    }
+
+    # Основная логика
+    case "$1" in
+        "setup")
+            setup_auditd
+            ;;
+        "failed")
+            monitor_failed_logins
+            ;;
+        "analyze")
+            analyze_auth_logs
+            ;;
+        "all")
+            setup_auditd
+            echo ""
+            monitor_failed_logins
+            echo ""
+            analyze_auth_logs
+            ;;
+        *)
+            echo "Использование: $0 <setup|failed|analyze|all>"
+            exit 1
+            ;;
+    esac
+}
+
+# Создание отчета безопасности
+generate_security_report() {
+    local report_file="/var/log/security-report-$(date +%Y%m%d).txt"
+
+    echo "Генерация отчета безопасности: $report_file"
+
+    {
+        echo "=== Отчет безопасности Debian ==="
+        echo "Дата: $(date)"
+        echo ""
+
+        echo "=== Пользователи и группы ==="
+        audit_users
+
+        echo -e "\n=== Мониторинг доступа ==="
+        monitor_failed_logins
+
+        echo -e "\n=== Анализ аутентификации ==="
+        analyze_auth_logs
+
+        echo -e "\n=== Рекомендации ==="
+        echo "1. Регулярно проверяйте логи аутентификации"
+        echo "2. Настройте многофакторную аутентификацию"
+        echo "3. Мониторьте неудачные попытки входа"
+        echo "4. Используйте strong пароли"
+        echo "5. Регулярно обновляйте систему"
+
+    } 2>/dev/null > "$report_file"
+
+    echo "Отчет сохранен: $report_file"
+}
+
+main() {
+    case "$1" in
+        "monitor")
+            shift
+            access_monitoring "$@"
+            ;;
+        "report")
+            generate_security_report
+            ;;
+        *)
+            echo "Использование: $0 <monitor|report> [параметры]"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано на основе раздела Debian authentication and access controls

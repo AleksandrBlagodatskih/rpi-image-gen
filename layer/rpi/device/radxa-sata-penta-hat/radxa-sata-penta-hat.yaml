@@ -1,0 +1,176 @@
+# METABEGIN
+# X-Env-Layer-Name: radxa-sata-penta-hat
+# X-Env-Layer-Category: device
+# X-Env-Layer-Desc: Radxa SATA Penta HAT support for Raspberry Pi 5 with PCIe Gen 3.0 and SATA initramfs hooks
+# X-Env-Layer-Version: 1.1.0
+# X-Env-Layer-Requires: device-base,rpi-boot-firmware
+# X-Env-Layer-Provides: sata-controller,jmb585-support
+#
+# X-Env-VarPrefix: radxa_sata
+#
+# X-Env-Var-pcie_gen3: y
+# X-Env-Var-pcie_gen3-Desc: Enable PCIe Gen 3.0 and SATA optimizations for JMB585 controller
+# X-Env-Var-pcie_gen3-Required: n
+# X-Env-Var-pcie_gen3-Valid: bool
+# X-Env-Var-pcie_gen3-Set: immediate
+#
+# X-Env-Var-initramfs_sata: y
+# X-Env-Var-initramfs_sata-Desc: Enable initramfs SATA initialization with RP1 and PCIe modules
+# X-Env-Var-initramfs_sata-Required: n
+# X-Env-Var-initramfs_sata-Valid: bool
+# X-Env-Var-initramfs_sata-Set: immediate
+#
+# X-Env-Var-enable_gpio_power: n
+# X-Env-Var-enable_gpio_power-Desc: Enable GPIO power management for HAT (experimental)
+# X-Env-Var-enable_gpio_power-Required: n
+# X-Env-Var-enable_gpio_power-Valid: bool
+# X-Env-Var-enable_gpio_power-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    # PCIe Gen 3.0 and SATA optimizations for JMB585 controller
+    - |
+      set -eu
+      if [ "${IGconf_radxa_sata_pcie_gen3:-y}" = "y" ]; then
+        echo "# Radxa SATA Penta HAT: PCIe Gen 3.0 for JMB585" >> $1/boot/firmware/config.txt
+        echo "dtparam=pciex1_gen=3" >> $1/boot/firmware/config.txt
+        echo "dtparam=pciex1_aspm=off" >> $1/boot/firmware/config.txt
+        echo "dtparam=pciex1" >> $1/boot/firmware/config.txt
+        echo "dtparam=sata_aggressive_linkpwr=1" >> $1/boot/firmware/config.txt
+      fi
+
+    # Initramfs SATA initialization
+    - |
+      set -eu
+      if [ "${IGconf_radxa_sata_initramfs_sata:-y}" = "y" ]; then
+        # Setup initramfs directories
+        mkdir -p $1/etc/initramfs-tools/hooks
+        mkdir -p $1/etc/initramfs-tools/scripts/local-top
+
+        # Copy SATA hook
+        install -m 755 device/initramfs-tools/hooks/sata_penta $1/etc/initramfs-tools/hooks/
+
+        # Add SATA modules
+        echo "# Radxa SATA Penta HAT modules" >> $1/etc/initramfs-tools/modules
+        grep -v '^#' device/initramfs-tools/modules/initramfs-modules | grep -v '^$' >> $1/etc/initramfs-tools/modules
+
+        # Configure initramfs
+        sed -i 's/MODULES=most/MODULES=list/' $1/etc/initramfs-tools/initramfs.conf
+
+        # GPIO power management (experimental) - SECURE VERSION
+        if [ "${IGconf_radxa_sata_enable_gpio_power}" = "y" ]; then
+          # Create systemd service for safe GPIO management
+          mkdir -p $1/etc/systemd/system
+          cat > $1/etc/systemd/system/radxa-sata-power.service << 'EOF'
+[Unit]
+Description=Radxa SATA Penta HAT Power Management
+After=local-fs.target
+ConditionPathExists=/sys/class/pci_bus/0000:01
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/radxa-sata-power-control start
+ExecStop=/usr/local/bin/radxa-sata-power-control stop
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+          # Create safe power control script
+          mkdir -p $1/usr/local/bin
+          cat > $1/usr/local/bin/radxa-sata-power-control << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+# Safe GPIO power control for Radxa SATA Penta HAT
+# Only allows specific, validated operations
+
+GPIO_PIN=26
+GPIO_CHIP="gpiochip4"
+
+validate_environment() {
+    # Validate that we're running in expected environment
+    if [ ! -d "/sys/class/pci_bus/0000:01" ]; then
+        echo "ERROR: PCIe bus not found - HAT may not be connected" >&2
+        exit 1
+    fi
+
+    # Check for JMB585 controller presence
+    if ! lspci -d "197b:0585" >/dev/null 2>&1; then
+        echo "ERROR: JMB585 SATA controller not detected" >&2
+        exit 1
+    fi
+}
+
+setup_gpio() {
+    local gpio_base="/sys/class/gpio"
+
+    # Export GPIO pin if not already exported
+    if [ ! -d "${gpio_base}/gpio${GPIO_PIN}" ]; then
+        echo "${GPIO_PIN}" > "${gpio_base}/export" 2>/dev/null || {
+            echo "WARNING: Could not export GPIO ${GPIO_PIN}" >&2
+            return 1
+        }
+    fi
+
+    # Set direction to output
+    echo "out" > "${gpio_base}/gpio${GPIO_PIN}/direction" 2>/dev/null || {
+        echo "WARNING: Could not set GPIO ${GPIO_PIN} direction" >&2
+        return 1
+    }
+
+    return 0
+}
+
+power_on() {
+    validate_environment
+
+    if setup_gpio; then
+        echo "1" > "/sys/class/gpio/gpio${GPIO_PIN}/value" 2>/dev/null || {
+            echo "WARNING: Could not set GPIO ${GPIO_PIN} to high" >&2
+            return 1
+        }
+        echo "Radxa SATA Penta HAT power enabled (GPIO ${GPIO_PIN})"
+    else
+        echo "WARNING: GPIO setup failed, HAT may not receive power" >&2
+    fi
+}
+
+power_off() {
+    if [ -d "/sys/class/gpio/gpio${GPIO_PIN}" ]; then
+        echo "0" > "/sys/class/gpio/gpio${GPIO_PIN}/value" 2>/dev/null || {
+            echo "WARNING: Could not set GPIO ${GPIO_PIN} to low" >&2
+        }
+        echo "Radxa SATA Penta HAT power disabled (GPIO ${GPIO_PIN})"
+    fi
+}
+
+case "${1:-}" in
+    start)
+        power_on
+        ;;
+    stop)
+        power_off
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}" >&2
+        exit 1
+        ;;
+esac
+EOF
+
+          chmod 755 $1/usr/local/bin/radxa-sata-power-control
+
+          # Enable the service
+          chroot $1 systemctl enable radxa-sata-power.service 2>/dev/null || true
+
+          echo "Secure GPIO power management configured for Radxa SATA Penta HAT"
+        fi
+
+        # Update initramfs
+        chroot $1 update-initramfs -u -k all
+      fi

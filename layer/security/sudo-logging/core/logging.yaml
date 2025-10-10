@@ -1,0 +1,65 @@
+# METABEGIN
+# X-Env-Layer-Name: sudo-logging-core-logging
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Comprehensive sudo logging configuration
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: sudo-logging-core-basic
+# X-Env-Layer-Provides: sudo-logging-logging
+# X-Env-VarPrefix: sudo_logging
+# X-Env-Var-log_input: y
+# X-Env-Var-log_input-Description: Log input for sudo commands
+# X-Env-Var-log_input-Required: false
+# X-Env-Var-log_input-Valid: bool
+# X-Env-Var-log_input-Set: lazy
+# X-Env-Var-log_output: y
+# X-Env-Var-log_output-Description: Log output for sudo commands
+# X-Env-Var-log_output-Required: false
+# X-Env-Var-log_output-Valid: bool
+# X-Env-Var-log_output-Set: lazy
+# X-Env-Var-compress_logs: y
+# X-Env-Var-compress_logs-Description: Compress sudo log files
+# X-Env-Var-compress_logs-Required: false
+# X-Env-Var-compress_logs-Valid: bool
+# X-Env-Var-compress_logs-Set: lazy
+# X-Env-Var-log_format: json
+# X-Env-Var-log_format-Description: Log format for sudo (json/text)
+# X-Env-Var-log_format-Required: false
+# X-Env-Var-log_format-Valid: json,text
+# X-Env-Var-log_format-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      echo "📝 Installing sudo logging configuration..."
+
+      # PHASE 5: Logging Configuration
+      echo "📝 Configuring sudo comprehensive logging..."
+
+      # Configure log file
+      LOGFILE=$(igconf getval IGconf_sudo_logging_logfile)
+
+      # Configure log input/output
+      if igconf isy IGconf_sudo_logging_log_input; then
+        echo "✅ Input logging enabled"
+      fi
+
+      if igconf isy IGconf_sudo_logging_log_output; then
+        echo "✅ Output logging enabled"
+      fi
+
+      # Configure log compression
+      if igconf isy IGconf_sudo_logging_compress_logs; then
+        echo "✅ Log compression enabled"
+      fi
+
+      # Configure log format
+      LOG_FORMAT=$(igconf getval IGconf_sudo_logging_log_format)
+      echo "✅ Log format: ${LOG_FORMAT}"
+
+      # Create log directory
+      mkdir -p "$1$(dirname "$LOGFILE")"
+
+      echo "✅ Log file: ${LOGFILE}"
+      echo ""
+      echo "✅ sudo logging comprehensive configuration completed!"

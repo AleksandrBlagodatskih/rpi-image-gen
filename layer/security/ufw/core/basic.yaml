@@ -1,0 +1,140 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-core-basic
+# X-Env-Layer-Category: security
+# X-Env-Layer-Desc: Basic UFW firewall configuration with core policies
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: firewall-basic
+# X-Env-VarPrefix: ufw
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Desc: Enable UFW firewall core functionality
+# X-Env-Var-enable-Required: n
+# X-Env-Var-enable-Set: immediate
+# X-Env-Var-default_input_policy: DROP
+# X-Env-Var-default_input_policy-Desc: Default input policy (ACCEPT/DROP/REJECT)
+# X-Env-Var-default_input_policy-Required: n
+# X-Env-Var-default_input_policy-Valid: ACCEPT,DROP,REJECT
+# X-Env-Var-default_input_policy-Set: lazy
+# X-Env-Var-default_output_policy: ACCEPT
+# X-Env-Var-default_output_policy-Desc: Default output policy (ACCEPT/DROP/REJECT)
+# X-Env-Var-default_output_policy-Required: n
+# X-Env-Var-default_output_policy-Valid: ACCEPT,DROP,REJECT
+# X-Env-Var-default_output_policy-Set: lazy
+# X-Env-Var-default_forward_policy: DROP
+# X-Env-Var-default_forward_policy-Desc: Default forward policy (ACCEPT/DROP/REJECT)
+# X-Env-Var-default_forward_policy-Required: n
+# X-Env-Var-default_forward_policy-Valid: ACCEPT,DROP,REJECT
+# X-Env-Var-default_forward_policy-Set: lazy
+# X-Env-Var-allow_ssh: n
+# X-Env-Var-allow_ssh-Desc: Allow SSH access from anywhere (not recommended for security)
+# X-Env-Var-allow_ssh-Required: n
+# X-Env-Var-allow_ssh-Valid: bool
+# X-Env-Var-allow_ssh-Set: lazy
+#
+# X-Env-Var-ssh_allowed_ips: ""
+# X-Env-Var-ssh_allowed_ips-Desc: Comma-separated list of IP addresses/networks allowed SSH access
+# X-Env-Var-ssh_allowed_ips-Required: n
+# X-Env-Var-ssh_allowed_ips-Valid: string
+# X-Env-Var-ssh_allowed_ips-Set: lazy
+# X-Env-Var-allow_http: n
+# X-Env-Var-allow_http-Desc: Allow HTTP access from anywhere
+# X-Env-Var-allow_http-Required: n
+# X-Env-Var-allow_http-Valid: bool
+# X-Env-Var-allow_http-Set: lazy
+# X-Env-Var-allow_https: n
+# X-Env-Var-allow_https-Desc: Allow HTTPS access from anywhere
+# X-Env-Var-allow_https-Required: n
+# X-Env-Var-allow_https-Valid: bool
+# X-Env-Var-allow_https-Set: lazy
+# X-Env-Var-logging_level: low
+# X-Env-Var-logging_level-Desc: UFW logging level (off/low/medium/high/full)
+# X-Env-Var-logging_level-Required: n
+# X-Env-Var-logging_level-Valid: off,low,medium,high,full
+# X-Env-Var-logging_level-Set: lazy
+# X-Env-Var-rate_limit: y
+# X-Env-Var-rate_limit-Desc: Enable rate limiting for new connections
+# X-Env-Var-rate_limit-Required: n
+# X-Env-Var-rate_limit-Valid: bool
+# X-Env-Var-rate_limit-Set: lazy
+# X-Env-Var-ipv6_enable: y
+# X-Env-Var-ipv6_enable-Desc: Enable IPv6 support in UFW
+# X-Env-Var-ipv6_enable-Required: n
+# X-Env-Var-ipv6_enable-Valid: bool
+# X-Env-Var-ipv6_enable-Set: lazy
+# X-Env-Var-apply_rules: n
+# X-Env-Var-apply_rules-Desc: Apply firewall rules during build (dangerous, use post-build)
+# X-Env-Var-apply_rules-Required: n
+# X-Env-Var-apply_rules-Valid: bool
+# X-Env-Var-apply_rules-Set: immediate
+# METAEND
+---
+mmdebstrap:
+  includes:
+    - ufw
+    - curl
+    - wget
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      if [ "${IGconf_ufw_enable:-n}" != "y" ]; then
+        echo "🛡️ UFW disabled by configuration"
+        exit 0
+      fi
+
+      echo "🛡️ Installing UFW firewall basic configuration..."
+
+      # PHASE 1: Validation
+      echo "🔍 Validating UFW installation..."
+
+      # Check that ufw is installed
+      if ! chroot "$1" dpkg -l ufw | grep -q "^ii"; then
+        echo "❌ ERROR: ufw package not installed"
+        exit 1
+      fi
+
+      # Check for required commands
+      for cmd in ufw systemctl; do
+        if ! chroot "$1" command -v "$cmd" >/dev/null 2>&1; then
+          echo "❌ ERROR: $cmd not available in chroot"
+          exit 1
+        fi
+      done
+
+      echo "✅ UFW validated successfully"
+
+      # PHASE 2: Backup
+      echo "💾 Creating backup..."
+      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+      BACKUP_DIR="/root/rpi-image-gen-backups/ufw-basic-$TIMESTAMP"
+      mkdir -p "$1$BACKUP_DIR"
+
+      # Backup existing UFW configuration
+      for dir in /etc/ufw /etc/default/ufw /var/lib/ufw; do
+        if [ -e "$1$dir" ]; then
+          cp -a "$1$dir" "$1$BACKUP_DIR/" 2>/dev/null || true
+        fi
+      done
+
+      echo "✅ Backup created: $BACKUP_DIR"
+
+      # PHASE 3: Core Configuration
+      echo "🔧 Configuring UFW basic settings..."
+
+      # Main configuration file
+      LOGLEVEL=$(igconf getval IGconf_ufw_logging_level)
+      install -m 644 "templates/security/ufw/ufw.conf" "$1/etc/ufw/ufw.conf"
+
+      # Default policies configuration
+      INPUT_POLICY=$(igconf getval IGconf_ufw_default_input_policy)
+      OUTPUT_POLICY=$(igconf getval IGconf_ufw_default_output_policy)
+      FORWARD_POLICY=$(igconf getval IGconf_ufw_default_forward_policy)
+      IPV6_ENABLE=$(igconf isy IGconf_ufw_ipv6_enable && echo "yes" || echo "no")
+
+      install -m 644 "templates/security/ufw/ufw" "$1/etc/default/ufw"
+
+      echo "✅ UFW default policies configured:"
+      echo "   Input: ${INPUT_POLICY}, Output: ${OUTPUT_POLICY}, Forward: ${FORWARD_POLICY}"
+      echo "   IPv6: ${IPV6_ENABLE}, Logging: ${LOGLEVEL}"
+
+      echo ""
+      echo "✅ UFW firewall basic configuration completed!"

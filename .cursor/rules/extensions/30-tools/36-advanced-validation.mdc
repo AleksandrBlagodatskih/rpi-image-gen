@@ -1,0 +1,417 @@
+---
+alwaysApply: ${cursor.file.path.match(/\.(yaml|sh)$/) && !cursor.file.path.includes("work/")}
+---
+
+
+# Правило 36: Продвинутая автоматическая валидация и линтинг
+
+## Назначение правила
+Предоставляет продвинутые инструменты автоматической валидации, линтинга и статического анализа кода расширений rpi-image-gen.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Многоуровневая валидация
+
+### Синтаксическая валидация
+```bash
+# Продвинутая YAML валидация
+validate-yaml-advanced() {
+    local file="$1"
+
+    # Стандартная валидация
+    python3 -c "import yaml; yaml.safe_load(open('$file'))" || return 1
+
+    # Проверка на распространенные ошибки
+    if grep -q "^[[:space:]]*-[[:space:]]*$" "$file"; then
+        echo "⚠️  Empty list items found"
+    fi
+
+    if grep -q ": $" "$file"; then
+        echo "⚠️  Empty values found"
+    fi
+
+    if grep -q "[[:space:]]$" "$file"; then
+        echo "⚠️  Trailing whitespace found"
+        # Автоматическое исправление
+        sed -i 's/[[:space:]]*$//' "$file"
+    fi
+
+    echo "✅ YAML syntax and style validated"
+}
+
+# Валидация Bash скриптов
+validate-bash-advanced() {
+    local file="$1"
+
+    # Синтаксическая проверка
+    bash -n "$file" || return 1
+
+    # Продвинутые проверки
+    if ! grep -q "set -euo pipefail" "$file"; then
+        echo "⚠️  Missing 'set -euo pipefail'"
+    fi
+
+    if grep -q "\$\w\+\s*[^\"']" "$file"; then
+        echo "⚠️  Unquoted variable usage"
+    fi
+
+    if grep -q "rm -rf /" "$file"; then
+        echo "🚨 Dangerous: 'rm -rf /' found"
+    fi
+
+    echo "✅ Bash script validated"
+}
+```
+
+### Семантическая валидация
+```bash
+# Валидация метаданных rpi-image-gen
+validate-rpi-metadata() {
+    local file="$1"
+
+    # Обязательные поля
+    local required_fields=("X-Env-Layer-Name" "X-Env-Layer-Category" "X-Env-Layer-Description" "X-Env-Layer-Version")
+    local missing_fields=()
+
+    for field in "${required_fields[@]}"; do
+        if ! grep -q "$field:" "$file"; then
+            missing_fields+=("$field")
+        fi
+    done
+
+    if [ ${#missing_fields[@]} -gt 0 ]; then
+        echo "❌ Missing required metadata: ${missing_fields[*]}"
+        return 1
+    fi
+
+    # Проверка категорий
+    local category=$(grep "X-Env-Layer-Category:" "$file" | cut -d: -f2 | tr -d ' ')
+    case "$category" in
+        security|extension|device|container|image)
+            echo "✅ Valid category: $category"
+            ;;
+        *)
+            echo "⚠️  Unknown category: $category"
+            ;;
+    esac
+
+    # Проверка префикса переменных
+    if grep -q "X-Env-VarPrefix:" "$file"; then
+        local prefix=$(grep "X-Env-VarPrefix:" "$file" | cut -d: -f2 | tr -d ' ')
+        if ! [[ "$prefix" =~ ^[a-z][a-z0-9_]*$ ]]; then
+            echo "⚠️  Invalid variable prefix format: $prefix"
+        fi
+    fi
+
+    echo "✅ rpi-image-gen metadata validated"
+}
+```
+
+## Автоматический линтинг
+
+### Стилистический линтинг
+```bash
+# Линтинг YAML файлов
+lint-yaml() {
+    local file="$1"
+
+    # Проверка отступов
+    if grep -q "^ " "$file" && ! grep -q "^  " "$file" | head -1; then
+        echo "⚠️  Inconsistent indentation (mix of spaces and tabs)"
+    fi
+
+    # Проверка длины строк
+    local long_lines=$(awk 'length > 120 {print NR ": " $0}' "$file" | wc -l)
+    if [ "$long_lines" -gt 0 ]; then
+        echo "⚠️  $long_lines lines exceed 120 characters"
+    fi
+
+    # Проверка пустых строк
+    local consecutive_blanks=$(grep -c "^$" "$file" | awk '{if(NR==1) sum=$1; else sum+=$1} END {print sum}')
+    if [ "$consecutive_blanks" -gt 5 ]; then
+        echo "⚠️  Too many consecutive blank lines"
+    fi
+
+    echo "✅ YAML style validated"
+}
+
+# Линтинг Bash скриптов
+lint-bash() {
+    local file="$1"
+
+    # Проверка функций
+    local functions=$(grep -c "^[a-zA-Z_][a-zA-Z0-9_]*()" "$file")
+    local lines=$(wc -l < "$file")
+
+    if [ "$lines" -gt 50 ] && [ "$functions" -eq 0 ]; then
+        echo "⚠️  Large script without functions - consider refactoring"
+    fi
+
+    # Проверка комментариев
+    local comment_ratio=$(awk '/^#/ {comments++} END {print comments/NR*100}' "$file")
+    if (( $(echo "$comment_ratio < 10" | bc -l) )); then
+        echo "⚠️  Low comment ratio: ${comment_ratio}%"
+    fi
+
+    # Проверка сложности
+    local complexity=$(grep -c "if \|while \|for \|case " "$file")
+    if [ "$complexity" -gt 15 ]; then
+        echo "⚠️  High cyclomatic complexity: $complexity branches"
+    fi
+
+    echo "✅ Bash style validated"
+}
+```
+
+## Статический анализ
+
+### Анализ зависимостей
+```bash
+# Анализ зависимостей слоев
+analyze-dependencies() {
+    local file="$1"
+
+    # Извлечение зависимостей
+    local deps=$(grep "X-Env-Layer-Requires:" "$file" | cut -d: -f2 | tr -d ' ')
+
+    # Проверка существования зависимостей
+    for dep in $deps; do
+        if [[ "$dep" == *,* ]]; then
+            # Разделить запятую
+            IFS=',' read -ra dep_array <<< "$dep"
+            for single_dep in "${dep_array[@]}"; do
+                if ! find layer/ -name "*${single_dep}*" -type f | grep -q .; then
+                    echo "⚠️  Dependency not found: $single_dep"
+                fi
+            done
+        else
+            if ! find layer/ -name "*${dep}*" -type f | grep -q .; then
+                echo "⚠️  Dependency not found: $dep"
+            fi
+        fi
+    done
+
+    echo "✅ Dependencies analyzed"
+}
+
+# Анализ переменных окружения
+analyze-variables() {
+    local file="$1"
+
+    # Найти все IGconf переменные
+    local igconf_vars=$(grep -o "IGconf_[a-zA-Z0-9_]*" "$file" | sort | uniq)
+
+    # Проверить соответствие префиксу
+    local prefix=$(grep "X-Env-VarPrefix:" "$file" | cut -d: -f2 | tr -d ' ')
+    if [ -n "$prefix" ]; then
+        for var in $igconf_vars; do
+            if [[ "$var" != IGconf_${prefix}_* ]]; then
+                echo "⚠️  Variable doesn't match prefix: $var (expected: IGconf_${prefix}_*)"
+            fi
+        done
+    fi
+
+    # Проверить неиспользуемые переменные из метаданных
+    local declared_vars=$(grep "X-Env-Var-[a-zA-Z0-9_-]*:" "$file" | sed 's/X-Env-Var-\([^:]*\):.*/\1/' | sort | uniq)
+    for var in $declared_vars; do
+        local igconf_var="IGconf_${prefix:-}${prefix:+_}$var"
+        if ! grep -q "$igconf_var" "$file"; then
+            echo "⚠️  Declared variable not used: $igconf_var"
+        fi
+    done
+
+    echo "✅ Variables analyzed"
+}
+```
+
+## Автоматизированные исправления
+
+### Автоисправление распространенных ошибок
+```bash
+# Автоматическое исправление стиля
+auto-fix-style() {
+    local file="$1"
+
+    # Удалить trailing whitespace
+    sed -i 's/[[:space:]]*$//' "$file"
+
+    # Исправить indentation (пробелы вместо табов)
+    sed -i 's/^\t/  /g' "$file"
+
+    # Добавить пустую строку перед комментариями
+    sed -i '/^[[:space:]]*[^#]/a\\' "$file"
+
+    echo "✅ Style auto-fixed"
+}
+
+# Автоматическое добавление error handling
+auto-add-error-handling() {
+    local file="$1"
+
+    if ! grep -q "set -euo pipefail" "$file"; then
+        sed -i '1a set -euo pipefail' "$file"
+        echo "✅ Added error handling"
+    fi
+
+    if ! grep -q "^die()" "$file"; then
+        sed -i '/set -euo pipefail/a \
+die() {\
+    echo "ERROR: $*" >&2\
+    exit 1\
+}' "$file"
+        echo "✅ Added die function"
+    fi
+}
+
+# Автоматическое исправление кавычек
+auto-fix-quotes() {
+    local file="$1"
+
+    # Добавить кавычки к переменным
+    sed -i 's/\$\([a-zA-Z_][a-zA-Z0-9_]*\)/${\1}/g' "$file"
+    sed -i 's/\${[a-zA-Z_][a-zA-Z0-9_]*}/"${}&"/g' "$file"
+
+    echo "✅ Quotes auto-fixed"
+}
+```
+
+## Продвинутый анализ безопасности
+
+### Анализ уязвимостей
+```bash
+# Анализ потенциальных уязвимостей
+analyze-security() {
+    local file="$1"
+
+    # Поиск опасных паттернов
+    if grep -q "eval " "$file"; then
+        echo "🚨 SECURITY: 'eval' usage found - potential code injection"
+    fi
+
+    if grep -q "curl.*|.*bash" "$file"; then
+        echo "🚨 SECURITY: Pipe to bash from curl - potential remote code execution"
+    fi
+
+    if grep -q "chmod 777" "$file"; then
+        echo "🚨 SECURITY: Overly permissive permissions"
+    fi
+
+    if grep -q "sudo.*\$" "$file"; then
+        echo "🚨 SECURITY: sudo with variable - potential privilege escalation"
+    fi
+
+    echo "✅ Security analysis completed"
+}
+
+# Анализ конфиденциальности
+analyze-privacy() {
+    local file="$1"
+
+    # Поиск hardcoded credentials
+    if grep -q "password.*=" "$file" || grep -q "PASSWORD.*=" "$file"; then
+        echo "⚠️  Potential hardcoded password found"
+    fi
+
+    if grep -q "token.*=" "$file" || grep -q "TOKEN.*=" "$file"; then
+        echo "⚠️  Potential hardcoded token found"
+    fi
+
+    if grep -q "key.*=" "$file" || grep -q "KEY.*=" "$file"; then
+        echo "⚠️  Potential hardcoded key found"
+    fi
+
+    echo "✅ Privacy analysis completed"
+}
+```
+
+## Интеграция с CI/CD
+
+### Автоматическая валидация в pipeline
+```yaml
+# .github/workflows/validate.yml
+name: Advanced Validation
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml yamllint shellcheck
+
+      - name: Advanced validation
+        run: |
+          find layer/ -name "*.yaml" -exec bash -c '
+            echo "Validating $1"
+            validate-yaml-advanced "$1"
+            validate-rpi-metadata "$1"
+            lint-yaml "$1"
+            analyze-dependencies "$1"
+            analyze-variables "$1"
+          ' _ {} \;
+
+      - name: Security analysis
+        run: |
+          find layer/ -name "*.yaml" -exec bash -c '
+            analyze-security "$1"
+            analyze-privacy "$1"
+          ' _ {} \;
+
+      - name: Auto-fix style
+        if: failure()
+        run: |
+          find layer/ -name "*.yaml" -exec auto-fix-style {} \;
+          git config --global user.name "Auto-fix Bot"
+          git config --global user.email "bot@auto-fix"
+          git add -A && git commit -m "🤖 Auto-fix style issues" || true
+```
+
+### Мониторинг качества
+```bash
+# Отчет о качестве кода
+quality-report() {
+    echo "=== Code Quality Report ==="
+    echo "Generated: $(date)"
+    echo ""
+
+    echo "📊 Files analyzed: $(find layer/ -name "*.yaml" | wc -l)"
+    echo "📊 Total lines: $(find layer/ -name "*.yaml" -exec wc -l {} \; | awk '{sum+=$1} END {print sum}')"
+    echo "📊 Average file size: $(find layer/ -name "*.yaml" -exec wc -l {} \; | awk '{sum+=$1; count++} END {print int(sum/count)}') lines"
+    echo ""
+
+    echo "🔍 Validation results:"
+    echo "   YAML syntax errors: $(find . -name "*.log" -exec grep -c "YAML error" {} \; 2>/dev/null || echo "0")"
+    echo "   Security issues: $(find . -name "*.log" -exec grep -c "SECURITY" {} \; 2>/dev/null || echo "0")"
+    echo "   Style violations: $(find . -name "*.log" -exec grep -c "⚠️" {} \; 2>/dev/null || echo "0")"
+    echo ""
+
+    echo "📈 Trends:"
+    echo "   Complexity score: $(calculate-complexity-score)"
+    echo "   Maintainability index: $(calculate-maintainability-index)"
+    echo "   Security score: $(calculate-security-score)"
+}
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Источник
+Создано для продвинутой автоматической валидации и линтинга расширений rpi-image-gen

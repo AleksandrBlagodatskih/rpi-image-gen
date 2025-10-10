@@ -1,0 +1,159 @@
+# Hybrid SD + RAID1 + LUKS2 configuration with ext4
+# SD card with MBR (boot) + SATA SSD RAID1 GPT (encrypted root)
+# Based on genimage documentation: https://github.com/pengutronix/genimage
+
+# SD Card Image (MBR)
+image sdcard.img {
+   hdimage {
+      align = 8M
+      partition-table-type = "mbr"
+      fill = true
+   }
+
+   partition boot {
+      partition-type = 0xC
+      bootable = true
+      image = "boot.vfat"
+   }
+}
+
+# Boot partition (VFAT) - optimized for Raspberry Pi
+image boot.vfat {
+   vfat {
+      label = "BOOT"
+      # Raspberry Pi specific: 512 byte sectors, specific inode
+      extraargs = "-S 512 -i BOOTPART"
+   }
+   size = <BOOT_SIZE>
+   mountpoint = "/boot/firmware"
+}
+
+# ============================================================================
+# RAID1 + LUKS2 Root Filesystem Images for SATA SSD
+# ============================================================================
+
+# Create filesystem based on IGconf_hybrid_raid_luks_rootfs_type
+%if IGconf_hybrid_raid_luks_rootfs_type == "ext4"
+image root.ext4 {
+   ext4 {
+      label = "ROOT"
+      use-mke2fs = true
+      mke2fs-conf = <MKE2FS_CONFIG>
+      # ext4 optimizations for RAID1:
+      # - UUID for stable mounting
+      # - Journaled data for consistency
+      # - Fast commits for reduced data loss window
+      # - Barriers for write ordering
+      # - Lazy table init disabled for immediate readiness
+      extraargs = "-U <ROOT_UUID> -O ^has_journal -E lazy_itable_init=0,lazy_journal_init=0,data=journaled,commit=5"
+   }
+   size = <ROOT_SIZE>
+   mountpoint = "/"
+}
+%elif IGconf_hybrid_raid_luks_rootfs_type == "btrfs"
+image root.btrfs {
+   btrfs {
+      label = "ROOT"
+      # Btrfs optimizations for RAID1:
+      # - UUID for stable mounting
+      # - Single profiles for metadata and data (RAID handled at block level)
+      # - Mixed mode for space efficiency
+      # - Compression for performance and space savings
+      extraargs = "-U <ROOT_UUID> --metadata-profile single --data-profile single --mixed"
+   }
+   size = <ROOT_SIZE>
+   mountpoint = "/"
+}
+%elif IGconf_hybrid_raid_luks_rootfs_type == "f2fs"
+image root.f2fs {
+   f2fs {
+      label = "ROOT"
+      # F2FS optimizations for SSD RAID1:
+      # - UUID for stable mounting
+      # - Enable advanced features for data integrity
+      # - Compression for space efficiency
+      # - Checksums for corruption detection
+      extraargs = "-U <ROOT_UUID> -f -O extra_attr,inode_checksum,sb_checksum,compression"
+   }
+   size = <ROOT_SIZE>
+   mountpoint = "/"
+}
+%endif
+
+# Encrypt filesystem into LUKS2 container
+# Note: LUKS container size accounts for LUKS2 header overhead (~16MB) + filesystem size
+image root.luks {
+   custom {
+      exec-pre = "# Encrypt the <IGconf_hybrid_raid_luks_rootfs_type> filesystem with LUKS2 reencryption
+# LUKS2 header overhead: ~16MB, plus --reduce-device-size reserves additional space
+# Total overhead: ~18MB to ensure filesystem fits within decrypted container
+/sbin/cryptsetup reencrypt --encrypt --type luks2 --cipher aes-xts-plain64 \\
+  --key-size <KEY_SIZE> --hash sha256 --pbkdf argon2id \\
+  --pbkdf-memory 1048576 --pbkdf-parallel 4 \\
+  --key-file <LUKS_KEY_FILE> --reduce-device-size 4096S \\
+  root.<IGconf_hybrid_raid_luks_rootfs_type> root.luks --batch-mode"
+   }
+   # LUKS container needs to be larger than filesystem to account for encryption overhead
+   # LUKS2 header: ~16MB + data area matching filesystem size
+   size = <LUKS_CONTAINER_SIZE>
+}
+
+# ============================================================================
+# SATA SSD Disk Images (GPT) with RAID1 LUKS partitions
+# ============================================================================
+
+# SATA SSD A - GPT disk containing RAID1 member
+image disk-a.img {
+   hdimage {
+      partition-table-type = "gpt"
+      align = 1M  # GPT alignment for SSD
+   }
+
+   partition raid {
+      # Partition for RAID1 member containing LUKS
+      # GPT partition type for Linux RAID
+      partition-type-uuid = "raid"
+      image = "mdraid-a.img"
+      size = <RAID_PARTITION_SIZE>
+   }
+}
+
+# SATA SSD B - GPT disk containing RAID1 member (identical to disk-a)
+image disk-b.img {
+   hdimage {
+      partition-table-type = "gpt"
+      align = 1M  # GPT alignment for SSD
+   }
+
+   partition raid {
+      # Partition for RAID1 member containing LUKS
+      # GPT partition type for Linux RAID
+      partition-type-uuid = "raid"
+      image = "mdraid-b.img"
+      size = <RAID_PARTITION_SIZE>
+   }
+}
+
+# ============================================================================
+# RAID1 Configuration - Two members with LUKS containers
+# ============================================================================
+
+# RAID1 member A containing LUKS encrypted filesystem
+image mdraid-a.img {
+   mdraid {
+      level = 1                    # RAID1 (mirroring)
+      devices = 2                  # Two devices in array
+      image = "root.luks"          # LUKS container as RAID content
+   }
+}
+
+# RAID1 member B - identical configuration to member A
+# According to genimage docs: when multiple mdraid images have identical
+# configuration, genimage uses the same RAID metadata for all members
+image mdraid-b.img {
+   mdraid {
+      level = 1                    # RAID1 (mirroring)
+      devices = 2                  # Two devices in array
+      image = "root.luks"          # LUKS container as RAID content
+   }
+}

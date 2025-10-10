@@ -1,0 +1,778 @@
+---
+alwaysApply: ${cursor.file.path.includes("ansible/") || cursor.file.path.includes("terraform/")}
+---
+
+
+# Правило 07: Процедуры развертывания расширений
+
+## Назначение правила
+Определяет стандарты и процедуры для подготовки, публикации и распространения расширений rpi-image-gen.
+
+## Публикация расширений 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### 1. Подготовка к публикации 🔴 ОВЯЗАТЕЛЬНЫЕ
+```bash
+#!/bin/bash
+# Скрипт подготовки расширения к публикации
+
+prepare_extension_for_release() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Подготовка расширения $extension_name к релизу $version"
+
+    # 1. Финальное тестирование
+    echo "Запуск финального набора тестов..."
+    if ! run_comprehensive_tests "$extension_name"; then
+        echo "ОШИБКА: Тесты не пройдены"
+        exit 1
+    fi
+
+    # 2. Валидация документации
+    echo "Проверка документации..."
+    if ! validate_documentation "$extension_name"; then
+        echo "ОШИБКА: Документация неполная"
+        exit 1
+    fi
+
+    # 3. Создание архива релиза
+    echo "Создание архива релиза..."
+    create_release_archive "$extension_name" "$version"
+
+    # 4. Генерация контрольных сумм
+    echo "Генерация контрольных сумм..."
+    generate_checksums "$extension_name" "$version"
+
+    # 5. Создание CHANGELOG
+    echo "Обновление CHANGELOG..."
+    update_changelog "$extension_name" "$version"
+
+    echo "Подготовка к публикации завершена"
+}
+
+run_comprehensive_tests() {
+    local extension_name="$1"
+
+    # Модульные тесты
+    python3 -m pytest tests/unit/ -v --tb=short
+
+    # Интеграционные тесты
+    rpi-image-gen build -c tests/integration-config.yaml --dry-run
+
+    # Тесты совместимости
+    test_compatibility_matrix "$extension_name"
+
+    # Тесты производительности
+    test_performance_regression "$extension_name"
+}
+
+validate_documentation() {
+    local extension_name="$1"
+
+    # Проверка наличия обязательных файлов
+    local required_files=("README.md" "CHANGELOG.md" "LICENSE" "layer/${extension_name}.yaml")
+
+    for file in "${required_files[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            echo "ОШИБКА: Отсутствует обязательный файл: $file"
+            return 1
+        fi
+    done
+
+    # Валидация README.md
+    if ! grep -q "## Установка" README.md; then
+        echo "ОШИБКА: README.md не содержит раздел установки"
+        return 1
+    fi
+
+    # Проверка ссылок в документации
+    if command -v markdown-link-check >/dev/null 2>&1; then
+        markdown-link-check README.md
+    fi
+
+    return 0
+}
+
+create_release_archive() {
+    local extension_name="$1"
+    local version="$2"
+
+    local archive_name="${extension_name}-${version}.tar.gz"
+    local temp_dir="/tmp/release-${extension_name}"
+
+    mkdir -p "$temp_dir"
+
+    # Копирование файлов релиза
+    cp -r layer/ "$temp_dir/"
+    cp -r config/ "$temp_dir/"
+    cp -r tests/ "$temp_dir/"
+    cp README.md CHANGELOG.md LICENSE "$temp_dir/"
+
+    # Создание архива
+    tar -czf "$archive_name" -C "$temp_dir" .
+
+    # Очистка
+    rm -rf "$temp_dir"
+
+    echo "Архив релиза создан: $archive_name"
+}
+
+generate_checksums() {
+    local extension_name="$1"
+    local version="$2"
+
+    local archive_name="${extension_name}-${version}.tar.gz"
+    local checksum_file="${archive_name}.sha256"
+
+    # Генерация SHA256 контрольной суммы
+    sha256sum "$archive_name" > "$checksum_file"
+
+    # Генерация дополнительных контрольных сумм
+    md5sum "$archive_name" > "${archive_name}.md5"
+    sha1sum "$archive_name" > "${archive_name}.sha1"
+
+    echo "Контрольные суммы сгенерированы"
+}
+```
+
+### 2. Версионирование 🔴 ОВЯЗАТЕЛЬНЫЕ
+```markdown
+# Семантическое версионирование
+MAJOR.MINOR.PATCH
+
+- **MAJOR**: Несовместимые изменения API, изменения архитектуры
+- **MINOR**: Добавление новой функциональности, обратная совместимость
+- **PATCH**: Исправление ошибок, мелкие улучшения
+
+## Примеры версионирования
+
+### Правильные примеры:
+- `1.0.0` → `1.1.0` (добавление функциональности)
+- `1.1.0` → `1.1.1` (исправление ошибки)
+- `1.1.0` → `2.0.0` (критические изменения)
+
+### Неправильные примеры:
+- `1.0.0` → `1.0.1` (добавление большой функциональности)
+- `1.0.0` → `1.1.0` (критические изменения)
+- `1.0.0` → `2.0.0` (мелкое исправление)
+```
+
+### Скрипт управления версиями
+```bash
+#!/bin/bash
+# Управление версиями расширения
+
+manage_extension_version() {
+    local action="$1"
+    local extension_name="$2"
+
+    case "$action" in
+        "bump-major")
+            bump_version "$extension_name" "major"
+            ;;
+        "bump-minor")
+            bump_version "$extension_name" "minor"
+            ;;
+        "bump-patch")
+            bump_version "$extension_name" "patch"
+            ;;
+        "get")
+            get_current_version "$extension_name"
+            ;;
+        "validate")
+            validate_version_consistency "$extension_name"
+            ;;
+        *)
+            echo "Использование: $0 {bump-major|bump-minor|bump-patch|get|validate} extension-name"
+            exit 1
+            ;;
+    esac
+}
+
+bump_version() {
+    local extension_name="$1"
+    local bump_type="$2"
+
+    local current_version=$(get_current_version "$extension_name")
+    local new_version=$(increment_version "$current_version" "$bump_type")
+
+    # Обновление версии в метаданных
+    sed -i "s/X-Env-Layer-Version:.*/X-Env-Layer-Version: ${new_version}/" "layer/${extension_name}.yaml"
+
+    # Обновление CHANGELOG.md
+    update_changelog_entry "$new_version"
+
+    # Создание git тега
+    git add "layer/${extension_name}.yaml" CHANGELOG.md
+    git commit -m "Bump version to ${new_version}"
+    git tag -a "v${new_version}" -m "Release version ${new_version}"
+
+    echo "Версия обновлена: $current_version → $new_version"
+}
+
+increment_version() {
+    local version="$1"
+    local bump_type="$2"
+
+    IFS='.' read -ra VERSION_PARTS <<< "$version"
+    local major=${VERSION_PARTS[0]}
+    local minor=${VERSION_PARTS[1]}
+    local patch=${VERSION_PARTS[2]}
+
+    case "$bump_type" in
+        "major")
+            echo "$((major + 1)).0.0"
+            ;;
+        "minor")
+            echo "${major}.$((minor + 1)).0"
+            ;;
+        "patch")
+            echo "${major}.${minor}.$((patch + 1))"
+            ;;
+    esac
+}
+
+get_current_version() {
+    local extension_name="$1"
+
+    grep "X-Env-Layer-Version:" "layer/${extension_name}.yaml" | sed 's/.*: //' | tr -d ' '
+}
+
+validate_version_consistency() {
+    local extension_name="$1"
+
+    local metadata_version=$(get_current_version "$extension_name")
+    local git_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+
+    if [[ "$git_tag" != "v$metadata_version" && "$git_tag" != "none" ]]; then
+        echo "ПРЕДУПРЕЖДЕНИЕ: Несоответствие версий"
+        echo "  Метаданные: $metadata_version"
+        echo "  Git tag: $git_tag"
+        return 1
+    fi
+
+    echo "Версии согласованы: $metadata_version"
+}
+```
+
+### 3. Создание релизов 🔴 ОВЯЗАТЕЛЬНЫЕ
+```bash
+#!/bin/bash
+# Создание релиза расширения
+
+create_extension_release() {
+    local extension_name="$1"
+    local version="$2"
+    local release_notes="$3"
+
+    echo "Создание релиза $extension_name версии $version"
+
+    # Финальная подготовка
+    prepare_extension_for_release "$extension_name" "$version"
+
+    # Создание git тега
+    git tag -a "v$version" -m "Release version $version"
+
+    # Push тега
+    git push origin "v$version"
+
+    # Создание GitHub релиза
+    if command -v gh >/dev/null 2>&1; then
+        gh release create "v$version" \
+            --title "Release v$version" \
+            --notes-file "$release_notes" \
+            --latest
+    fi
+
+    # Публикация в реестр расширений
+    if [[ -n "${REGISTRY_URL:-}" ]]; then
+        publish_to_registry "$extension_name" "$version"
+    fi
+
+    echo "Релиз $version успешно создан"
+}
+
+publish_to_registry() {
+    local extension_name="$1"
+    local version="$2"
+
+    local archive="${extension_name}-${version}.tar.gz"
+    local checksum="${archive}.sha256"
+
+    # Загрузка в реестр
+    curl -X POST "${REGISTRY_URL}/api/extensions" \
+        -H "Authorization: Bearer ${REGISTRY_TOKEN}" \
+        -F "extension=@${archive}" \
+        -F "checksum=@${checksum}" \
+        -F "metadata=$(cat layer/${extension_name}.yaml)"
+
+    echo "Расширение опубликовано в реестре: ${extension_name}@${version}"
+}
+```
+
+## Распространение расширений 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Способы распространения
+- **Исходный код**: Git репозитории (GitHub, GitLab, Bitbucket)
+- **Бинарные пакеты**: DEB/RPM пакеты для различных дистрибутивов
+- **Контейнеры**: Docker образы для изолированного развертывания
+- **Реестры**: Специализированные реестры расширений rpi-image-gen
+
+### Стратегия распространения
+```bash
+#!/bin/bash
+# Стратегия распространения расширения
+
+distribute_extension() {
+    local extension_name="$1"
+    local version="$2"
+    local distribution_method="$3"
+
+    case "$distribution_method" in
+        "source")
+            distribute_source_code "$extension_name" "$version"
+            ;;
+        "packages")
+            create_binary_packages "$extension_name" "$version"
+            ;;
+        "docker")
+            create_docker_images "$extension_name" "$version"
+            ;;
+        "registry")
+            publish_to_extension_registry "$extension_name" "$version"
+            ;;
+        "all")
+            distribute_source_code "$extension_name" "$version"
+            create_binary_packages "$extension_name" "$version"
+            create_docker_images "$extension_name" "$version"
+            publish_to_extension_registry "$extension_name" "$version"
+            ;;
+        *)
+            echo "Неизвестный метод распространения: $distribution_method"
+            echo "Доступные методы: source, packages, docker, registry, all"
+            exit 1
+            ;;
+    esac
+}
+
+distribute_source_code() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Распространение исходного кода..."
+
+    # Создание архива исходников
+    git archive --format=tar.gz --prefix="${extension_name}-${version}/" \
+        -o "${extension_name}-${version}-source.tar.gz" "v$version"
+
+    # Загрузка на GitHub Releases
+    gh release upload "v$version" "${extension_name}-${version}-source.tar.gz"
+}
+
+create_binary_packages() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Создание бинарных пакетов..."
+
+    # Создание DEB пакета
+    create_deb_package "$extension_name" "$version"
+
+    # Создание RPM пакета (если нужно)
+    create_rpm_package "$extension_name" "$version"
+}
+
+create_docker_images() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Создание Docker образов..."
+
+    # Создание Dockerfile
+    cat > Dockerfile << EOF
+FROM debian:bookworm-slim
+
+# Установка зависимостей
+RUN apt-get update && apt-get install -y \\
+    rpi-image-gen \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Копирование расширения
+COPY layer/${extension_name}.yaml /opt/rpi-image-gen/layer/
+COPY config/ /opt/rpi-image-gen/config/
+
+# Метки
+LABEL maintainer="Your Name <your.email@example.com>"
+LABEL version="${version}"
+LABEL extension="${extension_name}"
+
+# Точка входа
+ENTRYPOINT ["rpi-image-gen", "build"]
+CMD ["-c", "/opt/rpi-image-gen/config/default.yaml"]
+EOF
+
+    # Сборка и публикация образа
+    docker build -t "${extension_name}:${version}" .
+    docker tag "${extension_name}:${version}" "your-registry/${extension_name}:${version}"
+    docker push "your-registry/${extension_name}:${version}"
+}
+
+publish_to_extension_registry() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Публикация в реестр расширений..."
+
+    # Публикация через API реестра
+    rpi-image-gen extension publish \
+        --registry "${EXTENSION_REGISTRY_URL}" \
+        --extension "layer/${extension_name}.yaml" \
+        --version "$version"
+}
+```
+
+## Документирование для пользователей 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Шаблон README.md
+```markdown
+# Название расширения
+
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-green.svg)](https://github.com/user/extension/releases)
+[![CI](https://github.com/user/extension/actions/workflows/ci.yml/badge.svg)](https://github.com/user/extension/actions/workflows/ci.yml)
+
+## Описание
+
+Краткое описание функциональности расширения. Объясните, какую проблему оно решает и для каких случаев использования предназначено.
+
+## Особенности
+
+- **Функциональность 1**: Краткое описание
+- **Функциональность 2**: Краткое описание
+- **Функциональность 3**: Краткое описание
+
+## Системные требования
+
+- **rpi-image-gen**: версия 1.0.0 или выше
+- **Операционная система**: Debian 11/12 (Bullseye/Bookworm)
+- **Архитектура**: arm64, armhf
+- **Дополнительные зависимости**: список пакетов
+
+## Установка
+
+### Из исходного кода
+```bash
+# Клонирование репозитория
+git clone https://github.com/user/extension.git
+cd extension
+
+# Сборка с расширением
+rpi-image-gen build -c config/extension-config.yaml
+```
+
+### Использование предустановленного образа
+```bash
+# Скачивание образа
+wget https://github.com/user/extension/releases/download/v1.0.0/extension-image.img
+
+# Запись на SD карту
+sudo dd if=extension-image.img of=/dev/mmcblk0 bs=4M status=progress
+
+# Или через Raspberry Pi Imager
+# Выберите "Custom" и укажите скачанный файл
+```
+
+### Установка через реестр расширений
+```bash
+# Добавление расширения из реестра
+rpi-image-gen extension install user/extension
+
+# Использование в конфигурации
+rpi-image-gen build -c config.yaml --extension user/extension
+```
+
+## Конфигурация
+
+### Переменные окружения
+
+| Переменная | Описание | Значение по умолчанию | Обязательна |
+|------------|----------|----------------------|-------------|
+| `IGconf_extension_setting1` | Настройка 1 | `value1` | Да |
+| `IGconf_extension_setting2` | Настройка 2 | `value2` | Нет |
+
+### Пример конфигурации
+```yaml
+# Основная конфигурация
+device:
+  layer: pi5
+  hostname: my-device
+
+image:
+  layer: image-rpios
+  boot_part_size: 200M
+  root_part_size: 100%
+
+layer:
+  base: bookworm-minbase
+  extension: your-extension-name
+
+# Конфигурация расширения
+extension:
+  layer: your-extension-name
+  setting1: custom-value
+  setting2: another-value
+```
+
+### Дополнительные настройки
+
+#### Настройка сети
+```yaml
+extension:
+  network:
+    interface: eth0
+    mode: dhcp
+    static_ip: 192.168.1.100
+    gateway: 192.168.1.1
+    dns: 8.8.8.8,8.8.4.4
+```
+
+#### Настройка безопасности
+```yaml
+extension:
+  security:
+    firewall: enabled
+    ssh_keys_only: true
+    fail2ban: enabled
+    auto_updates: enabled
+```
+
+## Примеры использования
+
+### Пример 1: Базовая настройка
+```bash
+# Простая сборка с расширением
+rpi-image-gen build -c examples/basic-config.yaml
+```
+
+### Пример 2: Расширенная конфигурация
+```bash
+# Сборка с дополнительными параметрами
+rpi-image-gen build -c examples/advanced-config.yaml \
+  -- IGconf_extension_setting1=value1 \
+  -- IGconf_extension_setting2=value2
+```
+
+### Пример 3: Интеграция с CI/CD
+```yaml
+# GitHub Actions workflow
+name: Build with Extension
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build image
+      run: |
+        rpi-image-gen build -c config.yaml
+    - name: Test image
+      run: |
+        # Тестирование собранного образа
+```
+
+## Тестирование
+
+```bash
+# Запуск тестов
+python3 -m pytest tests/ -v
+
+# Линтинг кода
+shellcheck scripts/*.sh
+yamllint layer/*.yaml
+
+# Тестовая сборка
+rpi-image-gen build -c test-config.yaml --dry-run
+```
+
+## Разработка
+
+### Структура проекта
+```
+extension/
+├── layer/                    # Метаданные слоев
+│   └── extension.yaml       # Основная конфигурация
+├── config/                  # Конфигурации сборки
+├── scripts/                 # Скрипты установки
+├── tests/                   # Тесты
+├── examples/                # Примеры использования
+├── docs/                    # Дополнительная документация
+└── README.md               # Эта документация
+```
+
+### Внесение вклада
+1. Форкните репозиторий
+2. Создайте ветку для вашей функциональности (`git checkout -b feature/amazing-feature`)
+3. Зафиксируйте изменения (`git commit -m 'Add amazing feature'`)
+4. Отправьте в ветку (`git push origin feature/amazing-feature`)
+5. Создайте Pull Request
+
+## Устранение неисправностей
+
+### Распространенные проблемы
+
+#### Проблема: Сборка завершается с ошибкой
+```
+Ошибка: Layer not found
+```
+**Решение:**
+```bash
+# Проверьте зависимости
+rpi-image-gen layer --describe your-extension --deps
+
+# Убедитесь, что базовые слои установлены
+rpi-image-gen layer --list
+```
+
+#### Проблема: Переменные не работают
+```
+IGconf_extension_setting1: command not found
+```
+**Решение:**
+```bash
+# Проверьте синтаксис переменных
+rpi-image-gen metadata --lint layer/extension.yaml
+
+# Проверьте значения переменных
+echo "IGconf_extension_setting1=${IGconf_extension_setting1}"
+```
+
+### Получение помощи
+- [Документация](https://github.com/user/extension/wiki)
+- [Issues](https://github.com/user/extension/issues)
+- [Discussions](https://github.com/user/extension/discussions)
+
+## Лицензия
+
+MIT License - см. файл [LICENSE](LICENSE)
+
+## Авторы
+
+- **Имя Разработчика** - *Роль* - [GitHub](https://github.com/username)
+
+## Changelog
+
+Подробные изменения в [CHANGELOG.md](CHANGELOG.md)
+```
+
+## Автоматизация развертывания ⚠️ РЕКОМЕНДУЕМЫЕ
+
+### Pipeline развертывания
+```yaml
+# .github/workflows/release.yml
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Prepare release
+      run: ./scripts/prepare-release.sh ${{ github.ref_name }}
+
+    - name: Create GitHub release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          Release ${{ github.ref }}
+
+          ## Changes
+          - List of changes here
+
+    - name: Publish to registry
+      run: ./scripts/publish-to-registry.sh ${{ github.ref_name }}
+      env:
+        REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+```
+
+### Мониторинг релизов
+```bash
+#!/bin/bash
+# Мониторинг использования релизов
+
+monitor_release_adoption() {
+    local extension_name="$1"
+
+    echo "Мониторинг релизов для $extension_name"
+
+    # Получение статистики загрузок
+    get_download_stats "$extension_name"
+
+    # Анализ отзывов пользователей
+    analyze_user_feedback "$extension_name"
+
+    # Мониторинг ошибок в продакшене
+    monitor_production_errors "$extension_name"
+
+    # Генерация отчета
+    generate_adoption_report "$extension_name"
+}
+
+get_download_stats() {
+    local extension_name="$1"
+
+    # Получение статистики от GitHub API
+    curl -H "Authorization: token $GITHUB_TOKEN" \
+        "https://api.github.com/repos/user/$extension_name/releases" | \
+        jq -r '.[] | "\(.tag_name): \(.assets[0].download_count) downloads"'
+}
+
+analyze_user_feedback() {
+    local extension_name="$1"
+
+    # Анализ issues и discussions
+    echo "Анализ отзывов пользователей..."
+
+    # Положительные отзывы
+    positive_feedback=$(gh issue list --repo "user/$extension_name" --label "enhancement" --limit 10)
+
+    # Отрицательные отзывы (баги)
+    bug_reports=$(gh issue list --repo "user/$extension_name" --label "bug" --limit 10)
+
+    # Feature requests
+    feature_requests=$(gh issue list --repo "user/$extension_name" --label "feature-request" --limit 10)
+}
+```
+
+## Метрики соблюдения правила 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Качество подготовки релиза
+- [ ] Полный набор тестов пройден
+- [ ] Документация обновлена и валидна
+- [ ] Версионирование соответствует семантике
+- [ ] Архив релиза создан корректно
+- [ ] Контрольные суммы сгенерированы
+
+### Эффективность распространения
+- [ ] Множественные каналы распространения
+- [ ] Четкая документация по установке
+- [ ] Активный мониторинг использования
+- [ ] Быстрое реагирование на проблемы
+- [ ] Регулярные обновления
+
+### Качество документации
+- [ ] Полная README.md
+- [ ] Примеры использования
+- [ ] Устранение неисправностей
+- [ ] Контактная информация
+- [ ] Лицензионная информация

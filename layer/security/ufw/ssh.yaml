@@ -1,0 +1,40 @@
+# METABEGIN
+# X-Env-Layer-Name: ufw-ssh
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Automatic SSH allowance when OpenSSH server is detected
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: ufw-core
+# X-Env-Layer-Provides: firewall-ssh-auto-allow
+# X-Env-VarPrefix: ufw
+# X-Env-Var-openssh_allow: y
+# X-Env-Var-openssh_allow-Description: Automatically allow OpenSSH connections when SSH server is detected
+# X-Env-Var-openssh_allow-Required: false
+# X-Env-Var-openssh_allow-Valid: bool
+# X-Env-Var-openssh_allow-Set: lazy
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      # PHASE 0: Enable check
+      igconf isy IGconf_ufw_openssh_allow || exit 0
+
+      echo "🔑 Installing UFW SSH auto-allow..."
+
+      # Check if SSH is available
+      if [ ! -f "$1/usr/sbin/sshd" ]; then
+        echo "⚠️ OpenSSH server not detected, skipping auto-allow"
+        exit 0
+      fi
+
+      # OpenSSH integration
+      echo "🔑 Configuring automatic SSH allowance..."
+      # Create SSH detection and allowance script
+      install -m 644 "templates/security/ufw/ufw-ssh-auto-allow" "$1/usr/local/bin/ufw-ssh-auto-allow"
+      chmod +x "$1/usr/local/bin/ufw-ssh-auto-allow"
+
+      # Create systemd service to auto-allow SSH
+      install -m 644 "templates/security/ufw/ufw-ssh-auto-allow.service" "$1/etc/systemd/system/ufw-ssh-auto-allow.service"
+
+      chroot "$1" systemctl enable ufw-ssh-auto-allow
+      echo "✅ OpenSSH integration configured"

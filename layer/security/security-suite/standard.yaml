@@ -1,0 +1,48 @@
+# METABEGIN
+# X-Env-Layer-Name: security-suite-standard
+# X-Env-Layer-Category: security
+# X-Env-Layer-Description: Standard security suite (recommended security baseline)
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: locale-base
+# X-Env-Layer-Provides: security-suite-standard
+# X-Env-VarPrefix: security_suite_standard
+# X-Env-Var-enable: y
+# X-Env-Var-enable-Description: Enable standard security suite
+# X-Env-Var-enable-Required: false
+# X-Env-Var-enable-Valid: bool
+# METAEND
+---
+mmdebstrap:
+  layers:
+    # Basic security foundation
+    - security-suite-basic
+
+    # Intrusion prevention (core only)
+    - fail2ban-core
+
+    # Authentication hardening
+    - password-policies-core
+    - password-policies-aging
+    - password-policies-lockout
+
+    # Mandatory access control
+    - apparmor-core
+    - apparmor-profiles
+
+    # Command auditing
+    - sudo-logging
+
+    # System hardening
+    - sysctl-kernel
+    - sysctl-network
+
+  customize-hooks:
+    - |
+      echo "🔒 Standard security suite installed"
+      echo "   Components:"
+      echo "   • Basic security suite"
+      echo "   • Fail2Ban core"
+      echo "   • Password policies (core, aging, lockout)"
+      echo "   • AppArmor (core + profiles)"
+      echo "   • Sudo logging"
+      echo "   • Kernel & network hardening"
