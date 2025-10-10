@@ -1,28 +1,28 @@
 # METABEGIN
 # X-Env-Layer-Name: sysctl-network
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Network security hardening parameters
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Network security hardening parameters
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: sysctl-network
 # X-Env-VarPrefix: sysctl_network
 # X-Env-Var-tcp_syn_cookies: y
-# X-Env-Var-tcp_syn_cookies-Description: Enable TCP SYN cookies for SYN flood protection
+# X-Env-Var-tcp_syn_cookies-Desc: Enable TCP SYN cookies for SYN flood protection
 # X-Env-Var-tcp_syn_cookies-Required: false
 # X-Env-Var-tcp_syn_cookies-Valid: bool
 # X-Env-Var-tcp_syn_cookies-Set: lazy
 # X-Env-Var-icmp_redirect_ignore: y
-# X-Env-Var-icmp_redirect_ignore-Description: Ignore ICMP redirects (prevents man-in-the-middle attacks)
+# X-Env-Var-icmp_redirect_ignore-Desc: Ignore ICMP redirects (prevents man-in-the-middle attacks)
 # X-Env-Var-icmp_redirect_ignore-Required: false
 # X-Env-Var-icmp_redirect_ignore-Valid: bool
 # X-Env-Var-icmp_redirect_ignore-Set: lazy
 # X-Env-Var-rp_filter: y
-# X-Env-Var-rp_filter-Description: Enable IP spoofing protection via rp_filter
+# X-Env-Var-rp_filter-Desc: Enable IP spoofing protection via rp_filter
 # X-Env-Var-rp_filter-Required: false
 # X-Env-Var-rp_filter-Valid: bool
 # X-Env-Var-rp_filter-Set: lazy
 # X-Env-Var-source_route_ignore: y
-# X-Env-Var-source_route_ignore-Description: Ignore source routed packets
+# X-Env-Var-source_route_ignore-Desc: Ignore source routed packets
 # X-Env-Var-source_route_ignore-Required: false
 # X-Env-Var-source_route_ignore-Valid: bool
 # X-Env-Var-source_route_ignore-Set: lazy

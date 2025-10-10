@@ -13,10 +13,32 @@ die() {
     exit 1
 }
 
-# Copy essential tools
-copy_exec /sbin/mdadm
-copy_exec /sbin/cryptsetup
+# Copy essential tools with error handling
+if ! copy_exec /sbin/mdadm; then
+    echo "ERROR: Failed to copy mdadm" >&2
+    exit 1
+fi
 
-# Copy key script and key file
-copy_exec /usr/bin/rpi-raid
-[ -f /etc/luks/key ] && copy_file key /etc/luks/key /key
+if ! copy_exec /sbin/cryptsetup; then
+    echo "ERROR: Failed to copy cryptsetup" >&2
+    exit 1
+fi
+
+# Copy key script and key file with validation
+if ! copy_exec /usr/bin/rpi-raid; then
+    echo "ERROR: Failed to copy rpi-raid script" >&2
+    exit 1
+fi
+
+if [ -f /etc/luks/key ]; then
+    # Validate key file before copying
+    if [ -r /etc/luks/key ] && [ $(stat -c '%a' /etc/luks/key 2>/dev/null || echo "unknown") = "600" ]; then
+        if ! copy_file key /etc/luks/key /key; then
+            echo "ERROR: Failed to copy LUKS key file" >&2
+            exit 1
+        fi
+    else
+        echo "ERROR: LUKS key file has insecure permissions or is not readable" >&2
+        exit 1
+    fi
+fi

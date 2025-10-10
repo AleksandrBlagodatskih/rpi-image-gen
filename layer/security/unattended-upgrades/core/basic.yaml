@@ -1,8 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-core-basic
-# X-Env-Layer-Category: security
+# X-Env-Layer-Category: extension
 # X-Env-Layer-Desc: Basic unattended-upgrades configuration and package management
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: package-updates-basic
 # X-Env-VarPrefix: unattended

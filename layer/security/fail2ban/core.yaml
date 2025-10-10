@@ -1,8 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: fail2ban-core
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Fail2Ban core installation and basic configuration
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Fail2Ban core installation and basic configuration
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: fail2ban-core
 # X-Env-VarPrefix: fail2ban_core
@@ -35,16 +35,54 @@ mmdebstrap:
       #!/bin/bash
       set -euo pipefail
 
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
+
+      validate_component_enabled() {
+        local component="$1"
+        local enable_var="IGconf_${component}_enable"
+        if [ "${!enable_var:-n}" != "y" ]; then
+          echo "ℹ️  $component disabled (set $enable_var=y to enable)"
+          exit 0
+        fi
+      }
+
+      igconf_isy() {
+        local var_name="$1"
+        local var_value="${!var_name:-n}"
+        [ "$var_value" = "y" ]
+      }
+
+      igconf_getval() {
+        local var_name="$1"
+        local default_value="$2"
+        echo "${!var_name:-$default_value}"
+      }
+
+      install_component_script() {
+        local source_content="$1"
+        local target_path="$2"
+        local target_dir="$3"
+
+        # Create target directory if it doesn't exist
+        local target_dir_path="$target_dir/$(dirname "$target_path")"
+        uchroot "$target_dir" mkdir -p "$(dirname "$target_path")"
+
+        # Write content to target file with appropriate permissions
+        echo "$source_content" | uchroot "$target_dir" tee "$target_path" >/dev/null
+        if [[ "$target_path" == *.sh ]]; then
+          uchroot "$target_dir" chmod 755 "$target_path"
+        else
+          uchroot "$target_dir" chmod 644 "$target_path"
+        fi
+
+        echo "✅ Installed script to $target_path"
+      }
 
       # Validate component enablement
       validate_component_enabled "fail2ban_core"
 
       echo "🛡️ Installing Fail2Ban core..."
 
-      # Create backup directory
-      BACKUP_DIR=$(create_backup_dir "fail2ban-core" "$1")
 
       # Configure basic jail.local
       install -m 644 "templates/security/fail2ban/jail.local" "$1/etc/fail2ban/jail.local"
@@ -59,7 +97,140 @@ mmdebstrap:
       sed -i "s|^logtarget = .*|logtarget = $LOGTARGET|" "$1/etc/fail2ban/jail.local"
       sed -i "s|^dbfile = .*|dbfile = $DBFILE|" "$1/etc/fail2ban/jail.local"
 
-      # Enable fail2ban service
+      # Enable fail2ban service with automatic recovery
       chroot "$1" systemctl enable fail2ban
+      chroot "$1" systemctl start fail2ban || true
 
-      echo "✅ Fail2Ban core installed and configured"
+      # Create systemd drop-in for automatic recovery
+      mkdir -p "$1/etc/systemd/system/fail2ban.service.d"
+      cat > "$1/etc/systemd/system/fail2ban.service.d/override.conf" << 'EOF'
+[Service]
+Restart=always
+RestartSec=15
+StartLimitInterval=0
+EOF
+
+      # Reload systemd configuration
+      chroot "$1" systemctl daemon-reload
+
+      echo "✅ Fail2Ban core installed and configured with automatic recovery"
+  rootfs-overlay:
+    usr/local/bin/fail2ban-status: |
+      #!/bin/bash
+      # Fail2Ban Status Script
+      # Provides comprehensive status information about Fail2Ban
+
+      echo "=== Fail2Ban Intrusion Prevention Status ==="
+      echo
+
+      # Check if fail2ban service is running
+      echo "1. Fail2Ban Service:"
+      if systemctl is-active --quiet fail2ban 2>/dev/null; then
+          echo "   ✅ fail2ban service is active"
+      else
+          echo "   ❌ fail2ban service is not active"
+      fi
+
+      if systemctl is-enabled fail2ban >/dev/null 2>&1 2>/dev/null; then
+          echo "   ✅ fail2ban enabled on boot"
+      else
+          echo "   ❌ fail2ban not enabled on boot"
+      fi
+
+      # Check fail2ban utilities
+      echo
+      echo "2. Fail2Ban Utilities:"
+      for util in fail2ban-client fail2ban-server; do
+          if command -v "$util" >/dev/null 2>&1; then
+              echo "   ✅ $util available"
+          else
+              echo "   ❌ $util not available"
+          fi
+      done
+
+      # Check configuration files
+      echo
+      echo "3. Configuration Files:"
+      config_files=(
+          "/etc/fail2ban/jail.conf"
+          "/etc/fail2ban/jail.local"
+      )
+
+      for config in "${config_files[@]}"; do
+          if [ -e "$config" ]; then
+              echo "   ✅ $config exists"
+          else
+              echo "   ❌ $config not found"
+          fi
+      done
+
+      # Show active jails
+      echo
+      echo "4. Active Jails:"
+      if command -v fail2ban-client >/dev/null 2>&1; then
+          jail_list=$(fail2ban-client status 2>/dev/null | grep "Jail list:" | sed -E 's/^[^:]+:\s+//' | sed 's/,//g')
+          if [[ -n "$jail_list" ]]; then
+              echo "   📋 Active jails: $jail_list"
+              jail_count=$(echo "$jail_list" | wc -w)
+              echo "   📊 Total jails: $jail_count"
+          else
+              echo "   ⚠️ No active jails"
+          fi
+      else
+          echo "   fail2ban-client not available"
+      fi
+
+      # Check database
+      echo
+      echo "5. Fail2Ban Database:"
+      if [ -f /var/lib/fail2ban/fail2ban.sqlite3 ]; then
+          db_size=$(du -h /var/lib/fail2ban/fail2ban.sqlite3 2>/dev/null | cut -f1)
+          echo "   ✅ Database exists (size: $db_size)"
+      else
+          echo "   ⚠️ Database not found (normal for first run)"
+      fi
+
+      # Check recent bans
+      echo
+      echo "6. Recent Activity:"
+      if [ -f /var/log/fail2ban.log ]; then
+          recent_bans=$(grep -c "Ban " /var/log/fail2ban.log 2>/dev/null || echo "0")
+          echo "   🚫 Recent bans: $recent_bans"
+
+          if [ "$recent_bans" -gt 0 ]; then
+              echo "   📋 Last 3 bans:"
+              grep "Ban " /var/log/fail2ban.log 2>/dev/null | tail -3 | sed 's/^/      /'
+          fi
+      else
+          echo "   📭 No log file available"
+      fi
+
+      echo
+      echo "=== Recommendations ==="
+      echo "• Check jail status: fail2ban-client status"
+      echo "• View logs: tail -f /var/log/fail2ban.log"
+      echo "• Test banning: fail2ban-client set <jail> banip <ip>"
+      echo "• Monitor bans: fail2ban-client status <jail>"
+    etc/profile.d/fail2ban-status.sh: |
+      # Fail2Ban status profile for bash
+      # This file is sourced by /etc/profile.d/ to show Fail2Ban status on login
+
+      # Only show status if running interactively and not in scripts
+      if [[ $- == *i* ]] && [ -z "${FAIL2BAN_STATUS_SHOWN:-}" ]; then
+          export FAIL2BAN_STATUS_SHOWN=1
+
+          # Check if Fail2Ban is available
+          if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fail2ban 2>/dev/null; then
+              echo "🛡️ Fail2Ban Status:"
+              jail_count=$(fail2ban-client status 2>/dev/null | grep -c "Jail list:" || echo "0")
+              echo "   📋 Active jails: $jail_count"
+
+              # Check for recent bans
+              if [ -f /var/log/fail2ban.log ]; then
+                  recent_bans=$(grep -c "Ban " /var/log/fail2ban.log 2>/dev/null || echo "0")
+                  echo "   🚫 Recent bans: $recent_bans"
+              fi
+
+              echo
+          fi
+      fi

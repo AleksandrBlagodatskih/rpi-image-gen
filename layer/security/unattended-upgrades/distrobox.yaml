@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-distrobox
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Distrobox container restart after updates
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Distrobox container restart after updates
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: unattended-upgrades-core-basic
 # X-Env-Layer-Provides: package-updates-distrobox-integration
 # X-Env-VarPrefix: unattended
 # X-Env-Var-distrobox_restart: y
-# X-Env-Var-distrobox_restart-Description: Restart Distrobox containers after updates if present
+# X-Env-Var-distrobox_restart-Desc: Restart Distrobox containers after updates if present
 # X-Env-Var-distrobox_restart-Required: false
 # X-Env-Var-distrobox_restart-Valid: bool
 # X-Env-Var-distrobox_restart-Set: lazy

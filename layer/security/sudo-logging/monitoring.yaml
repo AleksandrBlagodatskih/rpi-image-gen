@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: sudo-logging-monitoring
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Sudo activity monitoring and alerting system
-# X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: sudo-logging-core
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Sudo activity monitoring and alerting system
+# X-Env-Layer-Version: 2.0.0
+# X-Env-Layer-Requires: sudo-logging-core-basic
 # X-Env-Layer-Provides: sudo-monitoring
 # X-Env-VarPrefix: sudo_logging
 # X-Env-Var-monitoring: y
-# X-Env-Var-monitoring-Description: Enable monitoring and alerting for sudo activity
+# X-Env-Var-monitoring-Desc: Enable monitoring and alerting for sudo activity
 # X-Env-Var-monitoring-Required: false
 # X-Env-Var-monitoring-Valid: bool
 # X-Env-Var-monitoring-Set: lazy

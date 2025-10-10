@@ -34,47 +34,20 @@ layer:
 * `rpi5_server_usb_max_performance`: USB 3.0 high-performance (по умолчанию: y)
 * `rpi5_server_disable_unused_interfaces`: Отключить SPI/I2C/I2S (по умолчанию: y)
 
-== Enterprise интеграция
+== Мониторинг
 
-=== Kubernetes Integration
-
-[source,yaml]
-----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: rpi5-server-pod
-spec:
-  containers:
-  - name: rpi5-server
-    image: rpi5-server-optimized:latest
-    ports:
-    - containerPort: 80
-      name: http
-    - containerPort: 443
-      name: https
-    resources:
-      requests:
-        memory: "512Mi"
-        cpu: "500m"
-      limits:
-        memory: "1Gi"
-        cpu: "1000m"
-----
-
-=== Prometheus мониторинг
+=== Prometheus метрики
 
 [source,yaml]
 ----
-global:
-  scrape_interval: 15s
-
 scrape_configs:
-  - job_name: 'rpi5-servers'
+  - job_name: 'rpi5-server-metrics'
     static_configs:
-      - targets: ['rpi5-server-01:9090', 'rpi5-server-02:9090']
-    metrics_path: /metrics
-    scrape_interval: 30s
+      - targets: ['rpi5-server:9090']
+    params:
+      collect[]:
+        - textfile
+    scrape_interval: 60s
 ----
 
 === Ansible автоматизация
@@ -86,26 +59,11 @@ scrape_configs:
   become: yes
 
   tasks:
-    - name: Copy optimized config.txt
-      copy:
-        src: /boot/firmware/config.txt
-        dest: /boot/firmware/config.txt.rpi5-server-config
-        backup: yes
-
     - name: Apply rpi5-server-config optimizations
       template:
         src: config-rpi5-server.j2
         dest: /boot/firmware/config.txt
       notify: reboot rpi5
-
-    - name: Verify configuration
-      command: rpi-image-gen layer --validate rpi5-server-config
-      register: config_check
-
-    - name: Fail if configuration invalid
-      fail:
-        msg: "Configuration validation failed"
-      when: config_check.rc != 0
 ----
 
 == Ссылки

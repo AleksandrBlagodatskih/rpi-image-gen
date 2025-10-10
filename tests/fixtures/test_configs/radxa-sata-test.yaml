@@ -1,0 +1,14 @@
+# Test configuration for radxa-sata-penta-hat device layer
+device:
+  layer: rpi5
+image:
+  layer: mbr/simple
+layer:
+  base: bookworm-minbase
+  device: radxa-sata-penta-hat
+
+# Test SATA configuration
+radxa_sata:
+  pcie_gen3: y
+  initramfs_sata: y
+  enable_gpio_power: n  # Disabled for testing safety

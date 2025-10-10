@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-cockpit
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Cockpit update notifications for unattended-upgrades
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Cockpit update notifications for unattended-upgrades
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: unattended-upgrades-core-basic
 # X-Env-Layer-Provides: package-updates-cockpit-integration
 # X-Env-VarPrefix: unattended
 # X-Env-Var-cockpit_notification: y
-# X-Env-Var-cockpit_notification-Description: Send update notifications to Cockpit interface
+# X-Env-Var-cockpit_notification-Desc: Send update notifications to Cockpit interface
 # X-Env-Var-cockpit_notification-Required: false
 # X-Env-Var-cockpit_notification-Valid: bool
 # X-Env-Var-cockpit_notification-Set: lazy

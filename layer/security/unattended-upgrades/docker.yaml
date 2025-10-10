@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-docker
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Docker container restart after unattended-upgrades
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Docker container restart after unattended-upgrades
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: unattended-upgrades-core-basic
 # X-Env-Layer-Provides: package-updates-docker-integration
 # X-Env-VarPrefix: unattended
 # X-Env-Var-docker_integration: y
-# X-Env-Var-docker_integration-Description: Restart Docker containers after updates if Docker is present
+# X-Env-Var-docker_integration-Desc: Restart Docker containers after updates if Docker is present
 # X-Env-Var-docker_integration-Required: false
 # X-Env-Var-docker_integration-Valid: bool
 # X-Env-Var-docker_integration-Set: lazy

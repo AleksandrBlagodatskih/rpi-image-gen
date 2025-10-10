@@ -1,7 +1,7 @@
 # METABEGIN
 # X-Env-Layer-Name: distrobox
 # X-Env-Layer-Category: container
-# X-Env-Layer-Description: Minimal Distrobox setup with dev container
+# X-Env-Layer-Desc: Minimal Distrobox setup with dev container
 # X-Env-Layer-Version: 1.1.0
 # X-Env-Layer-Provides: distrobox
 # X-Env-Layer-RequiresProvider: docker

@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: sudo-logging-ssh-audit
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Sudo audit integration for OpenSSH remote sessions
-# X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: sudo-logging-core
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Sudo audit integration for OpenSSH remote sessions
+# X-Env-Layer-Version: 2.0.0
+# X-Env-Layer-Requires: sudo-logging-core-basic
 # X-Env-Layer-Provides: sudo-ssh-audit
 # X-Env-VarPrefix: sudo_logging
 # X-Env-Var-openssh_audit: y
-# X-Env-Var-openssh_audit-Description: Enable sudo audit for OpenSSH remote sessions
+# X-Env-Var-openssh_audit-Desc: Enable sudo audit for OpenSSH remote sessions
 # X-Env-Var-openssh_audit-Required: false
 # X-Env-Var-openssh_audit-Valid: bool
 # X-Env-Var-openssh_audit-Set: lazy

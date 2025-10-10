@@ -1,32 +1,32 @@
 # METABEGIN
 # X-Env-Layer-Name: fail2ban-services
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Additional service protection with Fail2Ban
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Additional service protection with Fail2Ban
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: fail2ban-core
 # X-Env-Layer-Provides: fail2ban-services
 # X-Env-VarPrefix: fail2ban_services
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable additional service protection
+# X-Env-Var-enable-Desc: Enable additional service protection
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-recidive_enable: y
-# X-Env-Var-recidive_enable-Description: Enable recidive jail for persistent attackers
+# X-Env-Var-recidive_enable-Desc: Enable recidive jail for persistent attackers
 # X-Env-Var-recidive_enable-Required: false
 # X-Env-Var-recidive_enable-Valid: bool
 # X-Env-Var-recidive_enable-Set: lazy
 # X-Env-Var-recidive_bantime: 604800
-# X-Env-Var-recidive_bantime-Description: Ban time for recidive offenders (7 days)
+# X-Env-Var-recidive_bantime-Desc: Ban time for recidive offenders (7 days)
 # X-Env-Var-recidive_bantime-Required: false
 # X-Env-Var-recidive_bantime-Valid: int:86400-2592000
 # X-Env-Var-recidive_bantime-Set: lazy
 # X-Env-Var-docker_enable: y
-# X-Env-Var-docker_enable-Description: Enable Docker container protection
+# X-Env-Var-docker_enable-Desc: Enable Docker container protection
 # X-Env-Var-docker_enable-Required: false
 # X-Env-Var-docker_enable-Valid: bool
 # X-Env-Var-docker_enable-Set: lazy
 # X-Env-Var-distrobox_enable: y
-# X-Env-Var-distrobox_enable-Description: Enable Distrobox container protection
+# X-Env-Var-distrobox_enable-Desc: Enable Distrobox container protection
 # X-Env-Var-distrobox_enable-Required: false
 # X-Env-Var-distrobox_enable-Valid: bool
 # X-Env-Var-distrobox_enable-Set: lazy
@@ -35,8 +35,7 @@
 mmdebstrap:
   customize-hooks:
     - |
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
 
       # Validate component enablement
       validate_component_enabled "fail2ban_services"

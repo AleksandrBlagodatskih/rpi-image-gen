@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: ufw-distrobox
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: UFW support for Distrobox container network access
-# X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: ufw-core
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: UFW support for Distrobox container network access
+# X-Env-Layer-Version: 2.0.0
+# X-Env-Layer-Requires: ufw-core-basic
 # X-Env-Layer-Provides: firewall-distrobox-integration
 # X-Env-VarPrefix: ufw
 # X-Env-Var-distrobox_network: y
-# X-Env-Var-distrobox_network-Description: Allow network access for Distrobox containers
+# X-Env-Var-distrobox_network-Desc: Allow network access for Distrobox containers
 # X-Env-Var-distrobox_network-Required: false
 # X-Env-Var-distrobox_network-Valid: bool
 # X-Env-Var-distrobox_network-Set: lazy

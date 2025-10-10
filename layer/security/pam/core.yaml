@@ -1,32 +1,32 @@
 # METABEGIN
 # X-Env-Layer-Name: pam-core
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Core PAM configuration and password policies
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Core PAM configuration and password policies
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: pam-core
 # X-Env-VarPrefix: pam_core
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable core PAM configuration
+# X-Env-Var-enable-Desc: Enable core PAM configuration
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-minlen: 8
-# X-Env-Var-minlen-Description: Minimum password length
+# X-Env-Var-minlen-Desc: Minimum password length
 # X-Env-Var-minlen-Required: false
 # X-Env-Var-minlen-Valid: int:6-32
 # X-Env-Var-minlen-Set: lazy
 # X-Env-Var-faillock_enable: y
-# X-Env-Var-faillock_enable-Description: Enable account lockout after failed login attempts
+# X-Env-Var-faillock_enable-Desc: Enable account lockout after failed login attempts
 # X-Env-Var-faillock_enable-Required: false
 # X-Env-Var-faillock_enable-Valid: bool
 # X-Env-Var-faillock_enable-Set: lazy
 # X-Env-Var-faillock_attempts: 3
-# X-Env-Var-faillock_attempts-Description: Maximum failed login attempts before lockout
+# X-Env-Var-faillock_attempts-Desc: Maximum failed login attempts before lockout
 # X-Env-Var-faillock_attempts-Required: false
 # X-Env-Var-faillock_attempts-Valid: int:3-10
 # X-Env-Var-faillock_attempts-Set: lazy
 # X-Env-Var-faillock_unlock_time: 600
-# X-Env-Var-faillock_unlock_time-Description: Account lockout duration in seconds
+# X-Env-Var-faillock_unlock_time-Desc: Account lockout duration in seconds
 # X-Env-Var-faillock_unlock_time-Required: false
 # X-Env-Var-faillock_unlock_time-Valid: int:60-3600
 # X-Env-Var-faillock_unlock_time-Set: lazy
@@ -42,8 +42,7 @@ mmdebstrap:
       #!/bin/bash
       set -euo pipefail
 
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
 
       # Validate component enablement
       validate_component_enabled "pam_core"
@@ -78,3 +77,120 @@ mmdebstrap:
       fi
 
       echo "✅ PAM core configuration completed"
+  rootfs-overlay:
+    usr/local/bin/pam-status: |
+      #!/bin/bash
+      # PAM Status Script
+      # Provides comprehensive status information about PAM configuration
+
+      echo "=== PAM Authentication Status ==="
+      echo
+
+      # Check PAM packages
+      echo "1. PAM Packages:"
+      packages=("libpam-runtime" "libpam-modules" "libpam-pwquality")
+      for pkg in "${packages[@]}"; do
+          if dpkg -l | grep -q "^ii.*$pkg"; then
+              echo "   ✅ $pkg installed"
+          else
+              echo "   ⚠️ $pkg not found"
+          fi
+      done
+
+      # Check PAM configuration files
+      echo
+      echo "2. PAM Configuration Files:"
+      pam_files=(
+          "/etc/pam.d/common-auth"
+          "/etc/pam.d/common-account"
+          "/etc/pam.d/common-password"
+          "/etc/pam.d/common-session"
+          "/etc/security/pwquality.conf"
+      )
+
+      for file in "${pam_files[@]}"; do
+          if [[ -f "$file" ]]; then
+              echo "   ✅ $file exists"
+          else
+              echo "   ❌ $file missing"
+          fi
+      done
+
+      # Check password quality settings
+      echo
+      echo "3. Password Quality Settings:"
+      if [[ -f /etc/security/pwquality.conf ]]; then
+          minlen=$(grep "^minlen" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          echo "   📏 Minimum length: ${minlen:-not set}"
+
+          ucredit=$(grep "^ucredit" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          if [[ "$ucredit" =~ ^- ]]; then
+              echo "   🔠 Uppercase required: ${ucredit#-} minimum"
+          fi
+
+          lcredit=$(grep "^lcredit" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          if [[ "$lcredit" =~ ^- ]]; then
+              echo "   🔡 Lowercase required: ${lcredit#-} minimum"
+          fi
+
+          dcredit=$(grep "^dcredit" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          if [[ "$dcredit" =~ ^- ]]; then
+              echo "   🔢 Digits required: ${dcredit#-} minimum"
+          fi
+      else
+          echo "   ⚠️ Password quality config not found"
+      fi
+
+      # Check account lockout
+      echo
+      echo "4. Account Lockout:"
+      if grep -q "pam_faillock" /etc/pam.d/common-auth 2>/dev/null; then
+          echo "   ✅ Account lockout enabled"
+          deny_count=$(grep "pam_faillock" /etc/pam.d/common-auth | sed 's/.*deny=\([0-9]*\).*/\1/')
+          unlock_time=$(grep "pam_faillock" /etc/pam.d/common-auth | sed 's/.*unlock_time=\([0-9]*\).*/\1/')
+          echo "   🚫 Max attempts: ${deny_count:-unknown}"
+          echo "   ⏰ Unlock time: ${unlock_time:-unknown} seconds"
+      else
+          echo "   ⚪ Account lockout disabled"
+      fi
+
+      # Check LDAP integration
+      echo
+      echo "5. LDAP Integration:"
+      if [[ -f /etc/nslcd.conf ]] && systemctl is-active --quiet nslcd 2>/dev/null; then
+          echo "   ✅ LDAP authentication active"
+          ldap_uri=$(grep "^uri" /etc/nslcd.conf | head -1 | cut -d' ' -f2)
+          echo "   🌐 LDAP server: ${ldap_uri:-unknown}"
+      else
+          echo "   ⚪ LDAP not configured or inactive"
+      fi
+
+      echo
+      echo "=== Recommendations ==="
+      echo "• Test authentication: su - <user>"
+      echo "• Check password strength: pwscore"
+      echo "• Monitor auth logs: tail -f /var/log/auth.log"
+      echo "• Test lockout: attempt wrong passwords"
+    etc/profile.d/pam-status.sh: |
+      # PAM status profile for bash
+      # This file is sourced by /etc/profile.d/ to show PAM status on login
+
+      # Only show status if running interactively and not in scripts
+      if [[ $- == *i* ]] && [ -z "${PAM_STATUS_SHOWN:-}" ]; then
+          export PAM_STATUS_SHOWN=1
+
+          # Check if PAM is configured
+          if [[ -f /etc/pam.d/common-auth ]]; then
+              echo "🔐 PAM Status:"
+              if grep -q "pam_faillock" /etc/pam.d/common-auth 2>/dev/null; then
+                  echo "   🔒 Lockout protection: enabled"
+              fi
+
+              if [[ -f /etc/security/pwquality.conf ]]; then
+                  minlen=$(grep "^minlen" /etc/security/pwquality.conf 2>/dev/null | cut -d= -f2 | xargs)
+                  echo "   📏 Password min length: ${minlen:-unknown}"
+              fi
+
+              echo
+          fi
+      fi

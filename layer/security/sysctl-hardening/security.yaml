@@ -1,28 +1,28 @@
 # METABEGIN
 # X-Env-Layer-Name: sysctl-security
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: System security hardening parameters
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: System security hardening parameters
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: sysctl-security
 # X-Env-VarPrefix: sysctl_security
 # X-Env-Var-core_dump_restrict: y
-# X-Env-Var-core_dump_restrict-Description: Restrict core dumps to prevent memory disclosure
+# X-Env-Var-core_dump_restrict-Desc: Restrict core dumps to prevent memory disclosure
 # X-Env-Var-core_dump_restrict-Required: false
 # X-Env-Var-core_dump_restrict-Valid: bool
 # X-Env-Var-core_dump_restrict-Set: lazy
 # X-Env-Var-perf_event_paranoid: 2
-# X-Env-Var-perf_event_paranoid-Description: Restrict perf events (0=unrestricted, 1=restrict user space, 2=restrict all)
+# X-Env-Var-perf_event_paranoid-Desc: Restrict perf events (0=unrestricted, 1=restrict user space, 2=restrict all)
 # X-Env-Var-perf_event_paranoid-Required: false
 # X-Env-Var-perf_event_paranoid-Valid: int:0-2
 # X-Env-Var-perf_event_paranoid-Set: lazy
 # X-Env-Var-kernel_modules_disable: y
-# X-Env-Var-kernel_modules_disable-Description: Disable kernel module loading after boot
+# X-Env-Var-kernel_modules_disable-Desc: Disable kernel module loading after boot
 # X-Env-Var-kernel_modules_disable-Required: false
 # X-Env-Var-kernel_modules_disable-Valid: bool
 # X-Env-Var-kernel_modules_disable-Set: lazy
 # X-Env-Var-magic_sysrq_disable: y
-# X-Env-Var-magic_sysrq_disable-Description: Disable Magic SysRq key (prevents system manipulation)
+# X-Env-Var-magic_sysrq_disable-Desc: Disable Magic SysRq key (prevents system manipulation)
 # X-Env-Var-magic_sysrq_disable-Required: false
 # X-Env-Var-magic_sysrq_disable-Valid: bool
 # X-Env-Var-magic_sysrq_disable-Set: lazy

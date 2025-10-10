@@ -1,33 +1,33 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-core-security
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Security hardening and package blacklist configuration for unattended-upgrades
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Security hardening and package blacklist configuration for unattended-upgrades
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: unattended-upgrades-core-basic
 # X-Env-Layer-Provides: package-updates-security
 # X-Env-VarPrefix: unattended
 # X-Env-Var-package_blacklist: ""
-# X-Env-Var-package_blacklist-Description: Comma-separated list of packages to never upgrade automatically
+# X-Env-Var-package_blacklist-Desc: Comma-separated list of packages to never upgrade automatically
 # X-Env-Var-package_blacklist-Required: false
 # X-Env-Var-package_blacklist-Valid: string
 # X-Env-Var-package_blacklist-Set: lazy
 # X-Env-Var-allowed_origins: "origin=Debian,codename=${distro_codename},label=Debian-Security"
-# X-Env-Var-allowed_origins-Description: Comma-separated list of allowed update origins (security updates only by default)
+# X-Env-Var-allowed_origins-Desc: Comma-separated list of allowed update origins (security updates only by default)
 # X-Env-Var-allowed_origins-Required: false
 # X-Env-Var-allowed_origins-Valid: string
 # X-Env-Var-allowed_origins-Set: lazy
 # X-Env-Var-min_age_days: 2
-# X-Env-Var-min_age_days-Description: Minimum age of packages to upgrade (days) - avoid upgrading very new packages
+# X-Env-Var-min_age_days-Desc: Minimum age of packages to upgrade (days) - avoid upgrading very new packages
 # X-Env-Var-min_age_days-Required: false
 # X-Env-Var-min_age_days-Valid: int:0-30
 # X-Env-Var-min_age_days-Set: lazy
 # X-Env-Var-min_uptime_days: 1
-# X-Env-Var-min_uptime_days-Description: Minimum system uptime before allowing upgrades (days)
+# X-Env-Var-min_uptime_days-Desc: Minimum system uptime before allowing upgrades (days)
 # X-Env-Var-min_uptime_days-Required: false
 # X-Env-Var-min_uptime_days-Valid: int:0-30
 # X-Env-Var-min_uptime_days-Set: lazy
 # X-Env-Var-max_random_delay: 1800
-# X-Env-Var-max_random_delay-Description: Maximum random delay before upgrade (seconds) - prevents thundering herd
+# X-Env-Var-max_random_delay-Desc: Maximum random delay before upgrade (seconds) - prevents thundering herd
 # X-Env-Var-max_random_delay-Required: false
 # X-Env-Var-max_random_delay-Valid: int:0-86400
 # X-Env-Var-max_random_delay-Set: lazy

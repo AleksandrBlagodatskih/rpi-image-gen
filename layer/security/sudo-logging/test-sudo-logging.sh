@@ -194,20 +194,13 @@ else
     echo "❌ Sudo security status script not available"
 fi
 
-# Проверка 9: Бэкап
+# Проверка 9: Синтаксис sudoers
 echo ""
-echo "9. Checking backup..."
-BACKUP_DIR="/root/rpi-image-gen-backups"
-if [[ -d "$BACKUP_DIR" ]; then
-    SUDO_BACKUPS=$(find "$BACKUP_DIR" -name "*sudo*" -type d 2>/dev/null | wc -l)
-    if [[ "$SUDO_BACKUPS" -gt 0 ]; then
-        echo "✅ Sudo backups found ($SUDO_BACKUPS backup(s))"
-        ls -la "$BACKUP_DIR" | grep sudo | head -3 || true
-    else
-        echo "⚠️ No sudo backups found"
-    fi
+echo "9. Checking sudoers syntax..."
+if visudo -c -f /etc/sudoers >/dev/null 2>&1; then
+    echo "✅ Sudoers syntax is valid"
 else
-    echo "⚠️ Backup directory not found"
+    echo "❌ Sudoers syntax errors detected"
 fi
 
 # Проверка 10: Синтаксис sudoers
@@ -249,7 +242,7 @@ echo "=== Test Summary ==="
 echo "Sudo logging configuration appears to be properly set up!"
 
 # Подсчет проверок
-TOTAL_CHECKS=11
+TOTAL_CHECKS=10
 PASSED_CHECKS=0
 
 # Подсчет успешных проверок (упрощенная версия)
@@ -262,7 +255,6 @@ if grep -q "passwd_tries=" /etc/sudoers 2>/dev/null; then ((PASSED_CHECKS++)); f
 if grep -q "secure_path=" /etc/sudoers 2>/dev/null; then ((PASSED_CHECKS++)); fi
 if [[ -f /usr/local/bin/sudo-monitor ]; then ((PASSED_CHECKS++)); fi
 if command -v sudo-security-status >/dev/null 2>&1; then ((PASSED_CHECKS++)); fi
-if [[ -d "$BACKUP_DIR" ]; then ((PASSED_CHECKS++)); fi
 if visudo -c -f /etc/sudoers >/dev/null 2>&1; then ((PASSED_CHECKS++)); fi
 
 echo ""

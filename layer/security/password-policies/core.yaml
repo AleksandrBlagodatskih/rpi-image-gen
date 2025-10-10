@@ -1,42 +1,42 @@
 # METABEGIN
 # X-Env-Layer-Name: password-policies-core
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Core password policies and PAM configuration
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Core password policies and PAM configuration
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: password-policies-core
 # X-Env-VarPrefix: password_policies_core
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable core password policies
+# X-Env-Var-enable-Desc: Enable core password policies
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-min_length: 8
-# X-Env-Var-min_length-Description: Minimum password length
+# X-Env-Var-min_length-Desc: Minimum password length
 # X-Env-Var-min_length-Required: false
 # X-Env-Var-min_length-Valid: int:6-32
 # X-Env-Var-min_length-Set: lazy
 # X-Env-Var-complexity_enable: y
-# X-Env-Var-complexity_enable-Description: Enable password complexity requirements
+# X-Env-Var-complexity_enable-Desc: Enable password complexity requirements
 # X-Env-Var-complexity_enable-Required: false
 # X-Env-Var-complexity_enable-Valid: bool
 # X-Env-Var-complexity_enable-Set: lazy
 # X-Env-Var-min_upper: 1
-# X-Env-Var-min_upper-Description: Minimum uppercase characters
+# X-Env-Var-min_upper-Desc: Minimum uppercase characters
 # X-Env-Var-min_upper-Required: false
 # X-Env-Var-min_upper-Valid: int:0-5
 # X-Env-Var-min_upper-Set: lazy
 # X-Env-Var-min_lower: 1
-# X-Env-Var-min_lower-Description: Minimum lowercase characters
+# X-Env-Var-min_lower-Desc: Minimum lowercase characters
 # X-Env-Var-min_lower-Required: false
 # X-Env-Var-min_lower-Valid: int:0-5
 # X-Env-Var-min_lower-Set: lazy
 # X-Env-Var-min_digit: 1
-# X-Env-Var-min_digit-Description: Minimum digit characters
+# X-Env-Var-min_digit-Desc: Minimum digit characters
 # X-Env-Var-min_digit-Required: false
 # X-Env-Var-min_digit-Valid: int:0-5
 # X-Env-Var-min_digit-Set: lazy
 # X-Env-Var-min_other: 1
-# X-Env-Var-min_other-Description: Minimum other characters (special)
+# X-Env-Var-min_other-Desc: Minimum other characters (special)
 # X-Env-Var-min_other-Required: false
 # X-Env-Var-min_other-Valid: int:0-5
 # X-Env-Var-min_other-Set: lazy
@@ -48,8 +48,7 @@ mmdebstrap:
     - libpam-cracklib
   customize-hooks:
     - |
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
 
       # Validate component enablement
       validate_component_enabled "password_policies_core"
@@ -78,3 +77,133 @@ mmdebstrap:
       fi
 
       echo "✅ Core password policies configured"
+  rootfs-overlay:
+    usr/local/bin/password-policy-status: |
+      #!/bin/bash
+      # Password Policy Status Script
+      # Provides comprehensive status information about password policies
+
+      echo "=== Password Policy Status ==="
+      echo
+
+      # Check password policy files
+      echo "1. Password Policy Files:"
+      policy_files=(
+          "/etc/security/pwquality.conf"
+          "/etc/login.defs"
+      )
+
+      for file in "${policy_files[@]}"; do
+          if [[ -f "$file" ]]; then
+              echo "   ✅ $file exists"
+          else
+              echo "   ❌ $file missing"
+          fi
+      done
+
+      # Check password aging settings
+      echo
+      echo "2. Password Aging:"
+      if [[ -f /etc/login.defs ]]; then
+          PASS_MAX_DAYS=$(grep "^PASS_MAX_DAYS" /etc/login.defs | awk '{print $2}')
+          PASS_MIN_DAYS=$(grep "^PASS_MIN_DAYS" /etc/login.defs | awk '{print $2}')
+          PASS_WARN_AGE=$(grep "^PASS_WARN_AGE" /etc/login.defs | awk '{print $2}')
+
+          echo "   ⏰ Max days: ${PASS_MAX_DAYS:-not set}"
+          echo "   ⏳ Min days: ${PASS_MIN_DAYS:-not set}"
+          echo "   ⚠️ Warn days: ${PASS_WARN_AGE:-not set}"
+      fi
+
+      # Check password quality
+      echo
+      echo "3. Password Quality:"
+      if [[ -f /etc/security/pwquality.conf ]]; then
+          minlen=$(grep "^minlen" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          echo "   📏 Minimum length: ${minlen:-not set}"
+
+          # Check complexity requirements
+          ucredit=$(grep "^ucredit" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          if [[ "$ucredit" =~ ^- ]]; then
+              echo "   🔠 Uppercase required: ${ucredit#-}"
+          fi
+
+          lcredit=$(grep "^lcredit" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          if [[ "$lcredit" =~ ^- ]]; then
+              echo "   🔡 Lowercase required: ${lcredit#-}"
+          fi
+
+          dcredit=$(grep "^dcredit" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          if [[ "$dcredit" =~ ^- ]]; then
+              echo "   🔢 Digits required: ${dcredit#-}"
+          fi
+
+          ocredit=$(grep "^ocredit" /etc/security/pwquality.conf | cut -d= -f2 | xargs)
+          if [[ "$ocredit" =~ ^- ]]; then
+              echo "   💫 Special chars required: ${ocredit#-}"
+          fi
+      fi
+
+      # Check user password status
+      echo
+      echo "4. User Password Status:"
+      echo "   📊 User accounts with password policies:"
+      user_count=0
+      while IFS=: read -r username _ uid _ _ _; do
+          # Skip system users
+          [[ "$uid" -lt 1000 ]] && continue
+
+          ((user_count++))
+          echo -n "   👤 $username: "
+
+          # Check password expiration
+          if chage -l "$username" 2>/dev/null | grep -q "Password expires.*never"; then
+              echo "never expires"
+          else
+              expire_date=$(chage -l "$username" 2>/dev/null | grep "Password expires" | cut -d: -f2 | xargs)
+              echo "expires $expire_date"
+          fi
+      done < /etc/passwd
+
+      if [[ $user_count -eq 0 ]]; then
+          echo "   ⚠️ No user accounts found"
+      fi
+
+      # Check PAM integration
+      echo
+      echo "5. PAM Integration:"
+      if [[ -f /etc/pam.d/common-password ]] && grep -q "pam_pwquality" /etc/pam.d/common-password; then
+          echo "   ✅ PAM password quality enabled"
+      else
+          echo "   ❌ PAM password quality not configured"
+      fi
+
+      echo
+      echo "=== Recommendations ==="
+      echo "• Test password policy: passwd (as regular user)"
+      echo "• Check password strength: echo 'testpass' | pwscore"
+      echo "• Monitor user accounts: chage -l <username>"
+      echo "• View aging policies: grep PASS_ /etc/login.defs"
+    etc/profile.d/password-policy-status.sh: |
+      # Password policy status profile for bash
+      # This file is sourced by /etc/profile.d/ to show password policy status on login
+
+      # Only show status if running interactively and not in scripts
+      if [[ $- == *i* ]] && [ -z "${PASSWORD_POLICY_STATUS_SHOWN:-}" ]; then
+          export PASSWORD_POLICY_STATUS_SHOWN=1
+
+          # Check if password policies are configured
+          if [[ -f /etc/security/pwquality.conf ]] || [[ -f /etc/login.defs ]]; then
+              echo "🔑 Password Policy Status:"
+              if [[ -f /etc/security/pwquality.conf ]]; then
+                  minlen=$(grep "^minlen" /etc/security/pwquality.conf 2>/dev/null | cut -d= -f2 | xargs)
+                  echo "   📏 Min length: ${minlen:-unknown}"
+              fi
+
+              if [[ -f /etc/login.defs ]]; then
+                  max_days=$(grep "^PASS_MAX_DAYS" /etc/login.defs 2>/dev/null | awk '{print $2}')
+                  echo "   ⏰ Max age: ${max_days:-unknown} days"
+              fi
+
+              echo
+          fi
+      fi

@@ -1,0 +1,12 @@
+# Minimal security configuration for testing
+device:
+  layer: rpi5
+image:
+  layer: mbr/simple
+layer:
+  base: bookworm-minbase
+  security: apparmor-core
+
+# Test variables
+IGconf_apparmor_core_enable: y
+IGconf_apparmor_core_mode: enforce

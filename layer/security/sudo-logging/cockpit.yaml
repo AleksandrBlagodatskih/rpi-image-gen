@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: sudo-logging-cockpit
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Sudo logging integration with Cockpit user management
-# X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: sudo-logging-core
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Sudo logging integration with Cockpit user management
+# X-Env-Layer-Version: 2.0.0
+# X-Env-Layer-Requires: sudo-logging-core-basic
 # X-Env-Layer-Provides: sudo-cockpit-integration
 # X-Env-VarPrefix: sudo_logging
 # X-Env-Var-cockpit_integration: y
-# X-Env-Var-cockpit_integration-Description: Integrate sudo logging with Cockpit user management
+# X-Env-Var-cockpit_integration-Desc: Integrate sudo logging with Cockpit user management
 # X-Env-Var-cockpit_integration-Required: false
 # X-Env-Var-cockpit_integration-Valid: bool
 # X-Env-Var-cockpit_integration-Set: lazy

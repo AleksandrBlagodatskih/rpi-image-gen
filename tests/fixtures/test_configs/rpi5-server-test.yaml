@@ -1,0 +1,18 @@
+# Test configuration for rpi5-server-config device layer
+device:
+  layer: rpi5
+image:
+  layer: mbr/simple
+layer:
+  base: bookworm-minbase
+  server: rpi5-server-config
+
+# Test minimal server configuration
+rpi5_server:
+  disable_hdmi: y
+  disable_wifi: y
+  disable_bluetooth: y
+  disable_audio: y
+  pcie_max_speed: y
+  usb_max_performance: y
+  disable_unused_interfaces: y

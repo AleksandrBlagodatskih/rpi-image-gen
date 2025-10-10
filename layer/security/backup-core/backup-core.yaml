@@ -1,38 +1,38 @@
 # METABEGIN
 # X-Env-Layer-Name: backup-core
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Basic backup strategy for configuration files and user data
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Basic backup strategy for configuration files and user data
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: backup-core
 # X-Env-VarPrefix: backup_core
 #
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable basic backup functionality
+# X-Env-Var-enable-Desc: Enable basic backup functionality
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-enable-Set: immediate
 #
 # X-Env-Var-backup_dir: /var/backups/security
-# X-Env-Var-backup_dir-Description: Directory for storing backup files
+# X-Env-Var-backup_dir-Desc: Directory for storing backup files
 # X-Env-Var-backup_dir-Required: false
 # X-Env-Var-backup_dir-Valid: string
 # X-Env-Var-backup_dir-Set: immediate
 #
 # X-Env-Var-retention_days: 7
-# X-Env-Var-retention_days-Description: Number of days to keep backups before deletion
+# X-Env-Var-retention_days-Desc: Number of days to keep backups before deletion
 # X-Env-Var-retention_days-Required: false
 # X-Env-Var-retention_days-Valid: int:1-30
 # X-Env-Var-retention_days-Set: lazy
 #
 # X-Env-Var-include_configs: y
-# X-Env-Var-include_configs-Description: Backup security-related configuration files
+# X-Env-Var-include_configs-Desc: Backup security-related configuration files
 # X-Env-Var-include_configs-Required: false
 # X-Env-Var-include_configs-Valid: bool
 # X-Env-Var-include_configs-Set: lazy
 #
 # X-Env-Var-include_home: n
-# X-Env-Var-include_home-Description: Backup user home directories (use with caution - large backups)
+# X-Env-Var-include_home-Desc: Backup user home directories (use with caution - large backups)
 # X-Env-Var-include_home-Required: false
 # X-Env-Var-include_home-Valid: bool
 # X-Env-Var-include_home-Set: lazy

@@ -1,33 +1,33 @@
 # METABEGIN
 # X-Env-Layer-Name: security-suite-custom
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Custom security configuration (user-defined)
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Custom security configuration (user-defined)
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: security-suite-custom
 # X-Env-VarPrefix: security_suite_custom
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable custom security configuration
+# X-Env-Var-enable-Desc: Enable custom security configuration
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-fail2ban_ssh: y
-# X-Env-Var-fail2ban_ssh-Description: Include Fail2Ban SSH protection
+# X-Env-Var-fail2ban_ssh-Desc: Include Fail2Ban SSH protection
 # X-Env-Var-fail2ban_ssh-Required: false
 # X-Env-Var-fail2ban_ssh-Valid: bool
 # X-Env-Var-fail2ban_web: n
-# X-Env-Var-fail2ban_web-Description: Include Fail2Ban web server protection
+# X-Env-Var-fail2ban_web-Desc: Include Fail2Ban web server protection
 # X-Env-Var-fail2ban_web-Required: false
 # X-Env-Var-fail2ban_web-Valid: bool
 # X-Env-Var-fail2ban_services: n
-# X-Env-Var-fail2ban_services-Description: Include Fail2Ban additional services protection
+# X-Env-Var-fail2ban_services-Desc: Include Fail2Ban additional services protection
 # X-Env-Var-fail2ban_services-Required: false
 # X-Env-Var-fail2ban_services-Valid: bool
 # X-Env-Var-pam_ldap: n
-# X-Env-Var-pam_ldap-Description: Include LDAP authentication
+# X-Env-Var-pam_ldap-Desc: Include LDAP authentication
 # X-Env-Var-pam_ldap-Required: false
 # X-Env-Var-pam_ldap-Valid: bool
 # X-Env-Var-pam_services: n
-# X-Env-Var-pam_services-Description: Include PAM service integrations
+# X-Env-Var-pam_services-Desc: Include PAM service integrations
 # X-Env-Var-pam_services-Required: false
 # X-Env-Var-pam_services-Valid: bool
 # METAEND

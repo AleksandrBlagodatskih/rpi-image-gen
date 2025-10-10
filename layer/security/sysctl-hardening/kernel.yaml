@@ -1,28 +1,28 @@
 # METABEGIN
 # X-Env-Layer-Name: sysctl-kernel
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Kernel security hardening parameters
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Kernel security hardening parameters
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: sysctl-kernel
 # X-Env-VarPrefix: sysctl_kernel
 # X-Env-Var-ptrace_restrict: y
-# X-Env-Var-ptrace_restrict-Description: Restrict ptrace to prevent debugging of other processes
+# X-Env-Var-ptrace_restrict-Desc: Restrict ptrace to prevent debugging of other processes
 # X-Env-Var-ptrace_restrict-Required: false
 # X-Env-Var-ptrace_restrict-Valid: bool
 # X-Env-Var-ptrace_restrict-Set: lazy
 # X-Env-Var-aslr_enable: y
-# X-Env-Var-aslr_enable-Description: Enable Address Space Layout Randomization
+# X-Env-Var-aslr_enable-Desc: Enable Address Space Layout Randomization
 # X-Env-Var-aslr_enable-Required: false
 # X-Env-Var-aslr_enable-Valid: bool
 # X-Env-Var-aslr_enable-Set: lazy
 # X-Env-Var-kptr_restrict: 1
-# X-Env-Var-kptr_restrict-Description: Restrict /proc/kallsyms and kernel pointers (0=unrestricted, 1=restrict, 2=hide)
+# X-Env-Var-kptr_restrict-Desc: Restrict /proc/kallsyms and kernel pointers (0=unrestricted, 1=restrict, 2=hide)
 # X-Env-Var-kptr_restrict-Required: false
 # X-Env-Var-kptr_restrict-Valid: int:0-2
 # X-Env-Var-kptr_restrict-Set: lazy
 # X-Env-Var-dmesg_restrict: y
-# X-Env-Var-dmesg_restrict-Description: Restrict dmesg to root only (kernel ring buffer protection)
+# X-Env-Var-dmesg_restrict-Desc: Restrict dmesg to root only (kernel ring buffer protection)
 # X-Env-Var-dmesg_restrict-Required: false
 # X-Env-Var-dmesg_restrict-Valid: bool
 # X-Env-Var-dmesg_restrict-Set: lazy
@@ -31,8 +31,7 @@
 mmdebstrap:
   customize-hooks:
     - |
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
 
       SYSCTL_CONF="/etc/sysctl.d/10-kernel-security.conf"
 

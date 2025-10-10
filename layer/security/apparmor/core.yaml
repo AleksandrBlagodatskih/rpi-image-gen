@@ -1,8 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: apparmor-core
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: AppArmor core installation and basic configuration
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: AppArmor core installation and basic configuration
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: apparmor-core
 # X-Env-VarPrefix: apparmor_core
@@ -39,14 +39,6 @@ mmdebstrap:
       set -euo pipefail
 
       # Embedded common functions for self-contained layer
-      create_backup_dir() {
-        local component="$1"
-        local target_dir="$2"
-        local timestamp=$(date +%Y%m%d_%H%M%S)
-        local backup_dir="$target_dir/var/backups/security/${component}_backup_$timestamp"
-        mkdir -p "$backup_dir"
-        echo "$backup_dir"
-      }
 
       validate_component_enabled() {
         local component="$1"
@@ -92,14 +84,6 @@ mmdebstrap:
       APPARMOR_DIR="/etc/apparmor.d"
       CMDLINE_FILE="/boot/firmware/cmdline.txt"
 
-      # Create backup directory
-      BACKUP_DIR=$(create_backup_dir "apparmor-core" "$1")
-
-      # Backup existing AppArmor configuration
-      if [ -d "$1$APPARMOR_DIR" ]; then
-        cp -a "$1$APPARMOR_DIR" "$1$BACKUP_DIR/" 2>/dev/null || true
-        echo "📁 Backup created: $BACKUP_DIR/apparmor.d"
-      fi
 
       # Enable AppArmor in kernel boot parameters (Raspberry Pi specific)
       if [ -f "$1$CMDLINE_FILE" ]; then
@@ -161,10 +145,23 @@ mmdebstrap:
         fi
       fi
 
-      # Enable AppArmor service
+      # Enable AppArmor service with automatic recovery
       chroot "$1" systemctl enable apparmor
+      chroot "$1" systemctl start apparmor || true
 
-      echo "✅ AppArmor core configured"
+      # Create systemd drop-in for automatic recovery
+      mkdir -p "$1/etc/systemd/system/apparmor.service.d"
+      cat > "$1/etc/systemd/system/apparmor.service.d/override.conf" << 'EOF'
+[Service]
+Restart=always
+RestartSec=5
+StartLimitInterval=0
+EOF
+
+      # Reload systemd configuration
+      chroot "$1" systemctl daemon-reload
+
+      echo "✅ AppArmor core configured with automatic recovery"
   rootfs-overlay:
     usr/local/bin/apparmor-status: |
       #!/bin/bash

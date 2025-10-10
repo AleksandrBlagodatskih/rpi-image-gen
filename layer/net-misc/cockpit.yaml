@@ -1,8 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: cockpit
 # X-Env-Layer-Category: extension
-# X-Env-Layer-Description: Cockpit web interface for system management and monitoring
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Desc: Cockpit web interface for system management and monitoring
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: systemd-net-min
 #
 # X-Env-VarRequires: IGconf_device_user1

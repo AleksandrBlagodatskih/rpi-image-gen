@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-core-monitoring
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Monitoring and alerting system for unattended-upgrades activities
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Monitoring and alerting system for unattended-upgrades activities
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: unattended-upgrades-core-basic
 # X-Env-Layer-Provides: package-updates-monitoring
 # X-Env-VarPrefix: unattended
 # X-Env-Var-monitoring: y
-# X-Env-Var-monitoring-Description: Enable monitoring and alerting for upgrade activities
+# X-Env-Var-monitoring-Desc: Enable monitoring and alerting for upgrade activities
 # X-Env-Var-monitoring-Required: false
 # X-Env-Var-monitoring-Valid: bool
 # X-Env-Var-monitoring-Set: lazy

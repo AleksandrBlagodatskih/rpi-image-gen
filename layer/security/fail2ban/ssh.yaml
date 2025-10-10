@@ -1,22 +1,22 @@
 # METABEGIN
 # X-Env-Layer-Name: fail2ban-ssh
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: SSH protection with Fail2Ban
-# X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: fail2ban-core, ssh-server
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: SSH protection with Fail2Ban
+# X-Env-Layer-Version: 2.0.0
+# X-Env-Layer-Requires: fail2ban-core, openssh-server
 # X-Env-Layer-Provides: fail2ban-ssh
 # X-Env-VarPrefix: fail2ban_ssh
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable SSH jail protection
+# X-Env-Var-enable-Desc: Enable SSH jail protection
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-maxretry: 3
-# X-Env-Var-maxretry-Description: Maximum retry attempts for SSH before ban
+# X-Env-Var-maxretry-Desc: Maximum retry attempts for SSH before ban
 # X-Env-Var-maxretry-Required: false
 # X-Env-Var-maxretry-Valid: int:2-10
 # X-Env-Var-maxretry-Set: lazy
 # X-Env-Var-bantime: 3600
-# X-Env-Var-bantime-Description: Ban time in seconds for SSH violations
+# X-Env-Var-bantime-Desc: Ban time in seconds for SSH violations
 # X-Env-Var-bantime-Required: false
 # X-Env-Var-bantime-Valid: int:300-86400
 # X-Env-Var-bantime-Set: lazy
@@ -25,8 +25,7 @@
 mmdebstrap:
   customize-hooks:
     - |
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
 
       # Validate component enablement
       validate_component_enabled "fail2ban_ssh"

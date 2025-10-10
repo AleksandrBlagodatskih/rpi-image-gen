@@ -1,8 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: ufw-core-basic
-# X-Env-Layer-Category: security
+# X-Env-Layer-Category: extension
 # X-Env-Layer-Desc: Basic UFW firewall configuration with core policies
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: firewall-basic
 # X-Env-VarPrefix: ufw
@@ -102,20 +102,6 @@ mmdebstrap:
 
       echo "✅ UFW validated successfully"
 
-      # PHASE 2: Backup
-      echo "💾 Creating backup..."
-      TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-      BACKUP_DIR="/root/rpi-image-gen-backups/ufw-basic-$TIMESTAMP"
-      mkdir -p "$1$BACKUP_DIR"
-
-      # Backup existing UFW configuration
-      for dir in /etc/ufw /etc/default/ufw /var/lib/ufw; do
-        if [ -e "$1$dir" ]; then
-          cp -a "$1$dir" "$1$BACKUP_DIR/" 2>/dev/null || true
-        fi
-      done
-
-      echo "✅ Backup created: $BACKUP_DIR"
 
       # PHASE 3: Core Configuration
       echo "🔧 Configuring UFW basic settings..."
@@ -138,3 +124,150 @@ mmdebstrap:
 
       echo ""
       echo "✅ UFW firewall basic configuration completed!"
+  rootfs-overlay:
+    usr/local/bin/ufw-status: |
+      #!/bin/bash
+      # UFW Status Script
+      # Provides comprehensive status information about UFW firewall
+
+      echo "=== UFW Firewall Status ==="
+      echo
+
+      # Check if UFW is installed
+      echo "1. UFW Installation:"
+      if command -v ufw >/dev/null 2>&1; then
+          ufw_version=$(ufw --version 2>/dev/null | head -1 | awk '{print $2}')
+          echo "   ✅ UFW installed: $ufw_version"
+      else
+          echo "   ❌ UFW not installed"
+          exit 1
+      fi
+
+      # Check UFW service
+      echo
+      echo "2. UFW Service:"
+      if systemctl is-active --quiet ufw 2>/dev/null; then
+          echo "   ✅ UFW service is active"
+      else
+          echo "   ⚠️ UFW service not active"
+      fi
+
+      # Check UFW status
+      echo
+      echo "3. Firewall Status:"
+      ufw_status=$(ufw status 2>/dev/null | head -1)
+      if echo "$ufw_status" | grep -q "active\|inactive"; then
+          echo "   🔥 Status: $ufw_status"
+      else
+          echo "   ❓ Status: unknown"
+      fi
+
+      # Check configuration files
+      echo
+      echo "4. Configuration Files:"
+      config_files=(
+          "/etc/ufw/ufw.conf"
+          "/etc/default/ufw"
+          "/etc/ufw/before.rules"
+          "/etc/ufw/after.rules"
+      )
+
+      for file in "${config_files[@]}"; do
+          if [[ -f "$file" ]]; then
+              echo "   ✅ $file exists"
+          else
+              echo "   ❌ $file missing"
+          fi
+      done
+
+      # Check default policies
+      echo
+      echo "5. Default Policies:"
+      if [[ -f /etc/default/ufw ]]; then
+          default_input=$(grep "^DEFAULT_INPUT_POLICY" /etc/default/ufw | cut -d'"' -f2)
+          default_output=$(grep "^DEFAULT_OUTPUT_POLICY" /etc/default/ufw | cut -d'"' -f2)
+          default_forward=$(grep "^DEFAULT_FORWARD_POLICY" /etc/default/ufw | cut -d'"' -f2)
+
+          echo "   📥 Input: ${default_input:-unknown}"
+          echo "   📤 Output: ${default_output:-unknown}"
+          echo "   🔄 Forward: ${default_forward:-unknown}"
+      fi
+
+      # Check active rules
+      echo
+      echo "6. Active Rules:"
+      if command -v ufw >/dev/null 2>&1; then
+          rule_count=$(ufw status numbered 2>/dev/null | grep -c "^\[" || echo "0")
+          if [[ "$rule_count" -gt 0 ]]; then
+              echo "   📋 Total rules: $rule_count"
+              echo "   📋 Sample rules:"
+              ufw status numbered 2>/dev/null | head -5 | sed 's/^/      /'
+          else
+              echo "   ⚠️ No active rules"
+          fi
+      fi
+
+      # Check logging
+      echo
+      echo "7. Logging Configuration:"
+      if [[ -f /etc/ufw/ufw.conf ]]; then
+          loglevel=$(grep "^LOGLEVEL" /etc/ufw/ufw.conf | cut -d'"' -f2)
+          echo "   📊 Log level: ${loglevel:-unknown}"
+      fi
+
+      # Check IPv6 support
+      echo
+      echo "8. IPv6 Support:"
+      if [[ -f /etc/default/ufw ]]; then
+          ipv6=$(grep "^IPV6" /etc/default/ufw | cut -d'=' -f2 | tr -d '"')
+          if [[ "$ipv6" = "yes" ]]; then
+              echo "   ✅ IPv6 support enabled"
+          else
+              echo "   ❌ IPv6 support disabled"
+          fi
+      fi
+
+      # Check recent activity
+      echo
+      echo "9. Recent Activity:"
+      if [[ -f /var/log/ufw.log ]]; then
+          recent_entries=$(tail -20 /var/log/ufw.log 2>/dev/null | grep -c "UFW" || echo "0")
+          echo "   📈 Recent log entries: $recent_entries"
+
+          if [[ "$recent_entries" -gt 0 ]]; then
+              echo "   📋 Last blocked attempts:"
+              tail -5 /var/log/ufw.log 2>/dev/null | grep "UFW BLOCK" | tail -3 | sed 's/^/      /' || true
+          fi
+      else
+          echo "   📭 No UFW log file found"
+      fi
+
+      echo
+      echo "=== Recommendations ==="
+      echo "• Check detailed status: ufw status verbose"
+      echo "• View numbered rules: ufw status numbered"
+      echo "• Monitor logs: tail -f /var/log/ufw.log"
+      echo "• Test rules: ufw allow from <ip> to any port <port>"
+      echo "• Reload after changes: ufw reload"
+    etc/profile.d/ufw-status.sh: |
+      # UFW status profile for bash
+      # This file is sourced by /etc/profile.d/ to show UFW status on login
+
+      # Only show status if running interactively and not in scripts
+      if [[ $- == *i* ]] && [ -z "${UFW_STATUS_SHOWN:-}" ]; then
+          export UFW_STATUS_SHOWN=1
+
+          # Check if UFW is available and active
+          if command -v ufw >/dev/null 2>&1 && systemctl is-active --quiet ufw 2>/dev/null; then
+              echo "🛡️ UFW Status:"
+              ufw_status=$(ufw status 2>/dev/null | head -1)
+              if echo "$ufw_status" | grep -q "active"; then
+                  rule_count=$(ufw status numbered 2>/dev/null | grep -c "^\[" || echo "0")
+                  echo "   🔥 Active: $rule_count rules"
+              else
+                  echo "   💤 Inactive"
+              fi
+
+              echo
+          fi
+      fi

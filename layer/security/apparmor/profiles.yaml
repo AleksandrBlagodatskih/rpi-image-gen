@@ -1,32 +1,32 @@
 # METABEGIN
 # X-Env-Layer-Name: apparmor-profiles
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: AppArmor profiles for system services
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: AppArmor profiles for system services
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: apparmor-core
 # X-Env-Layer-Provides: apparmor-profiles
 # X-Env-VarPrefix: apparmor_profiles
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable AppArmor service profiles
+# X-Env-Var-enable-Desc: Enable AppArmor service profiles
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-cockpit_profiles: y
-# X-Env-Var-cockpit_profiles-Description: Create AppArmor profiles for Cockpit services
+# X-Env-Var-cockpit_profiles-Desc: Create AppArmor profiles for Cockpit services
 # X-Env-Var-cockpit_profiles-Required: false
 # X-Env-Var-cockpit_profiles-Valid: bool
 # X-Env-Var-cockpit_profiles-Set: lazy
 # X-Env-Var-docker_profiles: y
-# X-Env-Var-docker_profiles-Description: Create AppArmor profiles for Docker daemon and containers
+# X-Env-Var-docker_profiles-Desc: Create AppArmor profiles for Docker daemon and containers
 # X-Env-Var-docker_profiles-Required: false
 # X-Env-Var-docker_profiles-Valid: bool
 # X-Env-Var-docker_profiles-Set: lazy
 # X-Env-Var-openssh_profiles: y
-# X-Env-Var-openssh_profiles-Description: Create AppArmor profiles for OpenSSH server
+# X-Env-Var-openssh_profiles-Desc: Create AppArmor profiles for OpenSSH server
 # X-Env-Var-openssh_profiles-Required: false
 # X-Env-Var-openssh_profiles-Valid: bool
 # X-Env-Var-openssh_profiles-Set: lazy
 # X-Env-Var-distrobox_profiles: y
-# X-Env-Var-distrobox_profiles-Description: Create AppArmor profiles for Distrobox containers
+# X-Env-Var-distrobox_profiles-Desc: Create AppArmor profiles for Distrobox containers
 # X-Env-Var-distrobox_profiles-Required: false
 # X-Env-Var-distrobox_profiles-Valid: bool
 # X-Env-Var-distrobox_profiles-Set: lazy
@@ -35,8 +35,42 @@
 mmdebstrap:
   customize-hooks:
     - |
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
+
+      validate_component_enabled() {
+        local component="$1"
+        local enable_var="IGconf_${component}_enable"
+        if [ "${!enable_var:-n}" != "y" ]; then
+          echo "ℹ️  $component disabled (set $enable_var=y to enable)"
+          exit 0
+        fi
+      }
+
+      igconf_isy() {
+        local var_name="$1"
+        local var_value="${!var_name:-n}"
+        [ "$var_value" = "y" ]
+      }
+
+      install_component_script() {
+        local source_content="$1"
+        local target_path="$2"
+        local target_dir="$3"
+
+        # Create target directory if it doesn't exist
+        local target_dir_path="$target_dir/$(dirname "$target_path")"
+        uchroot "$target_dir" mkdir -p "$(dirname "$target_path")"
+
+        # Write content to target file with appropriate permissions
+        echo "$source_content" | uchroot "$target_dir" tee "$target_path" >/dev/null
+        if [[ "$target_path" == *.sh ]]; then
+          uchroot "$target_dir" chmod 755 "$target_path"
+        else
+          uchroot "$target_dir" chmod 644 "$target_path"
+        fi
+
+        echo "✅ Installed script to $target_path"
+      }
 
       # Validate component enablement
       validate_component_enabled "apparmor_profiles"

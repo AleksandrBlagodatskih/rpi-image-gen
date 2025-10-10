@@ -1,23 +1,23 @@
 # METABEGIN
 # X-Env-Layer-Name: sysctl-performance
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Performance optimization parameters
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Performance optimization parameters
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: sysctl-performance
 # X-Env-VarPrefix: sysctl_performance
 # X-Env-Var-tcp_optimizations: y
-# X-Env-Var-tcp_optimizations-Description: Enable TCP performance optimizations
+# X-Env-Var-tcp_optimizations-Desc: Enable TCP performance optimizations
 # X-Env-Var-tcp_optimizations-Required: false
 # X-Env-Var-tcp_optimizations-Valid: bool
 # X-Env-Var-tcp_optimizations-Set: lazy
 # X-Env-Var-memory_optimizations: y
-# X-Env-Var-memory_optimizations-Description: Enable memory management optimizations
+# X-Env-Var-memory_optimizations-Desc: Enable memory management optimizations
 # X-Env-Var-memory_optimizations-Required: false
 # X-Env-Var-memory_optimizations-Valid: bool
 # X-Env-Var-memory_optimizations-Set: lazy
 # X-Env-Var-docker_compatibility: y
-# X-Env-Var-docker_compatibility-Description: Enable Docker-compatible network settings
+# X-Env-Var-docker_compatibility-Desc: Enable Docker-compatible network settings
 # X-Env-Var-docker_compatibility-Required: false
 # X-Env-Var-docker_compatibility-Valid: bool
 # X-Env-Var-docker_compatibility-Set: lazy

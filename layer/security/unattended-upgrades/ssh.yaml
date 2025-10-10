@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-ssh
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: OpenSSH server restart after security updates
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: OpenSSH server restart after security updates
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: unattended-upgrades-core-basic
 # X-Env-Layer-Provides: package-updates-ssh-integration
 # X-Env-VarPrefix: unattended
 # X-Env-Var-openssh_restart: y
-# X-Env-Var-openssh_restart-Description: Restart OpenSSH server after security updates
+# X-Env-Var-openssh_restart-Desc: Restart OpenSSH server after security updates
 # X-Env-Var-openssh_restart-Required: false
 # X-Env-Var-openssh_restart-Valid: bool
 # X-Env-Var-openssh_restart-Set: lazy

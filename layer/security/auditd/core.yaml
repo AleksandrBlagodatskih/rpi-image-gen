@@ -1,32 +1,32 @@
 # METABEGIN
 # X-Env-Layer-Name: auditd-core
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Auditd core installation and basic configuration
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Auditd core installation and basic configuration
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: locale-base
 # X-Env-Layer-Provides: auditd-core
 # X-Env-VarPrefix: auditd_core
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable auditd core installation
+# X-Env-Var-enable-Desc: Enable auditd core installation
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
-# X-Env-Var-buffer_size: 1024
-# X-Env-Var-buffer_size-Description: Audit buffer size (512-16384, affects memory usage)
+# X-Env-Var-buffer_size: 512
+# X-Env-Var-buffer_size-Desc: Audit buffer size (512-16384, affects memory usage)
 # X-Env-Var-buffer_size-Required: false
 # X-Env-Var-buffer_size-Valid: int:512-16384
 # X-Env-Var-buffer_size-Set: lazy
 # X-Env-Var-max_log_file: 5
-# X-Env-Var-max_log_file-Description: Maximum log files to keep (1-99)
+# X-Env-Var-max_log_file-Desc: Maximum log files to keep (1-99)
 # X-Env-Var-max_log_file-Required: false
 # X-Env-Var-max_log_file-Valid: int:1-99
 # X-Env-Var-max_log_file-Set: lazy
-# X-Env-Var-failure_mode: 1
-# X-Env-Var-failure_mode-Description: Failure mode (0=quiet,1=printk,2=panic)
+# X-Env-Var-failure_mode: 0
+# X-Env-Var-failure_mode-Desc: Failure mode (0=quiet,1=printk,2=panic)
 # X-Env-Var-failure_mode-Required: false
 # X-Env-Var-failure_mode-Valid: int:0-2
 # X-Env-Var-failure_mode-Set: lazy
 # X-Env-Var-boot_audit: y
-# X-Env-Var-boot_audit-Description: Enable audit=1 boot parameter for full process coverage
+# X-Env-Var-boot_audit-Desc: Enable audit=1 boot parameter for full process coverage
 # X-Env-Var-boot_audit-Required: false
 # X-Env-Var-boot_audit-Valid: bool
 # X-Env-Var-boot_audit-Set: lazy
@@ -41,14 +41,6 @@ mmdebstrap:
       set -euo pipefail
 
       # Embedded common functions for self-contained layer
-      create_backup_dir() {
-        local component="$1"
-        local target_dir="$2"
-        local timestamp=$(date +%Y%m%d_%H%M%S)
-        local backup_dir="$target_dir/var/backups/security/${component}_backup_$timestamp"
-        mkdir -p "$backup_dir"
-        echo "$backup_dir"
-      }
 
       validate_component_enabled() {
         local component="$1"
@@ -90,14 +82,6 @@ mmdebstrap:
 
       echo "🔍 Installing auditd core..."
 
-      # Create backup directory
-      BACKUP_DIR=$(create_backup_dir "auditd-core" "$1")
-
-      # Backup existing audit configuration
-      if [ -d "$1/etc/audit" ]; then
-        cp -a "$1/etc/audit" "$1$BACKUP_DIR/" 2>/dev/null || true
-        echo "📁 Backup created: $BACKUP_DIR/audit"
-      fi
 
       # Configure auditd.conf with embedded default configuration
       install_component_script "$(cat << 'AUDITD_CONF_EOF'
@@ -164,10 +148,23 @@ AUDITD_CONF_EOF
         fi
       fi
 
-      # Enable auditd service
+      # Enable auditd service with automatic recovery
       chroot "$1" systemctl enable auditd
+      chroot "$1" systemctl start auditd || true
 
-      echo "✅ Auditd core installed and configured"
+      # Create systemd drop-in for automatic recovery
+      mkdir -p "$1/etc/systemd/system/auditd.service.d"
+      cat > "$1/etc/systemd/system/auditd.service.d/override.conf" << 'EOF'
+[Service]
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+EOF
+
+      # Reload systemd configuration
+      chroot "$1" systemctl daemon-reload
+
+      echo "✅ Auditd core installed and configured with automatic recovery"
   rootfs-overlay:
     etc/audit/auditd.conf: |
       #

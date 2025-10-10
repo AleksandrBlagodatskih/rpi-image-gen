@@ -1,8 +1,8 @@
 # METABEGIN
 # X-Env-Layer-Name: unattended-upgrades-core-services
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Systemd services and integrations for unattended-upgrades
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Systemd services and integrations for unattended-upgrades
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: unattended-upgrades-core-basic
 # X-Env-Layer-Provides: package-updates-services
 # METAEND

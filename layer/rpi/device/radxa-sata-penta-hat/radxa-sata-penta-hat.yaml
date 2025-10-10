@@ -29,34 +29,76 @@
 ---
 mmdebstrap:
   customize-hooks:
-    # PCIe Gen 3.0 and SATA optimizations for JMB585 controller
+    # PCIe Gen 3.0 and SATA optimizations for JMB585 controller (idempotent)
     - |
       set -eu
-      if [ "${IGconf_radxa_sata_pcie_gen3:-y}" = "y" ]; then
-        echo "# Radxa SATA Penta HAT: PCIe Gen 3.0 for JMB585" >> $1/boot/firmware/config.txt
-        echo "dtparam=pciex1_gen=3" >> $1/boot/firmware/config.txt
-        echo "dtparam=pciex1_aspm=off" >> $1/boot/firmware/config.txt
-        echo "dtparam=pciex1" >> $1/boot/firmware/config.txt
-        echo "dtparam=sata_aggressive_linkpwr=1" >> $1/boot/firmware/config.txt
+      CONFIG_FILE="$1/boot/firmware/config.txt"
+
+      # Validate environment
+      if [ ! -f "$CONFIG_FILE" ]; then
+        echo "ERROR: config.txt not found at $CONFIG_FILE" >&2
+        exit 1
       fi
 
-    # Initramfs SATA initialization
+      # Helper function for safe config addition (idempotent)
+      add_config_if_not_exists() {
+        local param="$1"
+        local comment="$2"
+
+        if ! grep -q "^${param%%=*}" "$CONFIG_FILE" 2>/dev/null; then
+          echo "$comment" >> "$CONFIG_FILE"
+          echo "$param" >> "$CONFIG_FILE"
+          echo "" >> "$CONFIG_FILE"
+          echo "✅ Added PCIe/SATA config: $param"
+        else
+          echo "⚪ PCIe/SATA config already present: $param"
+        fi
+      }
+
+      if [ "${IGconf_radxa_sata_pcie_gen3:-y}" = "y" ]; then
+        add_config_if_not_exists "dtparam=pciex1_gen=3" "# Radxa SATA Penta HAT: PCIe Gen 3.0 for JMB585"
+        add_config_if_not_exists "dtparam=pciex1_aspm=off" ""
+        add_config_if_not_exists "dtparam=pciex1" ""
+        add_config_if_not_exists "dtparam=sata_aggressive_linkpwr=1" ""
+      fi
+
+    # Initramfs SATA initialization (idempotent)
     - |
       set -eu
       if [ "${IGconf_radxa_sata_initramfs_sata:-y}" = "y" ]; then
-        # Setup initramfs directories
+        echo "🔧 Setting up initramfs SATA initialization for JMB585"
+
+        # Setup initramfs directories (idempotent)
         mkdir -p $1/etc/initramfs-tools/hooks
         mkdir -p $1/etc/initramfs-tools/scripts/local-top
 
-        # Copy SATA hook
-        install -m 755 device/initramfs-tools/hooks/sata_penta $1/etc/initramfs-tools/hooks/
+        # Copy SATA hook (idempotent)
+        HOOK_DEST="$1/etc/initramfs-tools/hooks/sata_penta"
+        if [ ! -f "$HOOK_DEST" ]; then
+          install -m 755 device/initramfs-tools/hooks/sata_penta "$HOOK_DEST"
+          echo "✅ Installed SATA initramfs hook"
+        else
+          echo "⚪ SATA initramfs hook already present"
+        fi
 
-        # Add SATA modules
-        echo "# Radxa SATA Penta HAT modules" >> $1/etc/initramfs-tools/modules
-        grep -v '^#' device/initramfs-tools/modules/initramfs-modules | grep -v '^$' >> $1/etc/initramfs-tools/modules
+        # Add SATA modules (idempotent)
+        MODULES_FILE="$1/etc/initramfs-tools/modules"
+        if ! grep -q "# Radxa SATA Penta HAT modules" "$MODULES_FILE" 2>/dev/null; then
+          echo "# Radxa SATA Penta HAT modules" >> "$MODULES_FILE"
+          grep -v '^#' device/initramfs-tools/modules/initramfs-modules | grep -v '^$' >> "$MODULES_FILE"
+          echo "✅ Added SATA modules to initramfs"
+        else
+          echo "⚪ SATA modules already configured in initramfs"
+        fi
 
-        # Configure initramfs
-        sed -i 's/MODULES=most/MODULES=list/' $1/etc/initramfs-tools/initramfs.conf
+        # Configure initramfs (idempotent)
+        INITRAMFS_CONF="$1/etc/initramfs-tools/initramfs.conf"
+        if ! grep -q "MODULES=list" "$INITRAMFS_CONF" 2>/dev/null; then
+          sed -i 's/MODULES=most/MODULES=list/' "$INITRAMFS_CONF"
+          echo "✅ Configured initramfs to load modules by list"
+        else
+          echo "⚪ Initramfs already configured for module list loading"
+        fi
 
         # GPIO power management (experimental) - SECURE VERSION
         if [ "${IGconf_radxa_sata_enable_gpio_power}" = "y" ]; then
@@ -173,4 +215,104 @@ EOF
 
         # Update initramfs
         chroot $1 update-initramfs -u -k all
+      fi
+
+    # Add SATA monitoring integration (optional)
+    - |
+      set -eu
+
+      # Setup monitoring for Radxa SATA Penta HAT (optional)
+      if command -v curl >/dev/null 2>&1 && systemctl is-active --quiet prometheus-node-exporter 2>/dev/null; then
+        echo "📊 Setting up Radxa SATA Penta HAT monitoring integration"
+
+        # Create Prometheus textfile collector for SATA metrics
+        mkdir -p "$1/var/lib/prometheus/node-exporter"
+
+        # Generate basic SATA controller metrics
+        cat > "$1/var/lib/prometheus/node-exporter/radxa-sata.prom" << EOF
+# Radxa SATA Penta HAT Metrics
+radxa_sata_hat_configured 1
+radxa_sata_devices_detected $(ls /dev/sd* 2>/dev/null | grep -c "^/dev/sd[a-z]$" || echo 0)
+EOF
+
+        # Create SATA status script
+        mkdir -p "$1/usr/local/bin"
+        cat > "$1/usr/local/bin/radxa-sata-status" << 'EOF'
+#!/bin/bash
+# Radxa SATA Penta HAT Status Script
+
+echo "=== Radxa SATA Penta HAT Status ==="
+echo
+
+# Check controller presence
+echo "1. SATA Controller:"
+if lspci -d "197b:0585" >/dev/null 2>&1; then
+    CONTROLLER_INFO=$(lspci -d "197b:0585" -v | head -1)
+    echo "   ✅ JMB585 SATA controller detected: $CONTROLLER_INFO"
+else
+    echo "   ❌ JMB585 SATA controller not detected"
+fi
+
+# Check PCIe configuration
+echo
+echo "2. PCIe Configuration:"
+if grep -q "dtparam=pciex1_gen=3" /boot/firmware/config.txt 2>/dev/null; then
+    echo "   ✅ PCIe Gen 3.0 enabled"
+else
+    echo "   ⚠️ PCIe Gen 3.0 not enabled (may limit performance)"
+fi
+
+# Check connected drives
+echo
+echo "3. Connected SATA Devices:"
+DEVICE_COUNT=$(ls /dev/sd* 2>/dev/null | grep -c "^/dev/sd[a-z]$" || echo 0)
+if [ "$DEVICE_COUNT" -gt 0 ]; then
+    echo "   ✅ $DEVICE_COUNT SATA device(s) detected:"
+    for device in /dev/sd[a-z]; do
+        if [ -b "$device" ]; then
+            SIZE=$(lsblk -b -n -o SIZE "$device" 2>/dev/null | head -1)
+            MODEL=$(lsblk -n -o MODEL "$device" 2>/dev/null | head -1)
+            echo "      $device: ${MODEL:-Unknown} (${SIZE:-Unknown} bytes)"
+        fi
+    done
+else
+    echo "   ⚠️ No SATA devices detected"
+fi
+
+# Check initramfs configuration
+echo
+echo "4. Initramfs Configuration:"
+if [ -f /etc/initramfs-tools/hooks/sata_penta ]; then
+    echo "   ✅ SATA initramfs hook installed"
+else
+    echo "   ⚠️ SATA initramfs hook not found"
+fi
+
+# Check GPIO power management
+echo
+echo "5. Power Management:"
+if systemctl is-enabled --quiet radxa-sata-power.service 2>/dev/null; then
+    if systemctl is-active --quiet radxa-sata-power.service 2>/dev/null; then
+        echo "   ✅ GPIO power management active"
+    else
+        echo "   ⚠️ GPIO power management enabled but not active"
+    fi
+else
+    echo "   ⚪ GPIO power management not configured"
+fi
+
+echo
+echo "=== Performance Recommendations ==="
+if [ "$DEVICE_COUNT" -gt 0 ]; then
+    echo "• Test performance: hdparm -tT /dev/sda"
+    echo "• Check SMART: smartctl -a /dev/sda"
+    echo "• Monitor temps: watch -n 5 'lsblk -o NAME,SIZE,MODEL,TYPE /dev/sd*'"
+fi
+echo "• PCIe info: lspci -d 197b:0585 -vvv"
+echo "• SATA info: lsblk -o NAME,SIZE,MODEL,SERIAL /dev/sd*"
+EOF
+
+        chmod 755 "$1/usr/local/bin/radxa-sata-status"
+        echo "📈 Radxa SATA monitoring configured"
+        echo "   Status command: radxa-sata-status"
       fi

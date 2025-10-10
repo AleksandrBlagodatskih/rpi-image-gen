@@ -1,0 +1,12 @@
+# Invalid configuration for testing error handling
+device:
+  layer: rpi5
+image:
+  layer: mbr/simple
+layer:
+  base: bookworm-minbase
+  security: apparmor-core
+
+# Invalid variables for testing validation
+IGconf_apparmor_core_enable: "not_boolean"
+IGconf_apparmor_core_mode: "invalid_mode"

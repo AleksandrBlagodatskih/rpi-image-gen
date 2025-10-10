@@ -1,13 +1,13 @@
 # METABEGIN
 # X-Env-Layer-Name: ufw-cockpit
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: UFW integration with Cockpit firewall management
-# X-Env-Layer-Version: 1.0.0
-# X-Env-Layer-Requires: ufw-core
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: UFW integration with Cockpit firewall management
+# X-Env-Layer-Version: 2.0.0
+# X-Env-Layer-Requires: ufw-core-basic
 # X-Env-Layer-Provides: firewall-cockpit-integration
 # X-Env-VarPrefix: ufw
 # X-Env-Var-cockpit_integration: y
-# X-Env-Var-cockpit_integration-Description: Integrate with Cockpit firewall management
+# X-Env-Var-cockpit_integration-Desc: Integrate with Cockpit firewall management
 # X-Env-Var-cockpit_integration-Required: false
 # X-Env-Var-cockpit_integration-Valid: bool
 # X-Env-Var-cockpit_integration-Set: lazy

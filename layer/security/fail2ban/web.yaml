@@ -1,32 +1,32 @@
 # METABEGIN
 # X-Env-Layer-Name: fail2ban-web
-# X-Env-Layer-Category: security
-# X-Env-Layer-Description: Web server protection with Fail2Ban
-# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Desc: Web server protection with Fail2Ban
+# X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: fail2ban-core
 # X-Env-Layer-Provides: fail2ban-web
 # X-Env-VarPrefix: fail2ban_web
 # X-Env-Var-enable: y
-# X-Env-Var-enable-Description: Enable web server jails protection
+# X-Env-Var-enable-Desc: Enable web server jails protection
 # X-Env-Var-enable-Required: false
 # X-Env-Var-enable-Valid: bool
 # X-Env-Var-apache_enable: n
-# X-Env-Var-apache_enable-Description: Enable Apache jails protection
+# X-Env-Var-apache_enable-Desc: Enable Apache jails protection
 # X-Env-Var-apache_enable-Required: false
 # X-Env-Var-apache_enable-Valid: bool
 # X-Env-Var-apache_enable-Set: lazy
 # X-Env-Var-nginx_enable: n
-# X-Env-Var-nginx_enable-Description: Enable Nginx jails protection
+# X-Env-Var-nginx_enable-Desc: Enable Nginx jails protection
 # X-Env-Var-nginx_enable-Required: false
 # X-Env-Var-nginx_enable-Valid: bool
 # X-Env-Var-nginx_enable-Set: lazy
 # X-Env-Var-maxretry: 6
-# X-Env-Var-maxretry-Description: Maximum retry attempts for web violations
+# X-Env-Var-maxretry-Desc: Maximum retry attempts for web violations
 # X-Env-Var-maxretry-Required: false
 # X-Env-Var-maxretry-Valid: int:2-20
 # X-Env-Var-maxretry-Set: lazy
 # X-Env-Var-bantime: 3600
-# X-Env-Var-bantime-Description: Ban time in seconds for web violations
+# X-Env-Var-bantime-Desc: Ban time in seconds for web violations
 # X-Env-Var-bantime-Required: false
 # X-Env-Var-bantime-Valid: int:300-86400
 # X-Env-Var-bantime-Set: lazy
@@ -35,8 +35,7 @@
 mmdebstrap:
   customize-hooks:
     - |
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
 
       # Validate component enablement
       validate_component_enabled "fail2ban_web"

@@ -1,0 +1,18 @@
+# Full security configuration for comprehensive testing
+device:
+  layer: rpi5
+image:
+  layer: mbr/simple
+layer:
+  base: bookworm-minbase
+  infra: security-suite-standard
+
+# Test variables for all security components
+IGconf_apparmor_core_enable: y
+IGconf_apparmor_core_mode: enforce
+IGconf_auditd_core_enable: y
+IGconf_fail2ban_core_enable: y
+IGconf_pam_core_enable: y
+IGconf_password_policies_core_enable: y
+IGconf_sysctl_kernel_enable: y
+IGconf_sysctl_network_enable: y
