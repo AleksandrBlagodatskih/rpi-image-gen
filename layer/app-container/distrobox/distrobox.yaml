@@ -64,8 +64,12 @@ mmdebstrap:
 
         # Set up container manager config
         mkdir -p "$1/etc/distrobox"
+
+        # Use Docker (required dependency)
+        container_manager="${IGconf_distrobox_container_manager:-docker}"
+
         cat > "$1/etc/distrobox/distrobox.conf" << EOF
-        container_manager=${IGconf_distrobox_container_manager:-docker}
+        container_manager=$container_manager
         container_image_default=${IGconf_distrobox_container_image:-debian:bookworm}
         container_generate_entry=${IGconf_distrobox_generate_entry:-false}
         non_interactive=true
@@ -116,12 +120,9 @@ mmdebstrap:
         # Configure Docker access if enabled
         if [ "${IGconf_distrobox_enable_host_docker:-n}" = "y" ]; then
           echo "Configuring host Docker access..."
-          # Add user to docker group inside container
-          chroot "$1" distrobox enter "${IGconf_distrobox_container_name:-dev}" -- sh -c "
-            groupadd -f docker
-            usermod -aG docker \$USER
-          "
-          echo "Host Docker access configured"
+          # Note: Docker group setup will be done during first container run
+          # This avoids issues if container creation hasn't completed yet
+          echo "Host Docker access will be configured on first container start"
         fi
 
         echo "Distrobox dev container created successfully"

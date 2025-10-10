@@ -31,8 +31,10 @@ alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.path.includes(
 - Определенные точки выполнения (setup, customize, cleanup)
 - Возможность модификации поведения сборки
 
-### Архитектура инструментов
-```
+### Архитектура системы сборки
+
+#### Компоненты системы сборки
+```yaml
 rpi-image-gen использует:
 ├── bdebstrap     - модульное применение слоев
 ├── mmdebstrap    - создание файловой системы
@@ -40,6 +42,13 @@ rpi-image-gen использует:
 ├── podman unshare - безопасное выполнение без root
 └── YAML          - конфигурационные файлы
 ```
+
+#### Этапы сборки (5 стадий)
+1. **Parameter Assembly** - Сборка параметров и валидация
+2. **Layer Processing** - Обработка слоев и разрешение зависимостей
+3. **Build Preparation** - Подготовка окружения и bdebstrap конфигурации
+4. **Filesystem Generation** - Создание ФС + хуки + overlay
+5. **Image Generation** - Создание финального образа
 
 ### Архитектурные принципы
 

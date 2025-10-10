@@ -28,7 +28,7 @@
 # X-Env-Var-max_startup_time-Valid: int
 # X-Env-Var-max_startup_time-Set: immediate
 #
-# X-Env-Var-login_banner: "Welcome to $(hostname)"
+# X-Env-Var-login_banner: "Welcome to Raspberry Pi system"
 # X-Env-Var-login_banner-Desc: Login banner message
 # X-Env-Var-login_banner-Required: n
 # X-Env-Var-login_banner-Valid: string
@@ -40,13 +40,13 @@
 # X-Env-Var-enable_ssl-Valid: bool
 # X-Env-Var-enable_ssl-Set: immediate
 #
-# X-Env-Var-ssl_cert_file: "/etc/cockpit/ws-certs.d/0-self-signed.cert"
+# X-Env-Var-ssl_cert_file: /etc/cockpit/ws-certs.d/0-self-signed.cert
 # X-Env-Var-ssl_cert_file-Desc: Path to SSL certificate file
 # X-Env-Var-ssl_cert_file-Required: n
 # X-Env-Var-ssl_cert_file-Valid: string
 # X-Env-Var-ssl_cert_file-Set: lazy
 #
-# X-Env-Var-ssl_key_file: "/etc/cockpit/ws-certs.d/0-self-signed.key"
+# X-Env-Var-ssl_key_file: /etc/cockpit/ws-certs.d/0-self-signed.key
 # X-Env-Var-ssl_key_file-Desc: Path to SSL private key file
 # X-Env-Var-ssl_key_file-Required: n
 # X-Env-Var-ssl_key_file-Valid: string

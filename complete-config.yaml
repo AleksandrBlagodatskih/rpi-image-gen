@@ -1,0 +1,179 @@
+# Полная конфигурация rpi-image-gen со всеми обновленными слоями
+# Согласно правилам extensions - систематическая организация по уровням абстракции
+---
+# Полная конфигурация rpi-image-gen со всеми обновленными слоями
+# Согласно правилам extensions - систематическая организация по уровням абстракции
+
+# ================================================================================
+# УРОВЕНЬ 1: СИСТЕМНЫЕ РАСШИРЕНИЯ (BASE)
+# ================================================================================
+
+device:
+  layer: pi5
+  hostname: rpi-complete-system
+  # Оптимизации для Raspberry Pi 5
+  IGconf_device_arm_boost: 1
+  IGconf_device_gpu_mem: 128
+
+image:
+  layer: hybrid-raid-luks
+  # Настройки гибридного RAID1 + LUKS хранилища
+  IGconf_hybrid_raid_luks_rootfs_type: ext4
+  IGconf_hybrid_raid_luks_encryption_enabled: y
+  IGconf_hybrid_raid_luks_ssd_devices: "/dev/sda,/dev/sdb"
+  IGconf_hybrid_raid_luks_boot_part_size: 200M
+  IGconf_hybrid_raid_luks_root_part_size: 8G
+  IGconf_hybrid_raid_luks_key_size: 512
+  IGconf_hybrid_raid_luks_disk_expansion_enabled: y
+
+layer:
+  # Базовый уровень - Debian система
+  base: bookworm-minbase
+
+  # ================================================================================
+  # УРОВЕНЬ 2: ИНФРАСТРУКТУРНЫЕ РАСШИРЕНИЯ (INFRASTRUCTURE)
+  # ================================================================================
+
+  # Системная безопасность - фундаментальный уровень
+  security-core: security-suite/basic
+
+  # Системное hardening - параметры ядра и сети
+  sysctl-kernel: sysctl-hardening/kernel
+  sysctl-security: sysctl-hardening/security
+  sysctl-network: sysctl-hardening/network
+  sysctl-performance: sysctl-hardening/performance
+
+  # Аудит и мониторинг системы
+  audit-core: auditd/core
+  audit-rules: auditd/rules
+  audit-services: auditd/services
+
+  # Управление пакетами и обновлениями
+  package-updates-basic: unattended-upgrades/core/basic
+  package-updates-security: unattended-upgrades/core/security
+  package-updates-services: unattended-upgrades/core/services
+  package-updates-monitoring: unattended-upgrades/core/monitoring
+
+  # Сетевая безопасность - брандмауэр
+  firewall-basic: ufw/core/basic
+  firewall-rules: ufw/core/rules
+  firewall-services: ufw/core/services
+
+  # ================================================================================
+  # УРОВЕНЬ 3: СЕРВИСНЫЕ РАСШИРЕНИЯ (SERVICES)
+  # ================================================================================
+
+  # Аутентификация и авторизация
+  pam-core: pam/core
+  pam-ldap: pam/ldap
+  pam-services: pam/services
+
+  # Управление паролями
+  password-policies-core: password-policies/core
+  password-policies-aging: password-policies/aging
+  password-policies-lockout: password-policies/lockout
+
+  # Управление sudo и логирование привилегированных операций
+  sudo-logging-basic: sudo-logging/core/basic
+  sudo-logging-logging: sudo-logging/core/logging
+  sudo-logging-security: sudo-logging/core/security
+
+  # Защита от brute-force атак
+  fail2ban-core: fail2ban/core
+  fail2ban-ssh: fail2ban/ssh
+  fail2ban-mail: fail2ban/mail
+  fail2ban-services: fail2ban/services
+
+  # AppArmor - обязательный контроль доступа
+  apparmor-core: apparmor/core
+  apparmor-profiles: apparmor/profiles
+
+  # ================================================================================
+  # УРОВЕНЬ 4: ПРИКЛАДНЫЕ РАСШИРЕНИЯ (APPLICATION)
+  # ================================================================================
+
+  # Контейнеризация - Distrobox для изолированных приложений
+  distrobox: app-container/distrobox
+
+  # Сетевое управление - Cockpit для веб-интерфейса
+  cockpit: net-misc/cockpit
+
+  # ================================================================================
+  # УРОВЕНЬ 5: ИНТЕГРАЦИОННЫЕ РАСШИРЕНИЯ (INTEGRATION)
+  # ================================================================================
+
+  # Интеграция с Distrobox
+  sudo-distrobox-privileged: sudo-logging/distrobox
+  firewall-distrobox-integration: ufw/distrobox
+  package-updates-distrobox-integration: unattended-upgrades/distrobox
+
+  # Интеграция с Cockpit
+  sudo-cockpit-integration: sudo-logging/cockpit
+  firewall-cockpit-integration: ufw/cockpit
+  package-updates-cockpit-integration: unattended-upgrades/cockpit
+
+  # ================================================================================
+  # УРОВЕНЬ 6: УСТРОЙСТВЕННЫЕ РАСШИРЕНИЯ (DEVICE)
+  # ================================================================================
+
+  # Специфические оптимизации для устройств
+  rpi5-server-optimization: rpi/device/rpi5-server-config
+  sata-controller-support: rpi/device/radxa-sata-penta-hat
+
+# ================================================================================
+# ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ УРОВНЯ ОБРАЗА
+# ================================================================================
+# ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ
+# ================================================================================
+
+# Переменные окружения передаются через командную строку после '--'
+# Пример:
+# ./rpi-image-gen build -c complete-config.yaml -- \\
+#   IGconf_apparmor_core_mode=enforce \\
+#   IGconf_auditd_core_buffer_size=8192 \\
+#   IGconf_hybrid_raid_luks_encryption_enabled=y \\
+#   IGconf_rpi5_server_disable_hdmi=y
+
+# ================================================================================
+# ДОКУМЕНТАЦИЯ КОНФИГУРАЦИИ
+# ================================================================================
+
+# Эта конфигурация предоставляет:
+# - Полную систему безопасности (AppArmor, Auditd, Fail2ban, PAM, etc.)
+# - Гибридное хранилище (RAID1 + LUKS шифрование)
+# - Контейнеризацию (Distrobox)
+# - Сетевое управление (Cockpit)
+# - Оптимизации для Raspberry Pi 5 и Radxa SATA HAT
+# - Автоматические обновления и мониторинг
+#
+# Уровни организации:
+# 1. Системный (base, device, image)
+# 2. Инфраструктурный (security, sysctl, audit, firewall, updates)
+# 3. Сервисный (pam, passwords, sudo, fail2ban, apparmor)
+# 4. Прикладной (distrobox, cockpit)
+# 5. Интеграционный (cross-service integrations)
+# 6. Устройственный (device-specific optimizations)
+#
+# Все слои обновлены согласно правилам extensions v2.0.0
+
+# ================================================================================
+# ДОКУМЕНТАЦИЯ КОНФИГУРАЦИИ
+# ================================================================================
+
+# Эта конфигурация предоставляет:
+# - Полную систему безопасности (AppArmor, Auditd, Fail2ban, PAM, etc.)
+# - Гибридное хранилище (RAID1 + LUKS шифрование)
+# - Контейнеризацию (Distrobox)
+# - Сетевое управление (Cockpit)
+# - Оптимизации для Raspberry Pi 5 и Radxa SATA HAT
+# - Автоматические обновления и мониторинг
+#
+# Уровни организации:
+# 1. Системный (base, device, image)
+# 2. Инфраструктурный (security, sysctl, audit, firewall, updates)
+# 3. Сервисный (pam, passwords, sudo, fail2ban, apparmor)
+# 4. Прикладной (distrobox, cockpit)
+# 5. Интеграционный (cross-service integrations)
+# 6. Устройственный (device-specific optimizations)
+#
+# Все слои обновлены согласно правилам extensions v2.0.0

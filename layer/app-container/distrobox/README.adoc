@@ -23,13 +23,20 @@
 
 == Зависимости
 
-* **Docker слой**: `docker-debian-bookworm` или `docker-debian-trixie` (выберите один)
+* **Docker слой** (обязательно): `docker-debian-bookworm` или `docker-debian-trixie`
 * **rpi-user-credentials**: для настройки пользователей
 * **sys-build-base**: системные утилиты сборки
 
-=== Совместимость с Docker
+=== Совместимость с контейнерными менеджерами
 
-Слой автоматически определяет совместимость с установленным Docker слоем:
+Слой использует Docker как обязательный контейнерный менеджер:
+
+* **Docker** (обязательно): `docker-debian-bookworm` или `docker-debian-trixie`
+* Автоматическая настройка container manager в конфигурации Distrobox
+
+=== Docker интеграция (обязательна)
+
+Docker интеграция включена всегда благодаря обязательной зависимости:
 
 * **docker-debian-bookworm**: Рекомендуется для стабильной работы
 * **docker-debian-trixie**: Для использования новейших функций (экспериментально)

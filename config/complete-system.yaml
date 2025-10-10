@@ -1,0 +1,42 @@
+# Полная конфигурация rpi-image-gen со всеми обновленными слоями
+# Согласно правилам extensions - систематическая организация по уровням абстракции
+# Использует все обновленные слои: security, containers, monitoring, device optimizations
+
+device:
+  layer: rpi5
+  hostname: rpi-complete-system
+
+image:
+  layer: hybrid-raid-luks
+  boot_part_size: 200%
+  root_part_size: 400%
+  name: complete-system
+
+layer:
+  # Базовый уровень - Debian система
+  base: bookworm-minbase
+  build_base: sys-build-base
+
+  # Уровень 1.5: Сетевая инфраструктура (SSH для удаленного доступа)
+  ssh_server: openssh-server
+
+  # Уровень 2: Инфраструктурные расширения (ядро и безопасность)
+  sysctl_kernel: sysctl-kernel
+  sysctl_security: sysctl-security
+  audit_core: auditd-core
+  firewall_basic: ufw-core-basic
+
+  # Уровень 3: Сервисные расширения (аутентификация и политика)
+  pam_core: pam-core
+  password_policies_core: password-policies-core
+  fail2ban_core: fail2ban-core
+  apparmor_core: apparmor-core
+
+  # Уровень 4: Прикладные расширения (инструменты и сервисы)
+  docker: docker-debian-bookworm
+  distrobox: distrobox
+  # cockpit_web: cockpit  # Временно отключен для отладки
+
+  # Уровень 5: Устройственные расширения (специфично для оборудования)
+  rpi5_server_config: rpi5-server-config
+  radxa_sata_hat: radxa-sata-penta-hat

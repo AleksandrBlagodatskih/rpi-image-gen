@@ -1,0 +1,107 @@
+# Полная конфигурация rpi-image-gen со встроенными переменными
+# Переменные указаны непосредственно в YAML без IGconf_ префикса
+# Значения берутся из complete-system.env
+
+device:
+  layer: rpi5
+  hostname: rpi-complete-system
+
+image:
+  layer: hybrid-raid-luks
+  boot_part_size: 200%
+  root_part_size: 400%
+  name: complete-system
+
+# Переменные окружения (без IGconf_ префикса)
+# Эти значения будут установлены из .env файла
+apparmor_core_mode: enforce
+apparmor_core_auditd_integration: y
+apparmor_core_desktop_notifications: n
+
+auditd_core_buffer_size: 8192
+auditd_core_max_log_file: 8
+auditd_core_failure_mode: 1
+auditd_core_kernel_auditing: y
+
+sysctl_hardening_kernel_kptr_restrict: 0
+sysctl_hardening_security_ip_forward: 0
+sysctl_hardening_network_rp_filter: 1
+sysctl_hardening_performance_swappiness: 10
+
+ufw_core_default_input_policy: DROP
+ufw_core_default_output_policy: ACCEPT
+ufw_core_default_forward_policy: DROP
+ufw_core_ipv6_enabled: true
+ufw_core_logging_level: low
+
+password_policies_core_minlen: 12
+password_policies_core_ucredit: -1
+password_policies_core_lcredit: -1
+password_policies_core_dcredit: -1
+password_policies_core_ocredit: -1
+
+pam_core_password_minlen: 12
+pam_core_account_lockout_attempts: 5
+pam_core_account_lockout_time: 900
+
+fail2ban_core_log_target: /var/log/fail2ban.log
+fail2ban_core_log_level: INFO
+fail2ban_core_db_file: /var/lib/fail2ban/fail2ban.db
+
+hybrid_raid_luks_encryption_enabled: y
+hybrid_raid_luks_rootfs_type: ext4
+hybrid_raid_luks_ssd_devices: "/dev/sda,/dev/sdb"
+hybrid_raid_luks_boot_part_size: 200M
+hybrid_raid_luks_root_part_size: 8G
+hybrid_raid_luks_key_size: 512
+hybrid_raid_luks_disk_expansion_enabled: y
+
+app_container_distrobox_enable: y
+app_container_distrobox_container_name: development
+app_container_distrobox_image: ubuntu:22.04
+app_container_distrobox_home: /home/user
+app_container_distrobox_additional_packages: "git,vim,build-essential"
+
+net_misc_cockpit_enable: y
+net_misc_cockpit_port: 9090
+net_misc_cockpit_ssl: true
+net_misc_cockpit_allow_unencrypted: false
+
+rpi5_server_disable_hdmi: y
+rpi5_server_disable_wifi: y
+rpi5_server_disable_bluetooth: y
+rpi5_server_disable_audio: y
+rpi5_server_pcie_max_speed: y
+rpi5_server_usb_max_performance: y
+rpi5_server_disable_unused_interfaces: y
+
+radxa_sata_initramfs_sata: y
+radxa_sata_pcie_gen3: y
+radxa_sata_sata_power_control: y
+radxa_sata_gpio_pin: 26
+radxa_sata_power_on_delay: 2
+radxa_sata_power_off_delay: 1
+
+layer:
+  # Базовый уровень - Debian система
+  base: bookworm-minbase
+
+  # Уровень 2: Инфраструктурные расширения
+  sysctl-kernel: sysctl-hardening/kernel
+  sysctl-security: sysctl-hardening/security
+  audit-core: auditd/core
+  firewall-basic: ufw/core/basic
+
+  # Уровень 3: Сервисные расширения
+  pam-core: pam/core
+  password-policies-core: password-policies/core
+  fail2ban-core: fail2ban/core
+  apparmor-core: apparmor/core
+
+  # Уровень 4: Прикладные расширения
+  distrobox: app-container/distrobox
+  cockpit: net-misc/cockpit
+
+  # Уровень 6: Устройственные расширения
+  rpi5-server-optimization: rpi/device/rpi5-server-config
+  sata-controller-support: rpi/device/radxa-sata-penta-hat

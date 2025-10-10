@@ -1,0 +1,10 @@
+# Минимальная конфигурация для тестирования сборки
+---
+device:
+  layer: rpi5
+
+image:
+  layer: hybrid-raid-luks
+
+layer:
+  base: bookworm-minbase
