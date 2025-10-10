@@ -40,8 +40,50 @@ mmdebstrap:
       #!/bin/bash
       set -euo pipefail
 
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
+      create_backup_dir() {
+        local component="$1"
+        local target_dir="$2"
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        local backup_dir="$target_dir/var/backups/security/${component}_backup_$timestamp"
+        mkdir -p "$backup_dir"
+        echo "$backup_dir"
+      }
+
+      validate_component_enabled() {
+        local component="$1"
+        local enable_var="IGconf_${component}_enable"
+        if [ "${!enable_var:-n}" != "y" ]; then
+          echo "ℹ️  $component disabled (set $enable_var=y to enable)"
+          exit 0
+        fi
+      }
+
+      igconf_isy() {
+        local var_name="$1"
+        local var_value="${!var_name:-n}"
+        [ "$var_value" = "y" ]
+      }
+
+      install_component_script() {
+        local source_content="$1"
+        local target_path="$2"
+        local target_dir="$3"
+
+        # Create target directory if it doesn't exist
+        local target_dir_path="$target_dir/$(dirname "$target_path")"
+        uchroot "$target_dir" mkdir -p "$(dirname "$target_path")"
+
+        # Write content to target file with appropriate permissions
+        echo "$source_content" | uchroot "$target_dir" tee "$target_path" >/dev/null
+        if [[ "$target_path" == *.sh ]]; then
+          uchroot "$target_dir" chmod 755 "$target_path"
+        else
+          uchroot "$target_dir" chmod 644 "$target_path"
+        fi
+
+        echo "✅ Installed script to $target_path"
+      }
 
       # Validate component enablement
       validate_component_enabled "auditd_core"
@@ -57,8 +99,49 @@ mmdebstrap:
         echo "📁 Backup created: $BACKUP_DIR/audit"
       fi
 
-      # Configure auditd.conf
-      install -m 644 "templates/security/auditd/auditd.conf" "$1/etc/audit/auditd.conf"
+      # Configure auditd.conf with embedded default configuration
+      install_component_script "$(cat << 'AUDITD_CONF_EOF'
+#
+# This file controls the configuration of the audit daemon
+#
+
+local_events = yes
+write_logs = yes
+log_file = /var/log/audit/audit.log
+log_group = adm
+log_format = RAW
+flush = INCREMENTAL_ASYNC
+freq = 50
+max_log_file = 8
+num_logs = 5
+priority_boost = 4
+disp_qos = lossy
+dispatcher = /sbin/audispd
+name_format = NONE
+##name = mydomain
+max_log_file_action = ROTATE
+space_left = 75
+space_left_action = SYSLOG
+action_mail_acct = root
+admin_space_left = 50
+admin_space_left_action = SUSPEND
+disk_full_action = SUSPEND
+disk_error_action = SUSPEND
+##tcp_listen_port = 60
+tcp_listen_queue = 5
+tcp_max_per_addr = 1
+##tcp_client_ports = 1024-65535
+tcp_client_max_idle = 0
+enable_krb5 = no
+krb5_principal = auditd
+##krb5_key_file = /etc/audit/audit.key
+distribute_network = no
+q_depth = 400
+overflow_action = SYSLOG
+max_restarts = 10
+plugin_dir = /etc/audit/plugins.d
+AUDITD_CONF_EOF
+)" "$1/etc/audit/auditd.conf"
 
       # Apply configuration variables
       BUFFER_SIZE=${IGconf_auditd_core_buffer_size:-1024}
@@ -70,7 +153,7 @@ mmdebstrap:
       sed -i "s|^buffer_size = .*|buffer_size = $BUFFER_SIZE|" "$1/etc/audit/auditd.conf"
 
       # Boot parameter configuration
-      if igconf isy IGconf_auditd_core_boot_audit; then
+      if igconf_isy IGconf_auditd_core_boot_audit; then
         if [ -f "$1/boot/firmware/cmdline.txt" ]; then
           if ! grep -q "audit=1" "$1/boot/firmware/cmdline.txt"; then
             sed -i 's/$/ audit=1/' "$1/boot/firmware/cmdline.txt"
@@ -84,8 +167,203 @@ mmdebstrap:
       # Enable auditd service
       chroot "$1" systemctl enable auditd
 
-      # Create audit status script
-      install_component_script "templates/security/auditd/audit-status" "/usr/local/bin/audit-status" "$1"
-      install_component_script "templates/security/auditd/audit-status.sh" "/etc/profile.d/audit-status.sh" "$1"
-
       echo "✅ Auditd core installed and configured"
+  rootfs-overlay:
+    etc/audit/auditd.conf: |
+      #
+      # This file controls the configuration of the audit daemon
+      #
+
+      local_events = yes
+      write_logs = yes
+      log_file = /var/log/audit/audit.log
+      log_group = adm
+      log_format = RAW
+      flush = INCREMENTAL_ASYNC
+      freq = 50
+      max_log_file = 8
+      num_logs = 5
+      priority_boost = 4
+      disp_qos = lossy
+      dispatcher = /sbin/audispd
+      name_format = NONE
+      ##name = mydomain
+      max_log_file_action = ROTATE
+      space_left = 75
+      space_left_action = SYSLOG
+      action_mail_acct = root
+      admin_space_left = 50
+      admin_space_left_action = SUSPEND
+      disk_full_action = SUSPEND
+      disk_error_action = SUSPEND
+      ##tcp_listen_port = 60
+      tcp_listen_queue = 5
+      tcp_max_per_addr = 1
+      ##tcp_client_ports = 1024-65535
+      tcp_client_max_idle = 0
+      enable_krb5 = no
+      krb5_principal = auditd
+      ##krb5_key_file = /etc/audit/audit.key
+      distribute_network = no
+      q_depth = 400
+      overflow_action = SYSLOG
+      max_restarts = 10
+      plugin_dir = /etc/audit/plugins.d
+    usr/local/bin/audit-status: |
+      #!/bin/bash
+      # Auditd Status Script
+      # Provides comprehensive status information about auditd
+
+      echo "=== Auditd Security Monitoring Status ==="
+      echo
+
+      # Check if auditd service is running
+      echo "1. Auditd Service:"
+      if systemctl is-active --quiet auditd 2>/dev/null; then
+          echo "   ✅ auditd service is active"
+      else
+          echo "   ❌ auditd service is not active"
+      fi
+
+      if systemctl is-enabled auditd >/dev/null 2>&1 2>/dev/null; then
+          echo "   ✅ auditd enabled on boot"
+      else
+          echo "   ❌ auditd not enabled on boot"
+      fi
+
+      # Check kernel audit support
+      echo
+      echo "2. Kernel Audit Support:"
+      audit_enabled=$(cat /proc/sys/kernel/audit 2>/dev/null || echo "unknown")
+      if [ "$audit_enabled" = "1" ]; then
+          echo "   ✅ Kernel audit enabled"
+      else
+          echo "   ⚠️  Kernel audit status: $audit_enabled"
+      fi
+
+      # Check boot parameter
+      if grep -q "audit=1" /proc/cmdline 2>/dev/null; then
+          echo "   ✅ Boot parameter audit=1 present"
+      else
+          echo "   ⚠️  Boot parameter audit=1 missing (limited process coverage)"
+      fi
+
+      # Check auditd utilities
+      echo
+      echo "3. Auditd Utilities:"
+      for util in auditctl aureport ausearch; do
+          if command -v "$util" >/dev/null 2>&1; then
+              echo "   ✅ $util available"
+          else
+              echo "   ❌ $util not available"
+          fi
+      done
+
+      # Check configuration files
+      echo
+      echo "4. Configuration Files:"
+      config_files=(
+          "/etc/audit/auditd.conf"
+          "/etc/audit/rules.d/"
+      )
+
+      for config in "${config_files[@]}"; do
+          if [ -e "$config" ]; then
+              echo "   ✅ $config exists"
+          else
+              echo "   ❌ $config not found"
+          fi
+      done
+
+      # Show audit statistics
+      echo
+      echo "5. Audit Statistics:"
+      if command -v auditctl >/dev/null 2>&1; then
+          echo "   📊 Current audit buffer status:"
+          auditctl -s 2>/dev/null | sed 's/^/      /' || echo "      Unable to get audit statistics"
+      else
+          echo "   auditctl not available"
+      fi
+
+      # Check loaded rules
+      echo
+      echo "6. Loaded Audit Rules:"
+      if command -v auditctl >/dev/null 2>&1; then
+          rule_count=$(auditctl -l 2>/dev/null | wc -l)
+          echo "   📋 Total loaded rules: $rule_count"
+
+          if [ "$rule_count" -gt 0 ]; then
+              echo "   📋 Sample rules:"
+              auditctl -l 2>/dev/null | head -3 | sed 's/^/      /'
+          fi
+      else
+          echo "   auditctl not available"
+      fi
+
+      # Check log files
+      echo
+      echo "7. Audit Logs:"
+      log_files=(
+          "/var/log/audit/audit.log"
+          "/var/log/audit/audit.log.1"
+      )
+
+      for log in "${log_files[@]}"; do
+          if [ -f "$log" ]; then
+              size=$(du -h "$log" 2>/dev/null | cut -f1)
+              echo "   ✅ $log exists (size: $size)"
+          else
+              echo "   ⚠️  $log not found"
+          fi
+      done
+
+      # Recent events summary
+      echo
+      echo "8. Recent Audit Events:"
+      if [ -f /var/log/audit/audit.log ]; then
+          total_events=$(wc -l < /var/log/audit/audit.log 2>/dev/null || echo "0")
+          echo "   📊 Total events in current log: $total_events"
+
+          # Show event types summary
+          echo "   📈 Event types (last 1000 events):"
+          tail -1000 /var/log/audit/audit.log 2>/dev/null | \
+              grep "type=" | \
+              sed 's/.*type=\([^ ]*\).*/\1/' | \
+              sort | \
+              uniq -c | \
+              sort -nr | \
+              head -5 | \
+              sed 's/^/      /' || echo "      Unable to analyze events"
+      else
+          echo "   📭 No audit log available"
+      fi
+
+      echo
+      echo "=== Recommendations ==="
+      echo "• View detailed reports: aureport --summary"
+      echo "• Search specific events: ausearch -m AVC"
+      echo "• Monitor in real-time: tail -f /var/log/audit/audit.log"
+      echo "• Check rule syntax: auditctl -l"
+    etc/profile.d/audit-status.sh: |
+      # Auditd status profile for bash
+      # This file is sourced by /etc/profile.d/ to show auditd status on login
+
+      # Only show status if running interactively and not in scripts
+      if [[ $- == *i* ]] && [ -z "${AUDITD_STATUS_SHOWN:-}" ]; then
+          export AUDITD_STATUS_SHOWN=1
+
+          # Check if auditd is available
+          if command -v auditctl >/dev/null 2>&1 && systemctl is-active --quiet auditd 2>/dev/null; then
+              echo "🔍 Auditd Status:"
+              rule_count=$(auditctl -l 2>/dev/null | wc -l)
+              echo "   📋 Loaded rules: $rule_count"
+
+              # Check if audit log exists and has events
+              if [ -f /var/log/audit/audit.log ]; then
+                  event_count=$(wc -l < /var/log/audit/audit.log 2>/dev/null || echo "0")
+                  echo "   📊 Recent events: $event_count"
+              fi
+
+              echo
+          fi
+      fi

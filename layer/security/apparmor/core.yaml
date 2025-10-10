@@ -38,8 +38,50 @@ mmdebstrap:
       #!/bin/bash
       set -euo pipefail
 
-      # Source common functions
-      . "templates/security/common.sh"
+      # Embedded common functions for self-contained layer
+      create_backup_dir() {
+        local component="$1"
+        local target_dir="$2"
+        local timestamp=$(date +%Y%m%d_%H%M%S)
+        local backup_dir="$target_dir/var/backups/security/${component}_backup_$timestamp"
+        mkdir -p "$backup_dir"
+        echo "$backup_dir"
+      }
+
+      validate_component_enabled() {
+        local component="$1"
+        local enable_var="IGconf_${component}_enable"
+        if [ "${!enable_var:-n}" != "y" ]; then
+          echo "ℹ️  $component disabled (set $enable_var=y to enable)"
+          exit 0
+        fi
+      }
+
+      igconf_isy() {
+        local var_name="$1"
+        local var_value="${!var_name:-n}"
+        [ "$var_value" = "y" ]
+      }
+
+      install_component_script() {
+        local source_content="$1"
+        local target_path="$2"
+        local target_dir="$3"
+
+        # Create target directory if it doesn't exist
+        local target_dir_path="$target_dir/$(dirname "$target_path")"
+        uchroot "$target_dir" mkdir -p "$(dirname "$target_path")"
+
+        # Write content to target file with appropriate permissions
+        echo "$source_content" | uchroot "$target_dir" tee "$target_path" >/dev/null
+        if [[ "$target_path" == *.sh ]]; then
+          uchroot "$target_dir" chmod 755 "$target_path"
+        else
+          uchroot "$target_dir" chmod 644 "$target_path"
+        fi
+
+        echo "✅ Installed script to $target_path"
+      }
 
       # Validate component enablement
       validate_component_enabled "apparmor_core"
@@ -94,7 +136,7 @@ mmdebstrap:
       configure_apparmor_mode "${IGconf_apparmor_core_mode:-enforce}" "$1"
 
       # Configure auditd for detailed AppArmor logging
-      if igconf isy IGconf_apparmor_core_auditd; then
+      if igconf_isy IGconf_apparmor_core_auditd; then
         echo "📊 Installing and configuring auditd for AppArmor logging"
         chroot "$1" apt-get install -y auditd
 
@@ -102,15 +144,12 @@ mmdebstrap:
         chroot "$1" systemctl enable auditd
 
         # Configure audit rules for AppArmor
-        cat >> "$1/etc/audit/rules.d/apparmor.rules" << 'EOF'
--w /etc/apparmor.d/ -p wa -k apparmor
--w /etc/apparmor/ -p wa -k apparmor
-EOF
+        printf '# AppArmor audit rules\n-w /etc/apparmor.d/ -p wa -k apparmor\n-w /etc/apparmor/ -p wa -k apparmor\n' >> "$1/etc/audit/rules.d/apparmor.rules"
         echo "📋 AppArmor audit rules added"
       fi
 
       # Configure desktop notifications for policy violations
-      if igconf isy IGconf_apparmor_core_notify; then
+      if igconf_isy IGconf_apparmor_core_notify; then
         echo "🔔 Installing apparmor-notify for desktop notifications"
         chroot "$1" apt-get install -y apparmor-notify
 
@@ -125,8 +164,118 @@ EOF
       # Enable AppArmor service
       chroot "$1" systemctl enable apparmor
 
-      # Create AppArmor status script
-      install_component_script "templates/security/apparmor/apparmor-status" "/usr/local/bin/apparmor-status" "$1"
-      install_component_script "templates/security/apparmor/apparmor-status.sh" "/etc/profile.d/apparmor-status.sh" "$1"
-
       echo "✅ AppArmor core configured"
+  rootfs-overlay:
+    usr/local/bin/apparmor-status: |
+      #!/bin/bash
+      # AppArmor Status Script
+      # Provides comprehensive status information about AppArmor
+
+      echo "=== AppArmor Security Status ==="
+      echo
+
+      # Check if AppArmor is enabled in kernel
+      echo "1. Kernel AppArmor Support:"
+      if grep -q "apparmor=1" /proc/cmdline 2>/dev/null; then
+          echo "   ✅ AppArmor enabled in kernel boot parameters"
+      else
+          echo "   ❌ AppArmor not enabled in kernel (apparmor=1 missing from cmdline)"
+      fi
+
+      # Check if apparmor service is running
+      echo
+      echo "2. AppArmor Service:"
+      if systemctl is-active --quiet apparmor 2>/dev/null; then
+          echo "   ✅ apparmor service is active"
+      else
+          echo "   ⚠️  apparmor service is not active"
+      fi
+
+      # Check apparmor-utils availability
+      echo
+      echo "3. AppArmor Utilities:"
+      for util in aa-status aa-enforce aa-complain; do
+          if command -v "$util" >/dev/null 2>&1; then
+              echo "   ✅ $util available"
+          else
+              echo "   ❌ $util not available"
+          fi
+      done
+
+      # Show loaded profiles
+      echo
+      echo "4. Loaded AppArmor Profiles:"
+      if command -v aa-status >/dev/null 2>&1; then
+          aa-status 2>/dev/null || echo "   Unable to get profile status"
+      else
+          echo "   aa-status not available"
+      fi
+
+      # Check configuration files
+      echo
+      echo "5. Configuration Files:"
+      config_files=(
+          "/etc/apparmor.d/"
+          "/etc/apparmor/"
+      )
+
+      for config in "${config_files[@]}"; do
+          if [ -e "$config" ]; then
+              echo "   ✅ $config exists"
+          else
+              echo "   ❌ $config not found"
+          fi
+      done
+
+      # Check recent audit logs
+      echo
+      echo "6. Recent AppArmor Events:"
+      if [ -f /var/log/audit/audit.log ]; then
+          recent_events=$(grep -c "apparmor" /var/log/audit/audit.log 2>/dev/null || echo "0")
+          echo "   📊 Recent audit events: $recent_events"
+
+          if [ "$recent_events" -gt 0 ]; then
+              echo "   📋 Last 3 events:"
+              grep "apparmor" /var/log/audit/audit.log 2>/dev/null | tail -3 | sed 's/^/      /'
+          fi
+      elif [ -f /var/log/kern.log ]; then
+          recent_events=$(grep -c "apparmor" /var/log/kern.log 2>/dev/null || echo "0")
+          echo "   📊 Recent kernel events: $recent_events"
+      else
+          echo "   📭 No audit logs available"
+      fi
+
+      echo
+      echo "=== Recommendations ==="
+      echo "• Run 'aa-enforce /etc/apparmor.d/*' to set all profiles to enforce mode"
+      echo "• Run 'aa-complain /etc/apparmor.d/*' to set all profiles to complain mode"
+      echo "• Check logs: tail -f /var/log/audit/audit.log | grep apparmor"
+      echo "• Monitor violations: aa-notify -p"
+    etc/profile.d/apparmor-status.sh: |
+      # AppArmor status profile for bash
+      # This file is sourced by /etc/profile.d/ to show AppArmor status on login
+
+      # Only show status if running interactively and not in scripts
+      if [[ $- == *i* ]] && [ -z "${APPARMOR_STATUS_SHOWN:-}" ]; then
+          export APPARMOR_STATUS_SHOWN=1
+
+          # Check if AppArmor is available
+          if command -v aa-status >/dev/null 2>&1; then
+              echo "🛡️  AppArmor Status:"
+              aa-status 2>/dev/null | head -3 | sed 's/^/   /'
+
+              # Check for any complain mode profiles
+              complain_profiles=$(aa-status 2>/dev/null | grep -c "in complain mode" || echo "0")
+              if [ "$complain_profiles" -gt 0 ]; then
+                  echo "   ⚠️  $complain_profiles profiles in complain mode"
+              fi
+
+              # Check for any enforce mode profiles
+              enforce_profiles=$(aa-status 2>/dev/null | grep -c "in enforce mode" || echo "0")
+              if [ "$enforce_profiles" -gt 0 ]; then
+                  echo "   ✅ $enforce_profiles profiles in enforce mode"
+              fi
+
+              echo
+          fi
+      fi
