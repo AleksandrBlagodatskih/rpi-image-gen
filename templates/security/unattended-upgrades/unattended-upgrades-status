@@ -1,0 +1,151 @@
+#!/bin/bash
+# Unattended Upgrades Status Script
+# Provides comprehensive status information about unattended upgrades
+
+echo "=== Unattended Upgrades Status ==="
+echo
+
+# Check if unattended-upgrades is installed
+echo "1. Package Status:"
+if dpkg -l | grep -q unattended-upgrades; then
+    echo "   ✅ unattended-upgrades package installed"
+else
+    echo "   ❌ unattended-upgrades package not installed"
+fi
+
+# Check service status
+echo
+echo "2. Service Status:"
+if systemctl is-active --quiet unattended-upgrades 2>/dev/null; then
+    echo "   ✅ unattended-upgrades service is active"
+else
+    echo "   ⚠️  unattended-upgrades service is not active"
+fi
+
+if systemctl is-enabled unattended-upgrades >/dev/null 2>&1 2>/dev/null; then
+    echo "   ✅ unattended-upgrades enabled on boot"
+else
+    echo "   ⚠️  unattended-upgrades not enabled on boot"
+fi
+
+# Check timer status
+echo
+echo "3. Timer Status:"
+if systemctl is-active --quiet unattended-upgrades.timer 2>/dev/null; then
+    echo "   ✅ unattended-upgrades.timer is active"
+else
+    echo "   ⚠️  unattended-upgrades.timer is not active"
+fi
+
+# Check configuration
+echo
+echo "4. Configuration:"
+config_file="/etc/apt/apt.conf.d/50unattended-upgrades"
+if [ -f "$config_file" ]; then
+    echo "   ✅ Main config exists: $config_file"
+
+    # Check if unattended upgrades are enabled
+    if grep -q "Unattended-Upgrade::Update-Package-Lists" "$config_file" 2>/dev/null; then
+        echo "   ✅ Package list updates enabled"
+    fi
+
+    if grep -q "Unattended-Upgrade::Unattended-Upgrade" "$config_file" 2>/dev/null; then
+        echo "   ✅ Unattended upgrades enabled"
+    fi
+else
+    echo "   ❌ Main config not found"
+fi
+
+# Check custom configurations
+echo
+echo "5. Custom Configurations:"
+custom_configs=(
+    "/etc/apt/apt.conf.d/97unattended-upgrades-distrobox"
+    "/etc/apt/apt.conf.d/98unattended-upgrades-ssh"
+    "/etc/apt/apt.conf.d/99unattended-upgrades-docker"
+)
+
+for config in "${custom_configs[@]}"; do
+    if [ -f "$config" ]; then
+        echo "   ✅ $config exists"
+    else
+        echo "   ⚠️  $config not found"
+    fi
+done
+
+# Check log files
+echo
+echo "6. Log Files:"
+log_files=(
+    "/var/log/unattended-upgrades/unattended-upgrades.log"
+    "/var/log/unattended-upgrades/unattended-upgrades-shutdown.log"
+)
+
+for log in "${log_files[@]}"; do
+    if [ -f "$log" ]; then
+        size=$(du -h "$log" 2>/dev/null | cut -f1)
+        echo "   ✅ $log exists (size: $size)"
+    else
+        echo "   ⚠️  $log not found"
+    fi
+done
+
+# Check recent activity
+echo
+echo "7. Recent Activity:"
+if [ -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
+    last_run=$(grep "Starting unattended upgrades" /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null | tail -1 | cut -d' ' -f1-3 || echo "Never")
+    if [ "$last_run" != "Never" ]; then
+        echo "   📅 Last run: $last_run"
+    else
+        echo "   📅 No previous runs found"
+    fi
+
+    # Count recent upgrades
+    recent_upgrades=$(grep -c "Packages that will be upgraded:" /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null || echo "0")
+    echo "   📦 Total upgrade operations: $recent_upgrades"
+else
+    echo "   📭 No log file available"
+fi
+
+# Check for pending upgrades
+echo
+echo "8. Pending Upgrades:"
+if command -v apt >/dev/null 2>&1; then
+    pending=$(apt list --upgradable 2>/dev/null | grep -c "upgradable" || echo "0")
+    echo "   📋 Pending packages: $pending"
+
+    if [ "$pending" -gt 0 ]; then
+        echo "   📋 Upgradable packages:"
+        apt list --upgradable 2>/dev/null | grep "upgradable" | head -5 | sed 's/^/      /'
+    fi
+else
+    echo "   apt not available"
+fi
+
+# Check monitoring scripts
+echo
+echo "9. Monitoring Scripts:"
+monitor_scripts=(
+    "/usr/local/bin/unattended-upgrades-status"
+    "/usr/local/bin/unattended-upgrades-monitor"
+    "/usr/local/bin/unattended-upgrades-cockpit-notify"
+    "/usr/local/bin/unattended-upgrades-ssh-restart"
+    "/usr/local/bin/unattended-upgrades-docker-restart"
+    "/usr/local/bin/unattended-upgrades-distrobox-restart"
+)
+
+for script in "${monitor_scripts[@]}"; do
+    if [ -x "$script" ]; then
+        echo "   ✅ $script available"
+    else
+        echo "   ⚠️  $script not available"
+    fi
+done
+
+echo
+echo "=== Recommendations ==="
+echo "• Check logs: tail -f /var/log/unattended-upgrades/unattended-upgrades.log"
+echo "• Force run: unattended-upgrade -d"
+echo "• Edit config: nano /etc/apt/apt.conf.d/50unattended-upgrades"
+echo "• Test config: unattended-upgrade --dry-run"

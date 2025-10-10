@@ -1,0 +1,48 @@
+#!/bin/bash
+# Unattended Upgrades Distrobox Restart Script
+# This script is called after unattended upgrades to handle Distrobox containers
+
+set -euo pipefail
+
+LOG_FILE="/var/log/unattended-upgrades/distrobox-restart.log"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+echo "[$TIMESTAMP] Starting Distrobox container restart after upgrades" >> "$LOG_FILE"
+
+# Check if distrobox command is available
+if ! command -v distrobox >/dev/null 2>&1; then
+    echo "[$TIMESTAMP] Distrobox not available, skipping container restart" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Get list of running containers
+containers=$(distrobox list --running 2>/dev/null | awk 'NR>1 {print $1}' || echo "")
+
+if [ -z "$containers" ]; then
+    echo "[$TIMESTAMP] No running Distrobox containers found" >> "$LOG_FILE"
+    exit 0
+fi
+
+echo "[$TIMESTAMP] Found running containers: $containers" >> "$LOG_FILE"
+
+# Restart each container
+for container in $containers; do
+    echo "[$TIMESTAMP] Restarting container: $container" >> "$LOG_FILE"
+
+    if distrobox stop "$container" 2>/dev/null; then
+        echo "[$TIMESTAMP] Successfully stopped: $container" >> "$LOG_FILE"
+    else
+        echo "[$TIMESTAMP] Failed to stop: $container" >> "$LOG_FILE"
+        continue
+    fi
+
+    sleep 2
+
+    if distrobox start "$container" 2>/dev/null; then
+        echo "[$TIMESTAMP] Successfully restarted: $container" >> "$LOG_FILE"
+    else
+        echo "[$TIMESTAMP] Failed to restart: $container" >> "$LOG_FILE"
+    fi
+done
+
+echo "[$TIMESTAMP] Distrobox container restart completed" >> "$LOG_FILE"

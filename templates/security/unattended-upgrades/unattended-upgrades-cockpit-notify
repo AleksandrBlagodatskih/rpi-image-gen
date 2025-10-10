@@ -1,0 +1,59 @@
+#!/bin/bash
+# Unattended Upgrades Cockpit Notification Script
+# This script sends notifications to Cockpit about upgrade status
+
+set -euo pipefail
+
+LOG_FILE="/var/log/unattended-upgrades/cockpit-notify.log"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+echo "[$TIMESTAMP] Checking for Cockpit upgrade notifications" >> "$LOG_FILE"
+
+# Check if Cockpit is running
+if ! systemctl is-active --quiet cockpit 2>/dev/null; then
+    echo "[$TIMESTAMP] Cockpit service not running, skipping notifications" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Check if we have upgrade logs
+if [ ! -f /var/log/unattended-upgrades/unattended-upgrades.log ]; then
+    echo "[$TIMESTAMP] No upgrade log found" >> "$LOG_FILE"
+    exit 0
+fi
+
+# Get recent upgrade information
+recent_upgrades=$(grep -A 10 "Starting unattended upgrades" /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null | tail -20 || echo "")
+
+if [ -n "$recent_upgrades" ]; then
+    # Check for successful upgrades
+    upgraded_count=$(echo "$recent_upgrades" | grep -c "Inst " || echo "0")
+
+    if [ "$upgraded_count" -gt 0 ]; then
+        echo "[$TIMESTAMP] Found $upgraded_count upgraded packages" >> "$LOG_FILE"
+
+        # Create notification for Cockpit
+        # Cockpit can read notifications from /var/lib/cockpit/ or use wall command
+        notification_msg="Unattended upgrades completed: $upgraded_count packages updated"
+
+        # Send notification via wall (visible in Cockpit terminal)
+        if command -v wall >/dev/null 2>&1; then
+            echo "$notification_msg" | wall
+            echo "[$TIMESTAMP] Notification sent: $notification_msg" >> "$LOG_FILE"
+        fi
+
+        # Log detailed information
+        echo "[$TIMESTAMP] Upgrade details:" >> "$LOG_FILE"
+        echo "$recent_upgrades" >> "$LOG_FILE"
+    fi
+
+    # Check for errors
+    errors=$(echo "$recent_upgrades" | grep -i error || echo "")
+    if [ -n "$errors" ]; then
+        error_msg="Unattended upgrades encountered errors - check logs"
+        echo "$error_msg" | wall 2>/dev/null || true
+        echo "[$TIMESTAMP] Error notification sent" >> "$LOG_FILE"
+        echo "[$TIMESTAMP] Errors: $errors" >> "$LOG_FILE"
+    fi
+fi
+
+echo "[$TIMESTAMP] Cockpit notification check completed" >> "$LOG_FILE"
