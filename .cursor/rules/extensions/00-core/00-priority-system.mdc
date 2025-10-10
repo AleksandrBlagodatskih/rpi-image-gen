@@ -16,8 +16,8 @@ alwaysApply: true
 
 #### Система сборки rpi-image-gen
 - **01-architecture.mdc** - Архитектурные принципы и система сборки
-- **01-build-system.mdc** - Система сборки rpi-image-gen (bdebstrap, mmdebstrap, genimage)
-- **01-variable-system.mdc** - Система переменных окружения IGconf_*
+- **01-build-system.mdc** - Система сборки и создания конфигураций rpi-image-gen (bdebstrap, mmdebstrap, genimage)
+- **01-variable-system.mdc** - Система переменных окружения IGconf_* (короткие имена в конфигурациях)
 - **01-hooks-integration.mdc** - Хуки и точки интеграции
 
 #### Безопасность и архитектура

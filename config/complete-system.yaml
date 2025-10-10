@@ -2,6 +2,83 @@
 # Согласно правилам extensions - систематическая организация по уровням абстракции
 # Использует все обновленные слои: security, containers, monitoring, device optimizations
 
+# ============================================================================
+# ПЕРЕМЕННЫЕ СЛОЕВ (вынесены из блока layer для лучшей читаемости)
+# ============================================================================
+
+# Уровень 2: Инфраструктурные расширения (ядро и безопасность)
+sysctl_kernel:
+  ptrace_restrict: y
+  aslr_enable: y
+  kptr_restrict: 1
+  dmesg_restrict: y
+
+sysctl_security:
+  core_dump_restrict: y
+  perf_event_paranoid: 2
+  kernel_modules_disable: y
+
+audit_core:
+  enable: y
+  buffer_size: 1024
+  max_log_file: 8
+
+firewall_basic:
+  enable: y
+  default_input_policy: DROP
+  default_output_policy: ACCEPT
+  logging_level: low
+
+# Уровень 3: Сервисные расширения (аутентификация и политика)
+pam_core:
+  enable: y
+  minlen: 12
+  faillock_enable: y
+
+password_policies_core:
+  enable: y
+  min_length: 12
+  complexity_enable: y
+
+fail2ban_core:
+  enable: y
+  loglevel: INFO
+  logtarget: /var/log/fail2ban.log
+
+apparmor_core:
+  enable: y
+  mode: enforce
+  auditd: y
+
+# Уровень 4: Прикладные расширения (инструменты и сервисы)
+docker:
+  trust_user1: n
+
+distrobox:
+  container_name: development
+  container_image: ubuntu:22.04
+  enable_host_docker: y
+  dev_packages: "git,curl,sudo,net-tools,iputils-ping,iputils-tracepath,iputils-traceroute,iputils-arping,iputils-nping,iputils-nflog,iputils-rdisc,iputils-rtacct,iputils-rtmon,iputils-rtroute,iputils-rarpd,iputils-rdisc,iputils-rtacct,iputils-rtmon,iputils-rtroute,iputils-rarpd"
+
+# Уровень 5: Устройственные расширения (специфично для оборудования)
+rpi5_server_config:
+  disable_hdmi: y
+  disable_wifi: y
+  disable_bluetooth: y
+  disable_audio: y
+  pcie_max_speed: y
+  usb_max_performance: y
+  disable_unused_interfaces: y
+
+radxa_sata_hat:
+  pcie_gen3: y
+  initramfs_sata: y
+  enable_gpio_power: n
+
+# ============================================================================
+# КОНФИГУРАЦИЯ УСТРОЙСТВА И ОБРАЗА
+# ============================================================================
+
 device:
   layer: rpi5
   hostname: rpi-complete-system
@@ -11,6 +88,10 @@ image:
   boot_part_size: 200%
   root_part_size: 400%
   name: complete-system
+
+# ============================================================================
+# СЛОИ СИСТЕМЫ (только ссылки на слои, переменные выше)
+# ============================================================================
 
 layer:
   # Базовый уровень - Debian система
@@ -35,6 +116,7 @@ layer:
   # Уровень 4: Прикладные расширения (инструменты и сервисы)
   docker: docker-debian-bookworm
   distrobox: distrobox
+
   # cockpit_web: cockpit  # Временно отключен для отладки
 
   # Уровень 5: Устройственные расширения (специфично для оборудования)
