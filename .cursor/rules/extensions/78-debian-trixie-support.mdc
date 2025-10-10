@@ -1,0 +1,226 @@
+---
+alwaysApply: ${cursor.file.content && (cursor.file.content.includes("suite: trixie") || cursor.file.content.includes("trixie"))}
+---
+
+# Правило 78: Поддержка Debian Trixie в rpi-image-gen
+
+## Назначение правила
+Определяет специфические правила и рекомендации для работы с Debian Trixie (testing) в rpi-image-gen.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Использование Debian Trixie
+
+### Настройка suite в mmdebstrap
+```yaml
+---
+mmdebstrap:
+  suite: trixie
+  keyrings:
+    - /usr/share/keyrings/debian-archive-keyring.gpg
+  mode: unshare
+  target: root.tar.xz
+  variant: apt
+```
+
+### Особенности Debian Trixie
+
+#### Testing repository особенности
+- **Частые обновления**: пакеты обновляются часто, возможны breaking changes
+- **Нестабильность**: некоторые пакеты могут быть временно неработоспособны
+- **Новые версии**: доступны последние версии ПО (Rust, Go, Python, etc.)
+
+#### Рекомендации по использованию
+```bash
+# Проверка доступности пакетов в Trixie
+apt-cache policy package-name
+
+# Использование pinning для критичных пакетов
+cat > /etc/apt/preferences.d/trixie-pinning << EOF
+Package: *
+Pin: release a=stable
+Pin-Priority: 900
+
+Package: specific-package
+Pin: release a=trixie
+Pin-Priority: 990
+EOF
+```
+
+### Валидация для Trixie расширений
+```yaml
+# Проверка совместимости пакетов
+validate_trixie_packages() {
+    local packages=("rustc" "golang-go" "python3-dev" "nodejs")
+
+    for pkg in "${packages[@]}"; do
+        if apt-cache show "$pkg" 2>/dev/null | grep -q "Version:"; then
+            echo "✓ Package $pkg available in Trixie"
+        else
+            echo "✗ Package $pkg not available or problematic in Trixie"
+            return 1
+        fi
+    done
+}
+```
+
+## Интеграция с современными toolchain
+
+### Rust в Debian Trixie
+```yaml
+# Rust из официального репозитория Debian
+mmdebstrap:
+  suite: trixie
+  packages:
+    - rustc
+    - cargo
+    - rustfmt
+    - clippy
+
+# Альтернатива: установка через rustup
+customize-hooks:
+  - |
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source $HOME/.cargo/env
+    rustup toolchain install stable
+```
+
+### Go в Debian Trixie
+```yaml
+# Go из официального репозитория
+mmdebstrap:
+  suite: trixie
+  packages:
+    - golang-go
+    - golang-golang-x-tools
+
+# Рекомендуемая версия Go 1.21+
+customize-hooks:
+  - |
+    go version
+    go install golang.org/x/tools/cmd/goimports@latest
+```
+
+### Python и Node.js экосистемы
+```yaml
+mmdebstrap:
+  suite: trixie
+  packages:
+    - python3.11
+    - python3.11-dev
+    - python3-pip
+    - nodejs
+    - npm
+    - yarnpkg
+
+customize-hooks:
+  - |
+    # Настройка Python virtualenv
+    python3 -m pip install --user pipx
+    pipx install poetry
+
+    # Настройка Node.js
+    npm install -g pnpm
+    npm install -g @microsoft/rush
+```
+
+## Безопасность в Trixie окружении
+
+### Управление обновлениями
+```bash
+# Настройка unattended-upgrades для testing
+cat > /etc/apt/apt.conf.d/50unattended-upgrades << EOF
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,codename=trixie,label=Debian";
+    "origin=Debian,codename=trixie-security,label=Debian-Security";
+};
+EOF
+```
+
+### Мониторинг стабильности
+```bash
+# Проверка на broken packages
+apt-get check
+
+# Очистка проблемных пакетов
+apt-get install -f
+
+# Анализ зависимостей
+apt-cache rdepends broken-package
+```
+
+## Оптимизации для Trixie
+
+### Кэширование пакетов
+```yaml
+# Использование apt-cacher-ng для локального кэширования
+customize-hooks:
+  - |
+    apt-get install -y apt-cacher-ng
+    systemctl enable apt-cacher-ng
+    echo 'Acquire::http::Proxy "http://localhost:3142";' > /etc/apt/apt.conf.d/01proxy
+```
+
+### Параллельная установка
+```yaml
+# Оптимизация для многопроцессорных систем
+mmdebstrap:
+  suite: trixie
+  apt:
+    conf: |
+      Acquire::Languages "none";
+      APT::Install-Recommends "false";
+      APT::Install-Suggests "false";
+      DPkg::Options {"--force-confdef";"--force-confold";};
+```
+
+## Устранение неполадок Trixie
+
+### Распространенные проблемы
+```bash
+# Проблема: пакет не найден
+apt-cache search package-name
+apt-cache show package-name
+
+# Проблема: конфликты зависимостей
+apt-get install -o Debug::pkgProblemResolver=yes package-name
+
+# Проблема: broken packages
+dpkg --audit
+apt-get install -f
+```
+
+### Резервные стратегии
+```yaml
+# Fallback на stable для критичных компонентов
+customize-hooks:
+  - |
+    # Установка базовой системы из stable
+    echo "deb http://deb.debian.org/debian stable main" > /etc/apt/sources.list.d/stable.list
+    apt-get update
+    apt-get install -y --no-install-recommends -t stable systemd
+
+    # Затем обновление до trixie для development tools
+    sed -i 's/stable/trixie/g' /etc/apt/sources.list.d/stable.list
+    apt-get update
+    apt-get upgrade
+```
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Использование `suite: trixie` вместо `unstable`
+- [ ] Валидация доступности критичных пакетов
+- [ ] Настройка security updates для testing
+- [ ] Тестирование на нескольких сборках
+- [ ] Документирование специфичных зависимостей
+
+### Качественные показатели
+- [ ] Стабильность пакетов в Trixie
+- [ ] Соответствие версий upstream
+- [ ] Минимум manual interventions
+- [ ] Хорошая воспроизводимость сборок
+- [ ] Обратная совместимость с stable
+
+### Источник
+Создано на основе опыта работы с Debian testing в embedded системах

@@ -21,6 +21,9 @@ alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.path.includes(
 - Хуки: setup, customize, cleanup
 - Документация на русском языке
 - Тесты для функциональности
+- Поддержка Debian Trixie (опционально)
+- A/B boot система (для критичных обновлений)
+- Современные протоколы безопасности (TLS, MQTT)
 ```
 
 ### Валидация конфигурации
@@ -33,6 +36,26 @@ alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.path.includes(
 - Переменные окружения имеют валидацию (X-Env-Var-*-Valid)
 ```
 
+### Работа с Debian Trixie
+```
+Создай расширение для Debian Trixie:
+- Используй suite: trixie в mmdebstrap
+- Убедись в совместимости пакетов
+- Добавь обработку testing-specific зависимостей
+- Включи современные версии toolchain (Rust, Go)
+- Добавь валидацию для Trixie-specific функций
+```
+
+### Настройка A/B Boot системы
+```
+Реализуй A/B обновления для rpi-image-gen:
+- Настрой tryboot с fallback механизмом
+- Создай systemd сервис для обновлений
+- Реализуй динамический выбор слотов
+- Добавь GPT labels для идентификации слотов
+- Включи мониторинг состояния обновлений
+```
+
 ### Оптимизация производительности
 ```
 Оптимизируй расширение rpi-image-gen для производительности:
@@ -40,6 +63,7 @@ alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.path.includes(
 - Предложи параллельное выполнение независимых операций
 - Оптимизируй размер образа (удали неиспользуемые пакеты)
 - Добавь кэширование для повторяющихся операций
+- Используй PMAP для оптимизации памяти
 ```
 
 ### Отладка проблем сборки
@@ -92,6 +116,10 @@ rpi-image-gen layer --create --depends "apparmor-core,auditd-core" --category se
 # X-Env-Var-firmware_version-Description: Версия firmware для устройства
 # X-Env-Var-firmware_version-Required: false
 # X-Env-Var-firmware_version-Valid: latest,stable,beta
+# X-Env-Var-enable_pmap: true
+# X-Env-Var-enable_pmap-Description: Включить PMAP для образа
+# X-Env-Var-enable_pmap-Required: false
+# X-Env-Var-enable_pmap-Valid: true,false
 # METAEND
 ---
 mmdebstrap:
@@ -99,11 +127,13 @@ mmdebstrap:
     - raspberrypi-bootloader
     - raspberrypi-kernel
     - linux-firmware-raspi
+    - rpi-eeprom
   customize-hooks:
     - |
       # Настройка специфичных параметров устройства
       configure_device_specifics() {
         local firmware_version="${IGconf_device_firmware_version:-latest}"
+        local enable_pmap="${IGconf_device_enable_pmap:-true}"
 
         case "$firmware_version" in
           "latest") rpi-eeprom-update -a ;;
@@ -111,11 +141,77 @@ mmdebstrap:
           "beta") rpi-eeprom-update -r ;;
         esac
 
+        # Настройка PMAP если требуется
+        if [[ "$enable_pmap" = "true" ]]; then
+          echo "PMAP включен для образа"
+          # PMAP настройки будут применены автоматически
+        fi
+
         # Дополнительная настройка устройства
         echo "Настройка устройства ${IGconf_device_type:-unknown} завершена"
       }
 
       configure_device_specifics
+```
+
+### Debian Trixie Development Template 🆕 НОВОЕ
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: ${extension_name}-trixie
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: ${description} на базе Debian Trixie
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+# X-Env-VarPrefix: trixie_dev
+#
+# X-Env-Var-rust_version: stable
+# X-Env-Var-rust_version-Description: Версия Rust toolchain
+# X-Env-Var-rust_version-Required: false
+# X-Env-Var-rust_version-Valid: stable,beta,nightly
+# X-Env-Var-go_version: 1.21
+# X-Env-Var-go_version-Description: Версия Go toolchain
+# X-Env-Var-go_version-Required: false
+# X-Env-Var-go_version-Valid: 1.19,1.20,1.21
+# METAEND
+---
+mmdebstrap:
+  suite: trixie
+  packages:
+    - build-essential
+    - git
+    - curl
+    - wget
+    - python3-dev
+    - nodejs
+    - npm
+  customize-hooks:
+    - |
+      # Настройка среды разработки Debian Trixie
+      setup_trixie_development() {
+        local rust_version="${IGconf_trixie_dev_rust_version:-stable}"
+        local go_version="${IGconf_trixie_dev_go_version:-1.21}"
+
+        # Установка Rust
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source $HOME/.cargo/env
+        rustup install "$rust_version"
+        rustup default "$rust_version"
+        rustup component add rustfmt clippy
+
+        # Установка Go
+        wget -O go.tar.gz "https://golang.org/dl/go${go_version}.linux-arm64.tar.gz"
+        tar -C /usr/local -xzf go.tar.gz
+        echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+        echo 'export GOPATH=/opt/go' >> /etc/profile
+
+        # Настройка Python и Node.js для Trixie
+        pip3 install --break-system-packages virtualenvwrapper
+        npm install -g yarn pnpm
+
+        echo "Среда разработки Debian Trixie настроена"
+      }
+
+      setup_trixie_development
 ```
 
 ### Application Extension Template

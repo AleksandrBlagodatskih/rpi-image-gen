@@ -80,6 +80,10 @@ mmdebstrap:
 # X-Env-Var-interval-Description: Интервал сбора данных (секунды)
 # X-Env-Var-interval-Required: false
 # X-Env-Var-interval-Valid: int:10-3600
+# X-Env-Var-enable_tls: true
+# X-Env-Var-enable_tls-Description: Использовать TLS для соединений
+# X-Env-Var-enable_tls-Required: false
+# X-Env-Var-enable_tls-Valid: true,false
 # METAEND
 ---
 mmdebstrap:
@@ -88,16 +92,19 @@ mmdebstrap:
     - python3-pip
     - python3-rpi.gpio
     - curl
+    - ca-certificates
   setup-hooks:
-    - pip3 install requests adafruit-circuitpython-dht
+    - pip3 install requests adafruit-circuitpython-dht paho-mqtt
   customize-hooks:
     - |
-      # Создание сервиса сбора данных
+      # Создание сервиса сбора данных с поддержкой TLS
       cat > /usr/local/bin/sensor-collector.py << 'EOF'
       #!/usr/bin/env python3
       import time
       import json
+      import ssl
       import requests
+      import paho.mqtt.client as mqtt
       import adafruit_dht
       import board
 
@@ -447,6 +454,262 @@ mmdebstrap:
 
   cleanup-hooks:
     - rm -f /etc/samba/smb.conf.bak /etc/grafana/grafana.ini.bak
+```
+
+### Шаблон: Debian Trixie Development Environment 🆕 НОВОЕ
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: debian-trixie-dev
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Среда разработки на базе Debian Trixie
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential
+# X-Env-VarPrefix: trixie_dev
+#
+# X-Env-Var-enable_rust: true
+# X-Env-Var-enable_rust-Description: Установить Rust toolchain
+# X-Env-Var-enable_rust-Required: false
+# X-Env-Var-enable_rust-Valid: true,false
+# X-Env-Var-enable_go: false
+# X-Env-Var-enable_go-Description: Установить Go toolchain
+# X-Env-Var-enable_go-Required: false
+# X-Env-Var-enable_go-Valid: true,false
+# METAEND
+---
+mmdebstrap:
+  suite: trixie
+  packages:
+    - build-essential
+    - git
+    - vim
+    - curl
+    - wget
+    - python3-dev
+    - nodejs
+    - npm
+  customize-hooks:
+    - |
+      # Настройка среды разработки для Debian Trixie
+      setup_dev_environment() {
+        local enable_rust="${IGconf_trixie_dev_enable_rust:-true}"
+        local enable_go="${IGconf_trixie_dev_enable_go:-false}"
+
+        # Установка Rust если требуется
+        if [[ "$enable_rust" = "true" ]]; then
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup component add rustfmt clippy
+        fi
+
+        # Установка Go если требуется
+        if [[ "$enable_go" = "true" ]]; then
+          wget -O go.tar.gz "https://golang.org/dl/go1.21.0.linux-arm64.tar.gz"
+          tar -C /usr/local -xzf go.tar.gz
+          echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+        fi
+
+        # Настройка Python virtualenv wrapper
+        pip3 install virtualenvwrapper --break-system-packages
+        echo "export WORKON_HOME=/opt/virtualenvs" >> /etc/profile
+        echo "source /usr/local/bin/virtualenvwrapper.sh" >> /etc/profile
+      }
+
+      setup_dev_environment
+```
+
+### Шаблон: A/B Boot System 🆕 НОВОЕ
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: ab-boot-system
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Система A/B обновлений с tryboot
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,rpi-bootloader
+# X-Env-VarPrefix: ab_boot
+#
+# X-Env-Var-tryboot_timeout: 10
+# X-Env-Var-tryboot_timeout-Description: Таймаут для tryboot (секунды)
+# X-Env-Var-tryboot_timeout-Required: false
+# X-Env-Var-tryboot_timeout-Valid: int:5-60
+# X-Env-Var-enable_fallback: true
+# X-Env-Var-enable_fallback-Description: Включить fallback на предыдущий слот
+# X-Env-Var-enable_fallback-Required: false
+# X-Env-Var-enable_fallback-Valid: true,false
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - raspberrypi-bootloader
+    - rpi-eeprom
+    - u-boot-tools
+  customize-hooks:
+    - |
+      # Настройка A/B boot системы
+      setup_ab_boot() {
+        local tryboot_timeout="${IGconf_ab_boot_tryboot_timeout:-10}"
+        local enable_fallback="${IGconf_ab_boot_enable_fallback:-true}"
+
+        # Создание конфигурации tryboot
+        cat > /boot/tryboot.txt << EOF
+[all]
+boot_delay=0
+dtoverlay=vc4-fkms-v3d
+kernel=kernel8.img
+initramfs initrd.img followkernel
+EOF
+
+        # Настройка EEPROM для A/B
+        rpi-eeprom-config --edit << EOF
+BOOT_ORDER=0xf21
+TFTP_PREFIX=tryboot
+BOOT_DELAY=0
+TFTP_ENABLED=1
+EOF
+
+        # Настройка systemd для обновлений
+        cat > /etc/systemd/system/rpi-ab-update.service << EOF
+[Unit]
+Description=Raspberry Pi A/B Update Service
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/rpi-ab-update.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        chmod +x /etc/systemd/system/rpi-ab-update.service
+        systemctl enable rpi-ab-update
+      }
+
+      setup_ab_boot
+    - |
+      # Создание скрипта обновления
+      cat > /usr/local/bin/rpi-ab-update.sh << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+# Определение текущего и целевого слота
+CURRENT_SLOT=$(rpi-eeprom-config | grep -o "BOOT_ORDER=.*" | cut -d= -f2)
+TARGET_SLOT=""
+
+if [[ "$CURRENT_SLOT" == "0xf21" ]]; then
+    TARGET_SLOT="0xf12"
+else
+    TARGET_SLOT="0xf21"
+fi
+
+echo "Переключение на слот: $TARGET_SLOT"
+
+# Логика переключения слотов
+rpi-eeprom-config --edit "BOOT_ORDER=$TARGET_SLOT"
+
+# Перезагрузка для применения
+shutdown -r now
+EOF
+      chmod +x /usr/local/bin/rpi-ab-update.sh
+```
+
+### Шаблон: Modern IoT Gateway 🆕 НОВОЕ
+```yaml
+# METABEGIN
+# X-Env-Layer-Name: iot-gateway-modern
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Современный IoT шлюз с MQTT и TLS
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: essential,net-misc
+# X-Env-VarPrefix: iot_gw
+#
+# X-Env-Var-mqtt_broker: mqtt.example.com
+# X-Env-Var-mqtt_broker-Description: MQTT брокер для подключения
+# X-Env-Var-mqtt_broker-Required: true
+# X-Env-Var-mqtt_port: 8883
+# X-Env-Var-mqtt_port-Description: Порт MQTT брокера
+# X-Env-Var-mqtt_port-Required: false
+# X-Env-Var-mqtt_port-Valid: int:1883,8883
+# X-Env-Var-enable_tls: true
+# X-Env-Var-enable_tls-Description: Использовать TLS для MQTT
+# X-Env-Var-enable_tls-Required: false
+# X-Env-Var-enable_tls-Valid: true,false
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - mosquitto-clients
+    - python3-paho-mqtt
+    - python3-cryptography
+    - ca-certificates
+    - curl
+    - jq
+  customize-hooks:
+    - |
+      # Настройка IoT шлюза
+      setup_iot_gateway() {
+        local mqtt_broker="${IGconf_iot_gw_mqtt_broker}"
+        local mqtt_port="${IGconf_iot_gw_mqtt_port:-8883}"
+        local enable_tls="${IGconf_iot_gw_enable_tls:-true}"
+
+        # Создание MQTT клиента с TLS
+        cat > /usr/local/bin/iot-gateway.py << EOF
+#!/usr/bin/env python3
+import paho.mqtt.client as mqtt
+import ssl
+import json
+import time
+import subprocess
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected to MQTT broker with result code {rc}")
+    client.subscribe("iot/devices/+/status")
+
+def on_message(client, userdata, msg):
+    print(f"Received message: {msg.topic} {msg.payload}")
+    # Обработка входящих сообщений от устройств
+
+def main():
+    client = mqtt.Client()
+    client.on_connect = on_connect
+    client.on_message = on_message
+
+    if "${enable_tls}" == "true":
+        client.tls_set(ca_certs=None, certfile=None, keyfile=None,
+                      cert_reqs=ssl.CERT_REQUIRED,
+                      tls_version=ssl.PROTOCOL_TLS, ciphers=None)
+        client.tls_insecure_set(False)
+
+    client.connect("${mqtt_broker}", ${mqtt_port}, 60)
+    client.loop_forever()
+
+if __name__ == "__main__":
+    main()
+EOF
+
+        chmod +x /usr/local/bin/iot-gateway.py
+
+        # Создание systemd сервиса
+        cat > /etc/systemd/system/iot-gateway.service << EOF
+[Unit]
+Description=IoT Gateway Service
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/iot-gateway.py
+Restart=always
+User=iot-gateway
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        # Создание пользователя для сервиса
+        useradd --system --shell /bin/false --home /var/lib/iot-gateway iot-gateway
+        systemctl enable iot-gateway
+      }
+
+      setup_iot_gateway
 ```
 
 ## Правила использования шаблонов 🔴 ОВЯЗАТЕЛЬНЫЕ

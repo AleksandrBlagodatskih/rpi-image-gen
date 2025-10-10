@@ -50,6 +50,50 @@ uchroot "$TEMP_DIR" bash -c "isolated_operation"
 
 ### Валидация входных данных
 
+#### Проверка переменных окружения для современных протоколов
+```bash
+# ✅ ПРАВИЛЬНО - валидация TLS и MQTT параметров
+validate_modern_protocols() {
+    local mqtt_broker="${IGconf_mqtt_broker}"
+    local mqtt_port="${IGconf_mqtt_port:-8883}"
+    local enable_tls="${IGconf_enable_tls:-true}"
+
+    # Валидация MQTT брокера
+    if [[ -z "$mqtt_broker" ]]; then
+        die "MQTT broker is required"
+    fi
+
+    if ! [[ "$mqtt_broker" =~ ^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        die "Invalid MQTT broker hostname: $mqtt_broker"
+    fi
+
+    # Валидация порта с учетом TLS
+    if [[ "$enable_tls" = "true" ]]; then
+        if ! [[ "$mqtt_port" =~ ^(8883|8884|443)$ ]]; then
+            die "TLS enabled but port is not secure: $mqtt_port"
+        fi
+    else
+        if ! [[ "$mqtt_port" =~ ^(1883|1884|80)$ ]]; then
+            die "TLS disabled but port is secure: $mqtt_port"
+        fi
+    fi
+}
+
+# Валидация A/B boot параметров
+validate_ab_boot() {
+    local tryboot_timeout="${IGconf_tryboot_timeout:-10}"
+    local enable_fallback="${IGconf_enable_fallback:-true}"
+
+    if ! [[ "$tryboot_timeout" =~ ^[0-9]+$ ]] || [[ "$tryboot_timeout" -lt 5 ]] || [[ "$tryboot_timeout" -gt 60 ]]; then
+        die "Invalid tryboot timeout: $tryboot_timeout (must be 5-60 seconds)"
+    fi
+
+    if [[ "$enable_fallback" != "true" && "$enable_fallback" != "false" ]]; then
+        die "enable_fallback must be true or false"
+    fi
+}
+```
+
 #### Проверка переменных окружения
 ```bash
 # ✅ ПРАВИЛЬНО - валидация всех входных данных
@@ -386,6 +430,108 @@ setup_integrity_check() {
 EOF
 
     chmod +x /etc/cron.daily/aide-check
+}
+```
+
+### Безопасность A/B Boot систем 🆕 НОВОЕ
+```bash
+# Безопасная настройка A/B обновлений
+setup_secure_ab_boot() {
+    # Создание резервных копий критических файлов
+    cp /boot/config.txt /boot/config.txt.backup
+    cp /etc/fstab /etc/fstab.backup
+
+    # Настройка безопасного tryboot
+    cat > /boot/tryboot.txt << 'EOF'
+[tryboot]
+# Критические параметры для безопасной загрузки
+kernel=kernel8.img
+initramfs initrd.img followkernel
+dtparam=i2c_arm=on
+dtparam=spi=on
+EOF
+
+    # Валидация целостности слотов
+    validate_slot_integrity() {
+        local current_slot=$(rpi-eeprom-config | grep BOOT_ORDER)
+        echo "Current boot order: $current_slot"
+
+        # Проверка наличия обоих слотов
+        if ! lsblk | grep -q "mmcblk0p2\|nvme0n1p2"; then
+            echo "WARNING: Second slot not found!"
+            return 1
+        fi
+
+        return 0
+    }
+
+    # Мониторинг состояния обновлений
+    setup_update_monitoring() {
+        cat > /usr/local/bin/monitor-ab-updates.sh << 'EOF'
+#!/bin/bash
+# Мониторинг A/B обновлений
+LOG_FILE="/var/log/ab-updates.log"
+
+while true; do
+    if validate_slot_integrity; then
+        echo "$(date): Slot integrity OK" >> "$LOG_FILE"
+    else
+        echo "$(date): Slot integrity FAILED" >> "$LOG_FILE"
+        # Отправка алерта
+        wall "WARNING: A/B slot integrity compromised"
+    fi
+    sleep 300  # Проверка каждые 5 минут
+done
+EOF
+
+        chmod +x /usr/local/bin/monitor-ab-updates.sh
+    }
+
+    validate_slot_integrity
+    setup_update_monitoring
+}
+```
+
+### Безопасность Debian Trixie 🆕 НОВОЕ
+```bash
+# Специфичные меры безопасности для Debian Trixie
+setup_trixie_security() {
+    # Обновление до последних security updates из testing
+    apt-get update
+    apt-get install -y --only-upgrade "$(apt-cache search security | awk '{print $1}')"
+
+    # Настройка unattended-upgrades для testing
+    cat > /etc/apt/apt.conf.d/50unattended-upgrades << 'EOF'
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,codename=${distro_codename},label=Debian-Security";
+    "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+    "origin=Debian,codename=testing,label=Debian";
+};
+Unattended-Upgrade::Package-Blacklist {
+};
+EOF
+
+    # Валидация toolchain безопасности
+    validate_toolchain_security() {
+        local rust_version=$(rustc --version 2>/dev/null | awk '{print $2}')
+        local go_version=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//')
+
+        if [[ -n "$rust_version" ]]; then
+            echo "Rust version: $rust_version"
+            # Проверка на известные уязвимости в Rust
+            rustup check
+        fi
+
+        if [[ -n "$go_version" ]]; then
+            echo "Go version: $go_version"
+            # Рекомендации по обновлению Go
+            if [[ "$go_version" < "1.20" ]]; then
+                echo "WARNING: Go version $go_version may have security issues"
+            fi
+        fi
+    }
+
+    validate_toolchain_security
 }
 ```
 
