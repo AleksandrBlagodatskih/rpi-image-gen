@@ -1,55 +1,33 @@
 [
    {
       "attributes": {
-         "PMAPversion": "1.2.0",
-         "system_type": "hybrid_mdraid_luks_gpt"
+         "PMAPversion": "1.1.0",
+         "system_type": "flat"
       }
    },
    {
-      "raid": {
-         "level": "raid1",
-         "devices": ["<SSD_DEVICES>"],
-         "mdraid_images": ["mdraid-a.img", "mdraid-b.img"],
-         "disk_images": ["disk-a.img", "disk-b.img"]
-      },
-      "encrypted": {
-         "luks2": {
-            "key_size": "<KEY_SIZE>",
-            "cipher": "aes-xts-plain64",
-            "hash": "sha256",
-            "pbkdf": "argon2id",
-            "pbkdf_memory": 1048576,
-            "pbkdf_parallel": 4,
-            "label": "cryptroot",
-            "uuid": "<CRYPT_UUID>",
-            "mname": "cryptroot",
-            "etype": "mdraid_luks2_gpt"
-         }
-      },
       "partitions": [
          {
-            "image": "boot.vfat",
-            "device": "sdcard",
-            "filesystem": "vfat",
-            "mountpoint": "/boot/firmware",
-            "partition_table": "mbr"
-         },
-         {
-            "image": "disk-a.img",
-            "device": "ssd_a",
-            "filesystem": "gpt_raid",
-            "partition_table": "gpt",
-            "raid_member": "mdraid-a.img",
-            "mountpoint": "/"
-         },
-         {
-            "image": "disk-b.img",
-            "device": "ssd_b",
-            "filesystem": "gpt_raid",
-            "partition_table": "gpt",
-            "raid_member": "mdraid-b.img",
-            "mountpoint": "/"
+            "image": "boot"
          }
       ]
+   },
+   {
+      "encrypted": {
+         "luks2": {
+            "key_size": 512,
+            "cipher": "aes-xts-plain64",
+            "hash": "sha256",
+            "label": "root",
+            "uuid": "<CRYPT_UUID>",
+            "mname": "cryptroot",
+            "etype": "raw"
+         },
+         "partitions": [
+            {
+               "image": "root"
+            }
+         ]
+      }
    }
 ]

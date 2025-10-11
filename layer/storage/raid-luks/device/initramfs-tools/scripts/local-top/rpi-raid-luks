@@ -1,0 +1,83 @@
+#!/bin/bash
+set -euo pipefail
+
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Get device UUIDs from cmdline if available
+CRYPT_UUID=""
+ROOT_UUID=""
+
+# Parse kernel command line for crypt device UUID
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        root=UUID=*)
+            ROOT_UUID="${param#root=UUID=}"
+            ;;
+        cryptdevice=UUID=*)
+            CRYPT_UUID="${param#cryptdevice=UUID=}"
+            ;;
+    esac
+done
+
+# If no UUIDs from cmdline, try to find by device name
+if [ -z "$CRYPT_UUID" ]; then
+    # Try to find the crypt device by scanning partitions
+    for dev in /dev/sd*; do
+        if cryptsetup isLuks "$dev" 2>/dev/null; then
+            CRYPT_UUID=$(blkid -s UUID -o value "$dev")
+            break
+        fi
+    done
+fi
+
+# If still no UUID, try environment variables or fallback
+CRYPT_UUID="${CRYPT_UUID:-$ROOT_UUID}"
+
+if [ -z "$CRYPT_UUID" ]; then
+    echo "WARNING: No crypt UUID found, skipping LUKS unlock" >&2
+    exit 0
+fi
+
+# Wait for devices to settle
+echo "Waiting for devices to settle..."
+sleep 2
+
+# Assemble RAID array if needed
+if [ -n "$ROOT_UUID" ]; then
+    echo "Assembling RAID array UUID=$ROOT_UUID..."
+    if ! mdadm --assemble --uuid="$ROOT_UUID" /dev/md0 2>/dev/null; then
+        echo "WARNING: RAID assembly failed or no RAID devices found" >&2
+    fi
+fi
+
+# Unlock LUKS container
+echo "Unlocking LUKS container UUID=$CRYPT_UUID..."
+if [ -x /usr/bin/rpi-raid ]; then
+    # Use custom keyscript if available
+    if cryptsetup luksOpen --keyscript /usr/bin/rpi-raid UUID="$CRYPT_UUID" cryptroot; then
+        echo "Successfully unlocked LUKS container"
+    else
+        echo "ERROR: Failed to unlock LUKS container with keyscript" >&2
+        exit 1
+    fi
+else
+    # Fallback: try with key file if available
+    if [ -f /key ]; then
+        if cryptsetup luksOpen --key-file /key UUID="$CRYPT_UUID" cryptroot; then
+            echo "Successfully unlocked LUKS container with key file"
+        else
+            echo "ERROR: Failed to unlock LUKS container with key file" >&2
+            exit 1
+        fi
+    else
+        echo "ERROR: No keyscript or key file available for LUKS unlock" >&2
+        exit 1
+    fi
+fi
+
+echo "RAID/LUKS initialization complete"
+exit 0

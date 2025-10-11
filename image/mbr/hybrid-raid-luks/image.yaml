@@ -4,7 +4,7 @@
 # X-Env-Layer-Desc: Hybrid SD + RAID1 + LUKS storage layer (genimage-based disk images)
 # X-Env-Layer-Version: 2.0.0
 # X-Env-Layer-Requires: rpi-essential-base
-# X-Env-Layer-Provides: image,raid,luks
+# X-Env-Layer-Provides: image
 # X-Env-VarPrefix: hybrid_raid_luks
 #
 # X-Env-Var-rootfs_type: ext4
@@ -62,93 +62,3 @@
 # X-Env-Var-disk_expansion_enabled-Set: lazy
 # METAEND
 ---
-mmdebstrap:
-  packages:
-    - mdadm
-    - cryptsetup
-    - initramfs-tools
-    - parted
-    - e2fsprogs  # for resize2fs
-    - btrfs-progs  # for btrfs filesystem resize
-    - f2fs-tools  # for resize.f2fs
-
-  customize-hooks:
-    # RAID/LUKS configuration with idempotency and error handling
-    - |
-      set -eu
-      echo "🔧 Configuring RAID/LUKS hybrid storage"
-
-      # Ensure services are enabled with automatic recovery
-      systemctl enable mdadm.service 2>/dev/null || true
-      systemctl enable cryptsetup.target 2>/dev/null || true
-
-      # Configure mdadm for automatic RAID assembly
-      if [ ! -f /etc/mdadm/mdadm.conf.backup ]; then
-        cp /etc/mdadm/mdadm.conf /etc/mdadm/mdadm.conf.backup 2>/dev/null || true
-      fi
-
-      echo "✅ RAID/LUKS hybrid storage configured"
-
-  rootfs-overlay:
-    usr/local/bin/raid-luks-status: |
-      #!/bin/bash
-      # RAID/LUKS Status Script
-      # Provides comprehensive status information about RAID/LUKS hybrid storage
-
-      echo "=== RAID/LUKS Hybrid Storage Status ==="
-      echo
-
-      # Check RAID status
-      echo "1. RAID Status:"
-      if [ -b /dev/md0 ]; then
-        echo "   ✅ RAID array /dev/md0 active"
-        mdadm --detail /dev/md0 | grep -E "(State|Active|Failed)" | sed 's/^/   /'
-      else
-        echo "   ❌ RAID array /dev/md0 not found"
-      fi
-      echo
-
-      # Check LUKS status
-      echo "2. LUKS Encryption Status:"
-      if [ -b /dev/mapper/cryptroot ]; then
-        echo "   ✅ LUKS container cryptroot active"
-        cryptsetup status cryptroot | grep -E "(type|cipher|keysize)" | sed 's/^/   /'
-      else
-        echo "   ❌ LUKS container cryptroot not active"
-      fi
-      echo
-
-      # Check filesystem
-      echo "3. Filesystem Status:"
-      ROOT_MOUNT=$(findmnt -n -o TARGET / 2>/dev/null || echo "unknown")
-      FS_TYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || echo "unknown")
-      echo "   Mount point: \"$ROOT_MOUNT\""
-      echo "   Filesystem: \"$FS_TYPE\""
-
-      # Check disk expansion
-      if [ -f /var/lib/disk-expansion.done ]; then
-        echo "   ✅ Disk expansion completed"
-      else
-        echo "   ⏳ Disk expansion pending"
-      fi
-      echo
-
-      # Check services
-      echo "4. Services Status:"
-      for service in mdadm cryptsetup disk-expansion; do
-        if systemctl is-active --quiet "$service" 2>/dev/null; then
-          echo "   ✅ $service: active"
-        elif systemctl is-enabled --quiet "$service" 2>/dev/null; then
-          echo "   ⚠️  $service: enabled but inactive"
-        else
-          echo "   ❌ $service: not configured"
-        fi
-      done
-
-    etc/profile.d/raid-luks-status.sh: |
-      # Show RAID/LUKS status on login
-      if [ -x /usr/local/bin/raid-luks-status ]; then
-        echo "🔒 RAID/LUKS Storage Status:"
-        /usr/local/bin/raid-luks-status | head -10 | tail -8
-        echo
-      fi

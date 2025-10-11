@@ -125,18 +125,30 @@ layer:
         return True
 
     def test_hybrid_raid_luks_script_validation(self):
-        """Test bash scripts in hybrid-raid-luks layer for syntax and security"""
-        layer_dir = self.repo_path / 'image' / 'mbr' / 'hybrid-raid-luks'
-
-        bash_scripts = [
+        """Test bash scripts in hybrid-raid-luks layers for syntax and security"""
+        # Test scripts in image layer
+        image_layer_dir = self.repo_path / 'image' / 'mbr' / 'hybrid-raid-luks'
+        image_scripts = [
             'pre-image.sh',
-            'setup.sh',
+            'setup.sh'
+        ]
+
+        # Test scripts in extension layer
+        extension_layer_dir = self.repo_path / 'layer' / 'storage' / 'raid-luks'
+        extension_scripts = [
             'device/rootfs-overlay/usr/bin/rpi-raid',
             'device/rootfs-overlay/usr/local/bin/disk-expansion',
             'device/initramfs-tools/hooks/rpi-raid-luks'
         ]
 
-        for script in bash_scripts:
+        # Combine all scripts to test
+        bash_scripts = []
+        for script in image_scripts:
+            bash_scripts.append((image_layer_dir, script))
+        for script in extension_scripts:
+            bash_scripts.append((extension_layer_dir, script))
+
+        for layer_dir, script in bash_scripts:
             script_path = layer_dir / script
             if not script_path.exists():
                 print(f"Script not found: {script_path}")

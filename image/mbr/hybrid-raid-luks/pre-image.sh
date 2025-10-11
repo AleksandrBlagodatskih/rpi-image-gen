@@ -35,25 +35,21 @@ if [[ "${IGconf_hybrid_raid_luks_encryption_enabled:-n}" == "y" ]]; then
     key_method="${IGconf_hybrid_raid_luks_key_method:-file}"
     [[ "$key_method" == "file" ]] || die "Only 'file' key method is supported for security reasons"
 
-    # Generate secure LUKS key file
-    LUKS_KEY_PATH="device/rootfs-overlay/etc/luks/key"
+    # Generate secure LUKS key file for genimage encryption only
+    # Note: LUKS key for system boot is handled by extension layer via overlay
+    LUKS_KEY_FILE="${genimg_in}/luks-key"
 
     # Generate cryptographically secure key (64 bytes = 512 bits)
     if command -v openssl >/dev/null 2>&1; then
-        openssl rand 64 > "$LUKS_KEY_PATH" 2>/dev/null || die "Failed to generate LUKS key with openssl"
+        openssl rand 64 > "$LUKS_KEY_FILE" 2>/dev/null || die "Failed to generate LUKS key with openssl"
     else
-        dd if=/dev/urandom bs=64 count=1 2>/dev/null > "$LUKS_KEY_PATH" || die "Failed to generate LUKS key with dd"
+        dd if=/dev/urandom bs=64 count=1 2>/dev/null > "$LUKS_KEY_FILE" || die "Failed to generate LUKS key with dd"
     fi
 
-    # Set secure permissions (readable only by root)
-    chmod 600 "$LUKS_KEY_PATH" || die "Failed to set LUKS key permissions"
-    chown root:root "$LUKS_KEY_PATH" 2>/dev/null || true  # Ignore if chown fails
+    # Set secure permissions for genimage process
+    chmod 600 "$LUKS_KEY_FILE" || die "Failed to set LUKS key permissions"
 
-    # Copy to genimage working directory
-    cp "$LUKS_KEY_PATH" "${genimg_in}/luks-key" || die "Failed to copy LUKS key"
-    LUKS_KEY_FILE="${genimg_in}/luks-key"
-
-    echo "Generated secure LUKS key file" >&2
+    echo "Generated secure LUKS key for image encryption" >&2
 else
     LUKS_KEY_FILE="/dev/null"
 fi
@@ -122,4 +118,5 @@ if [[ "${IGconf_hybrid_raid_luks_pmap:-clear}" == "crypt" ]]; then
     cp device/provisionmap-crypt.json "${genimg_in}/provisionmap.json"
     # Basic placeholder replacement
     sed -i "s|<CRYPT_UUID>|$CRYPT_UUID|g" "${genimg_in}/provisionmap.json"
+    echo "Provision map created for encrypted root filesystem" >&2
 fi

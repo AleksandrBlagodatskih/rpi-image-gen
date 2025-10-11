@@ -139,6 +139,7 @@ image disk-b.img {
 # ============================================================================
 
 # RAID1 member A containing LUKS encrypted filesystem
+# First member defines the complete RAID configuration
 image mdraid-a.img {
    mdraid {
       level = 1                    # RAID1 (mirroring)
@@ -147,13 +148,10 @@ image mdraid-a.img {
    }
 }
 
-# RAID1 member B - identical configuration to member A
-# According to genimage docs: when multiple mdraid images have identical
-# configuration, genimage uses the same RAID metadata for all members
+# RAID1 member B - inherits configuration from member A
+# According to genimage docs: second member inherits RAID identity from parent
 image mdraid-b.img {
    mdraid {
-      level = 1                    # RAID1 (mirroring)
-      devices = 2                  # Two devices in array
-      image = "root.luks"          # LUKS container as RAID content
+      parent = "mdraid-a.img"      # Inherit RAID config from first member
    }
 }

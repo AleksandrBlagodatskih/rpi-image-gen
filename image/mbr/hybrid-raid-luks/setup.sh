@@ -56,31 +56,9 @@ MAILADDR root
 ARRAY /dev/md0 level=raid1 num-devices=2 UUID=$ROOTUUID
 EOF
 
-      [ "${IGconf_hybrid_raid_luks_encryption_enabled:-n}" = "y" ] && {
-         chmod 600 "$IMAGEMOUNTPATH/etc/luks/key" || die "Failed to set LUKS key permissions"
-         chown root:root "$IMAGEMOUNTPATH/etc/luks/key" || die "Failed to set LUKS key ownership"
-      }
+      # Note: LUKS key permissions are handled by extension layer via overlay files
 
-      [ -d "$IMAGEMOUNTPATH/etc/initramfs-tools" ] && {
-         mkdir -p "$IMAGEMOUNTPATH/etc/initramfs-tools/hooks" || die "Failed to create initramfs hooks directory"
-         mkdir -p "$IMAGEMOUNTPATH/etc/initramfs-tools/scripts/local-top" || die "Failed to create initramfs scripts directory"
-
-         cp "../device/initramfs-tools/hooks/rpi-raid-luks" "$IMAGEMOUNTPATH/etc/initramfs-tools/hooks/" || die "Failed to copy initramfs hook"
-         chmod +x "$IMAGEMOUNTPATH/etc/initramfs-tools/hooks/rpi-raid-luks" || die "Failed to make initramfs hook executable"
-
-         cat << 'EOF' > "$IMAGEMOUNTPATH/etc/initramfs-tools/scripts/local-top/rpi-raid-luks" || die "Failed to create initramfs script"
-#!/bin/bash
-set -euo pipefail
-mdadm --assemble --uuid=$ROOT_UUID /dev/md0 || mdadm --assemble --scan
-[ -x /usr/bin/rpi-raid ] && cryptsetup luksOpen --keyscript /usr/bin/rpi-raid UUID=$CRYPT_UUID cryptroot
-exit 0
-EOF
-         chmod +x "$IMAGEMOUNTPATH/etc/initramfs-tools/scripts/local-top/rpi-raid-luks" || die "Failed to make initramfs script executable"
-
-         cp "../device/initramfs-tools/modules" "$IMAGEMOUNTPATH/etc/initramfs-tools/modules" || die "Failed to copy initramfs modules"
-
-         chroot "$IMAGEMOUNTPATH" systemctl enable disk-expansion.service || die "Failed to enable disk-expansion service"
-      }
+      # Note: initramfs-tools configuration and service setup is handled by extension layer via overlay files
       ;;
    BOOT)
       # Safely update root parameter using awk for better control
