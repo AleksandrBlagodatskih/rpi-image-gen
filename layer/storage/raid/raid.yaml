@@ -5,8 +5,6 @@
 # X-Env-Layer-Requires: essential
 # X-Env-Layer-Provides: raid,disk-expansion
 # X-Env-Layer-Category: extension
-#
-# X-Env-VarPrefix: storage_raid
 # METAEND
 ---
 mmdebstrap:
@@ -33,16 +31,6 @@ mmdebstrap:
       fi
 
       echo "✅ RAID1 storage configured"
-
-    # Copy initramfs hooks and scripts for RAID
-    - |
-      mkdir -p $1/etc/initramfs-tools/hooks
-      mkdir -p $1/etc/initramfs-tools/scripts/local-top
-      cp "layer/storage/raid/device/initramfs-tools/hooks/rpi-raid" "$1/etc/initramfs-tools/hooks/"
-      chmod +x "$1/etc/initramfs-tools/hooks/rpi-raid"
-      cp "layer/storage/raid/device/initramfs-tools/scripts/local-top/rpi-raid" "$1/etc/initramfs-tools/scripts/local-top/"
-      chmod +x "$1/etc/initramfs-tools/scripts/local-top/rpi-raid"
-      cp "layer/storage/raid/device/initramfs-tools/modules" "$1/etc/initramfs-tools/"
 
     # Enable disk expansion service
     - chroot $1 systemctl enable disk-expansion.service

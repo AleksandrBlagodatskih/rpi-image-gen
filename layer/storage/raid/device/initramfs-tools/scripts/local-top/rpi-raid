@@ -11,30 +11,18 @@ die() {
 echo "Waiting for devices to settle..."
 sleep 2
 
-# Get RAID UUID from cmdline if available
-RAID_UUID=""
-for param in $(cat /proc/cmdline); do
-    case "$param" in
-        raiduuid=*)
-            RAID_UUID="${param#raiduuid=}"
-            ;;
-        root=UUID=*)
-            # If root=UUID= is specified, it might be the RAID UUID for direct mounting
-            RAID_UUID="${param#root=UUID=}"
-            ;;
-    esac
-done
+# Use injected RAID UUID from template (replaced at build time)
+RAID_UUID="<RAID_UUID>"
 
-if [ -n "$RAID_UUID" ]; then
-    echo "Assembling RAID array UUID=$RAID_UUID..."
-    if ! mdadm --assemble --uuid="$RAID_UUID" /dev/md0 2>/dev/null; then
-        echo "WARNING: RAID assembly with UUID failed, trying scan..." >&2
-        mdadm --assemble --scan /dev/md0 2>/dev/null || echo "WARNING: RAID assembly failed" >&2
-    fi
-else
-    # Last resort: try to scan for any available RAID arrays
-    echo "No RAID UUID specified, trying to scan for arrays..."
-    mdadm --assemble --scan 2>/dev/null || echo "WARNING: No RAID arrays found" >&2
+if [ -z "$RAID_UUID" ] || [ "$RAID_UUID" = "<RAID_UUID>" ]; then
+    echo "WARNING: No RAID UUID found, skipping RAID assembly" >&2
+    exit 0
+fi
+
+echo "Assembling RAID array UUID=$RAID_UUID..."
+if ! mdadm --assemble --uuid="$RAID_UUID" /dev/md0 2>/dev/null; then
+    echo "ERROR: RAID assembly failed" >&2
+    exit 1
 fi
 
 echo "RAID initialization complete"

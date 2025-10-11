@@ -1,3 +1,0 @@
-[Service]
-# Override environment for hybrid RAID layout using stable device IDs
-Environment=SSD_IDS=__SSD_IDS__

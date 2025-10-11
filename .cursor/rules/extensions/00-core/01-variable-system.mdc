@@ -35,6 +35,7 @@ IGconf_device_storage_type=nvme
 IGconf_image_compression=zstd
 IGconf_image_boot_part_size=200%
 IGconf_image_root_part_size=400%
+IGconf_image_postbuild=${DIRECTORY}/post-build.sh  # Post-build hook для слоя
 
 # Переменные слоев (с префиксом слоя)
 IGconf_apparmor_core_mode=enforce

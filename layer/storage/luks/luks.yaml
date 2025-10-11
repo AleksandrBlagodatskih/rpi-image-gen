@@ -25,13 +25,3 @@ mmdebstrap:
       chmod 700 /etc/luks
 
       echo "✅ LUKS2 encryption configured"
-
-    # Copy initramfs hooks and scripts for LUKS
-    - |
-      mkdir -p $1/etc/initramfs-tools/hooks
-      mkdir -p $1/etc/initramfs-tools/scripts/local-top
-      cp /home/admin/rpi-image-gen/layer/storage/luks/device/initramfs-tools/hooks/rpi-luks $1/etc/initramfs-tools/hooks/
-      chmod +x $1/etc/initramfs-tools/hooks/rpi-luks
-      cp /home/admin/rpi-image-gen/layer/storage/luks/device/initramfs-tools/scripts/local-top/rpi-luks $1/etc/initramfs-tools/scripts/local-top/
-      chmod +x $1/etc/initramfs-tools/scripts/local-top/rpi-luks
-      cp /home/admin/rpi-image-gen/layer/storage/luks/device/initramfs-tools/modules $1/etc/initramfs-tools/

@@ -47,12 +47,18 @@ layer/
 image/
 ├── mbr/
 │   └── hybrid-raid-luks/
-│       └── device/
-│           └── rootfs-overlay/
-│               └── etc/
-│                   └── systemd/
-│                       └── system/
-│                           └── disk-expansion.service
+│       ├── post-build.sh          # Обработка шаблонов после копирования в rootfs
+│       ├── device/                # Шаблоны с <VARIABLE> синтаксисом
+│       │   ├── initramfs-tools/
+│       │   │   ├── hooks/hybrid-raid
+│       │   │   ├── modules
+│       │   │   └── scripts/local-top/rpi-luks
+│       │   ├── rootfs-overlay/
+│       │   │   ├── etc/profile.d/hybrid-raid-status.sh
+│       │   │   ├── etc/systemd/system/disk-expansion.service.d/override.conf
+│       │   │   └── usr/local/bin/disk-expansion
+│       │   └── provisionmap-*.json
+│       └── image.yaml             # С IGconf_image_postbuild
 ```
 
 ### Этапы выполнения хуков

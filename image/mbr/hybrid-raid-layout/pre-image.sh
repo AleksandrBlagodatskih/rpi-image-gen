@@ -59,13 +59,23 @@ validate_uuid "$BOOT_UUID" "BOOT"
 validate_uuid "$ROOT_UUID" "ROOT"
 validate_uuid "$RAID_UUID" "RAID"
 
-# Configure overlay templates with actual values (before genimage generation)
-if [ -f "configure-overlay.sh" ]; then
-    echo "🔧 Configuring overlay templates..."
-    bash configure-overlay.sh
-else
-    echo "WARNING: configure-overlay.sh not found, overlay templates not processed" >&2
-fi
+# Configure overlay templates with actual values (sequential operations)
+echo "🔧 Configuring overlay templates inline..."
+
+# Batch process all SSD template files
+sed -i "s|<SSD_IDS>|$IGconf_hybrid_raid_luks_ssd_ids|g" \
+    "$fs/etc/initramfs-tools/hooks/hybrid-raid" \
+    "$fs/usr/local/bin/disk-expansion" \
+    "$fs/etc/systemd/system/disk-expansion.service.d/override.conf" \
+    2>/dev/null || true
+
+# Process RAID template (always required)
+sed -i "s|<RAID_UUID>|$RAID_UUID|g" \
+    "$fs/etc/initramfs-tools/scripts/local-top/rpi-raid"
+
+# Process LUKS template (encryption-dependent)
+[ -n "${CRYPT_UUID:-}" ] && sed -i "s|<CRYPT_UUID>|$CRYPT_UUID|g" \
+    "$fs/etc/initramfs-tools/scripts/local-top/rpi-luks"
 
 # Encryption configuration (optional) - ultra compact
 encryption_enabled="${IGconf_hybrid_raid_luks_encryption_enabled:-n}"
@@ -92,6 +102,8 @@ ${CRYPT_UUID:+CRYPT_UUID=$CRYPT_UUID}
 RAID_UUID=$RAID_UUID
 ENCRYPTION_ENABLED=$encryption_enabled
 EOF
+
+
 
 # Validate SSD device IDs if specified (hybrid-raid-layout specific)
 if [ -n "${IGconf_hybrid_raid_luks_ssd_ids:-}" ]; then
