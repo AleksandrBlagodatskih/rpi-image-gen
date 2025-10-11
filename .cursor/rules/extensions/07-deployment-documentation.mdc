@@ -1,0 +1,363 @@
+---
+alwaysApply: ${cursor.file.path.includes("ansible/") || cursor.file.path.includes("terraform/")}
+---
+
+# Правило 07-2: Документирование и распространение расширений
+
+## Назначение правила
+Определяет стандарты документирования и стратегии распространения расширений rpi-image-gen.
+
+## Распространение расширений 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Способы распространения
+- **Исходный код**: Git репозитории (GitHub, GitLab, Bitbucket)
+- **Бинарные пакеты**: DEB/RPM пакеты для различных дистрибутивов
+- **Контейнеры**: Docker образы для изолированного развертывания
+- **Реестры**: Специализированные реестры расширений rpi-image-gen
+
+### Стратегия распространения
+```bash
+#!/bin/bash
+# Стратегия распространения расширения
+
+distribute_extension() {
+    local extension_name="$1"
+    local version="$2"
+    local distribution_method="$3"
+
+    case "$distribution_method" in
+        "source")
+            distribute_source_code "$extension_name" "$version"
+            ;;
+        "packages")
+            create_binary_packages "$extension_name" "$version"
+            ;;
+        "docker")
+            create_docker_images "$extension_name" "$version"
+            ;;
+        "registry")
+            publish_to_extension_registry "$extension_name" "$version"
+            ;;
+        "all")
+            distribute_source_code "$extension_name" "$version"
+            create_binary_packages "$extension_name" "$version"
+            create_docker_images "$extension_name" "$version"
+            publish_to_extension_registry "$extension_name" "$version"
+            ;;
+        *)
+            echo "Неизвестный метод распространения: $distribution_method"
+            echo "Доступные методы: source, packages, docker, registry, all"
+            exit 1
+            ;;
+    esac
+}
+
+distribute_source_code() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Распространение исходного кода..."
+
+    # Создание архива исходников
+    git archive --format=tar.gz --prefix="${extension_name}-${version}/" \
+        -o "${extension_name}-${version}-source.tar.gz" "v$version"
+
+    # Загрузка на GitHub Releases
+    gh release upload "v$version" "${extension_name}-${version}-source.tar.gz"
+}
+
+create_binary_packages() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Создание бинарных пакетов..."
+
+    # Создание DEB пакета
+    create_deb_package "$extension_name" "$version"
+
+    # Создание RPM пакета (если нужно)
+    create_rpm_package "$extension_name" "$version"
+}
+
+create_docker_images() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Создание Docker образов..."
+
+    # Создание Dockerfile
+    cat > Dockerfile << EOF
+FROM debian:bookworm-slim
+
+# Установка зависимостей
+RUN apt-get update && apt-get install -y \\
+    rpi-image-gen \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Копирование расширения
+COPY layer/${extension_name}.yaml /opt/rpi-image-gen/layer/
+COPY config/ /opt/rpi-image-gen/config/
+
+# Метки
+LABEL maintainer="Your Name <your.email@example.com>"
+LABEL version="${version}"
+LABEL extension="${extension_name}"
+
+# Точка входа
+ENTRYPOINT ["rpi-image-gen", "build"]
+CMD ["-c", "/opt/rpi-image-gen/config/default.yaml"]
+EOF
+
+    # Сборка и публикация образа
+    docker build -t "${extension_name}:${version}" .
+    docker tag "${extension_name}:${version}" "your-registry/${extension_name}:${version}"
+    docker push "your-registry/${extension_name}:${version}"
+}
+
+publish_to_extension_registry() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Публикация в реестр расширений..."
+
+    # Публикация через API реестра
+    rpi-image-gen extension publish \
+        --registry "${EXTENSION_REGISTRY_URL}" \
+        --extension "layer/${extension_name}.yaml" \
+        --version "$version"
+}
+```
+
+## Документирование для пользователей 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### Шаблон README.md
+```markdown
+# Название расширения
+
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.0.0-green.svg)](https://github.com/user/extension/releases)
+[![CI](https://github.com/user/extension/actions/workflows/ci.yml/badge.svg)](https://github.com/user/extension/actions/workflows/ci.yml)
+
+## Описание
+
+Краткое описание функциональности расширения. Объясните, какую проблему оно решает и для каких случаев использования предназначено.
+
+## Особенности
+
+- **Функциональность 1**: Краткое описание
+- **Функциональность 2**: Краткое описание
+- **Функциональность 3**: Краткое описание
+
+## Системные требования
+
+- **rpi-image-gen**: версия 1.0.0 или выше
+- **Операционная система**: Debian 11/12 (Bullseye/Bookworm)
+- **Архитектура**: arm64, armhf
+- **Дополнительные зависимости**: список пакетов
+
+## Установка
+
+### Из исходного кода
+```bash
+# Клонирование репозитория
+git clone https://github.com/user/extension.git
+cd extension
+
+# Сборка с расширением
+rpi-image-gen build -c config/extension-config.yaml
+```
+
+### Использование предустановленного образа
+```bash
+# Скачивание образа
+wget https://github.com/user/extension/releases/download/v1.0.0/extension-image.img
+
+# Запись на SD карту
+sudo dd if=extension-image.img of=/dev/mmcblk0 bs=4M status=progress
+
+# Или через Raspberry Pi Imager
+# Выберите "Custom" и укажите скачанный файл
+```
+
+### Установка через реестр расширений
+```bash
+# Добавление расширения из реестра
+rpi-image-gen extension install user/extension
+
+# Использование в конфигурации
+rpi-image-gen build -c config.yaml --extension user/extension
+```
+
+## Конфигурация
+
+### Переменные окружения
+
+| Переменная | Описание | Значение по умолчанию | Обязательна |
+|------------|----------|----------------------|-------------|
+| `IGconf_extension_setting1` | Настройка 1 | `value1` | Да |
+| `IGconf_extension_setting2` | Настройка 2 | `value2` | Нет |
+
+### Пример конфигурации
+```yaml
+# Основная конфигурация
+device:
+  layer: pi5
+  hostname: my-device
+
+image:
+  layer: image-rpios
+  boot_part_size: 200M
+  root_part_size: 100%
+
+layer:
+  base: bookworm-minbase
+  extension: your-extension-name
+
+# Конфигурация расширения
+extension:
+  layer: your-extension-name
+  setting1: custom-value
+  setting2: another-value
+```
+
+### Дополнительные настройки
+
+#### Настройка сети
+```yaml
+extension:
+  network:
+    interface: eth0
+    mode: dhcp
+    static_ip: 192.168.1.100
+    gateway: 192.168.1.1
+    dns: 8.8.8.8,8.8.4.4
+```
+
+#### Настройка безопасности
+```yaml
+extension:
+  security:
+    firewall: enabled
+    ssh_keys_only: true
+    fail2ban: enabled
+    auto_updates: enabled
+```
+
+## Примеры использования
+
+### Пример 1: Базовая настройка
+```bash
+# Простая сборка с расширением
+rpi-image-gen build -c examples/basic-config.yaml
+```
+
+### Пример 2: Расширенная конфигурация
+```bash
+# Сборка с дополнительными параметрами
+rpi-image-gen build -c examples/advanced-config.yaml \
+  -- IGconf_extension_setting1=value1 \
+  -- IGconf_extension_setting2=value2
+```
+
+### Пример 3: Интеграция с CI/CD
+```yaml
+# GitHub Actions workflow
+name: Build with Extension
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build image
+      run: |
+        rpi-image-gen build -c config.yaml
+    - name: Test image
+      run: |
+        # Тестирование собранного образа
+```
+
+## Тестирование
+
+```bash
+# Запуск тестов
+python3 -m pytest tests/ -v
+
+# Линтинг кода
+shellcheck scripts/*.sh
+yamllint layer/*.yaml
+
+# Тестовая сборка
+rpi-image-gen build -c test-config.yaml --dry-run
+```
+
+## Разработка
+
+### Структура проекта
+```
+extension/
+├── layer/                    # Метаданные слоев
+│   └── extension.yaml       # Основная конфигурация
+├── config/                  # Конфигурации сборки
+├── scripts/                 # Скрипты установки
+├── tests/                   # Тесты
+├── examples/                # Примеры использования
+├── docs/                    # Дополнительная документация
+└── README.md               # Эта документация
+```
+
+### Внесение вклада
+1. Форкните репозиторий
+2. Создайте ветку для вашей функциональности (`git checkout -b feature/amazing-feature`)
+3. Зафиксируйте изменения (`git commit -m 'Add amazing feature'`)
+4. Отправьте в ветку (`git push origin feature/amazing-feature`)
+5. Создайте Pull Request
+
+## Устранение неисправностей
+
+### Распространенные проблемы
+
+#### Проблема: Сборка завершается с ошибкой
+```
+Ошибка: Layer not found
+```
+**Решение:**
+```bash
+# Проверьте зависимости
+rpi-image-gen layer --describe your-extension --deps
+
+# Убедитесь, что базовые слои установлены
+rpi-image-gen layer --list
+```
+
+#### Проблема: Переменные не работают
+```
+IGconf_extension_setting1: command not found
+```
+**Решение:**
+```bash
+# Проверьте синтаксис переменных
+rpi-image-gen metadata --lint layer/extension.yaml
+
+# Проверьте значения переменных
+echo "IGconf_extension_setting1=${IGconf_extension_setting1}"
+```
+
+### Получение помощи
+- [Документация](https://github.com/user/extension/wiki)
+- [Issues](https://github.com/user/extension/issues)
+- [Discussions](https://github.com/user/extension/discussions)
+
+## Лицензия
+
+MIT License - см. файл [LICENSE](LICENSE)
+
+## Авторы
+
+- **Имя Разработчика** - *Роль* - [GitHub](https://github.com/username)
+
+## Changelog
+
+Подробные изменения в [CHANGELOG.md](CHANGELOG.md)
+```

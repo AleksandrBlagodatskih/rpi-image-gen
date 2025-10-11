@@ -13,8 +13,8 @@ echo "$total_lines строк"
 
 # 2. Поиск дублированного кода (простая проверка apt-get install)
 echo -e "\nПоиск дублированного кода:"
-duplicates=$(find layer/ -name '*.yaml' -exec grep -h 'apt-get install' {} \; | sort | uniq -c | awk '$1 > 1 {print "⚠️  " $2 ": " $1 " раз"}')
-if [[ -n "$duplicates" ]; then
+duplicates=$(find layer/ -name '*.yaml' -exec grep -h 'apt-get install' {} \; | sort | uniq -c | awk "\$1 > 1 {print \"⚠️  \" \$2 \": \" \$1 \" раз\"}")
+if [ -n "$duplicates" ]; then
     echo "$duplicates"
 else
     echo "Дублирование не найдено"
@@ -22,9 +22,9 @@ fi
 
 # 3. Анализ функций в bash скриптах
 echo -e "\nАнализ функций в скриптах:"
-if [[ -d "layer-hooks/" ]; then
+if [ -d "layer-hooks/" ]; then
     for script in layer-hooks/*.sh; do
-        if [[ -f "$script" ]; then
+        if [ -f "$script" ]; then
             echo "Файл: $(basename "$script")"
             # Анализ длины функций
             awk '

@@ -1,0 +1,103 @@
+---
+alwaysApply: ${cursor.file.content && (cursor.file.content.includes("tryboot") || cursor.file.content.includes("ab-boot") || cursor.file.content.includes("BOOT_ORDER"))}
+---
+
+# Правило 79-1: Архитектура и настройка A/B загрузки
+
+## Назначение правила
+Определяет стандарты и лучшие практики для реализации A/B (Atomic) обновлений в rpi-image-gen.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Архитектура A/B системы
+
+### Принципы A/B обновлений
+- **Атомарность**: обновление либо полностью успешно, либо откатывается
+- **Изоляция**: обновления не влияют на текущую работающую систему
+- **Безопасность**: возможность отката при проблемах
+- **Надежность**: автоматическое восстановление при сбоях
+
+### Структура разделов
+```bash
+# Рекомендуемая схема разделов для A/B
+# /dev/mmcblk0p1 - boot (FAT32, ~256MB) - общий для обоих слотов
+# /dev/mmcblk0p2 - root-a (ext4, основной размер) - слот A
+# /dev/mmcblk0p3 - root-b (ext4, основной размер) - слот B
+# /dev/mmcblk0p4 - data (ext4, оставшееся место) - общие данные
+
+# Проверка структуры разделов
+verify_ab_layout() {
+    local boot_part="/dev/mmcblk0p1"
+    local root_a="/dev/mmcblk0p2"
+    local root_b="/dev/mmcblk0p3"
+    local data_part="/dev/mmcblk0p4"
+
+    if [[ ! -b "$boot_part" || ! -b "$root_a" || ! -b "$root_b" ]]; then
+        die "A/B partition layout not found"
+    fi
+
+    # Проверка GPT labels
+    local label_a=$(blkid -s LABEL -o value "$root_a")
+    local label_b=$(blkid -s LABEL -o value "$root_b")
+
+    if [[ "$label_a" != "root-a" || "$label_b" != "root-b" ]]; then
+        die "Incorrect GPT labels for A/B partitions"
+    fi
+}
+```
+
+## Настройка EEPROM и Bootloader
+
+### Конфигурация Raspberry Pi EEPROM
+```yaml
+# Настройка EEPROM для A/B boot
+customize-hooks:
+  - |
+    # Установка boot order для A/B
+    rpi-eeprom-config --edit << EOF
+BOOT_ORDER=0xf21
+TFTP_PREFIX=tryboot
+BOOT_DELAY=0
+TFTP_ENABLED=1
+EOF
+
+    # Создание tryboot конфигурации
+    cat > /boot/tryboot.txt << 'EOF'
+[tryboot]
+kernel=kernel8.img
+initramfs initrd.img followkernel
+dtparam=i2c_arm=on
+dtparam=spi=on
+avoid_warnings=1
+EOF
+```
+
+### Динамический выбор слотов
+```bash
+# Реализация динамического выбора слотов
+select_boot_slot() {
+    local current_order=$(rpi-eeprom-config | grep BOOT_ORDER | cut -d= -f2)
+    local target_slot=""
+
+    case "$current_order" in
+        "0xf21")  # Текущий: слот A, следующий: слот B
+            target_slot="0xf12"
+            echo "Switching to slot B (0xf12)"
+            ;;
+        "0xf12")  # Текущий: слот B, следующий: слот A
+            target_slot="0xf21"
+            echo "Switching to slot A (0xf21)"
+            ;;
+        *)
+            echo "Unknown boot order: $current_order, defaulting to slot A"
+            target_slot="0xf21"
+            ;;
+    esac
+
+    # Применение нового boot order
+    rpi-eeprom-config --edit "BOOT_ORDER=$target_slot"
+}
+```
+
+## Система обновлений
+

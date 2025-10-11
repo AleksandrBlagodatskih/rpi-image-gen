@@ -84,152 +84,95 @@ rpi-image-gen build -c config.yaml --perf-report
 ```
 tests/
 ├── unit/
-│   ├── test_layer_validation.py      # Валидация метаданных слоев
-│   ├── test_variable_expansion.py    # Тестирование переменных
-│   └── test_dependency_resolution.py # Разрешение зависимостей
+│   ├── test_device_layers.py        # Тестирование слоев устройств
+│   └── test_security_layers.py      # Тестирование слоев безопасности
 ├── integration/
-│   ├── test_full_build.py           # Полная сборка
-│   ├── test_custom_hooks.py         # Тестирование хуков
-│   └── test_image_boot.py           # Загрузка образа
+│   └── test_full_build.py           # Полная сборка и интеграционные тесты
 └── fixtures/
-    ├── test_configs/                # Тестовые конфигурации
-    │   ├── minimal-config.yaml
-    │   ├── full-config.yaml
-    │   └── invalid-config.yaml
-    └── expected_outputs/            # Ожидаемые результаты
-        ├── layer-metadata.json
-        └── build-artifacts/
+    └── (динамически создаваемые тестовые файлы)
 ```
 
 ## Автоматизированные тесты 🔴 ОВЯЗАТЕЛЬНЫЕ
 
-### Шаблон тестового сценария
+### Реальный пример интеграционного теста
 ```python
 #!/usr/bin/env python3
+"""
+Integration tests for rpi-image-gen security layers
+Tests full build scenarios and image boot validation
+"""
+
 import subprocess
 import sys
 import os
 import tempfile
 import shutil
+import time
+from pathlib import Path
 
-class ExtensionTestSuite:
-    def __init__(self, extension_path):
-        self.extension_path = extension_path
+
+class IntegrationTestSuite:
+    """Integration test suite for security layers"""
+
+    def __init__(self, repo_path):
+        self.repo_path = Path(repo_path)
         self.test_results = []
 
     def run_test(self, test_name, test_func):
-        """Запуск отдельного теста с логированием"""
-        print(f"Запуск теста: {test_name}")
+        """Run individual integration test"""
+        print(f"Running integration test: {test_name}")
         try:
             result = test_func()
             self.test_results.append((test_name, result, None))
-            print(f"✓ {test_name}: {'ПРОЙДЕН' if result else 'ПРОВАЛЕН'}")
+            print(f"✓ {test_name}: {'PASSED' if result else 'FAILED'}")
             return result
         except Exception as e:
             self.test_results.append((test_name, False, str(e)))
-            print(f"✗ {test_name}: ОШИБКА - {e}")
+            print(f"✗ {test_name}: ERROR - {e}")
             return False
 
-    def test_extension_build(self):
-        """Тестирование сборки расширения"""
-        cmd = [
-            'rpi-image-gen', 'build',
-            '-c', 'tests/fixtures/test-config.yaml',
-            '--dry-run'
-        ]
+    def test_minimal_security_config(self):
+        """Test building with minimal security configuration"""
+        config_content = """
+device:
+  layer: rpi5
+image:
+  layer: mbr/simple
+layer:
+  base: bookworm-minbase
+  security: apparmor-core
+"""
 
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            f.write(config_content)
+            config_file = f.name
 
-        if result.returncode != 0:
-            print(f"Ошибка сборки: {result.stderr}")
-            return False
+        try:
+            cmd = [
+                str(self.repo_path / 'rpi-image-gen'), 'build',
+                '-c', config_file,
+                '--dry-run'
+            ]
 
-        return True
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=self.repo_path)
 
-    def test_layer_validation(self):
-        """Тестирование валидации слоя"""
-        cmd = ['rpi-image-gen', 'metadata', '--lint', f'{self.extension_path}/layer.yaml']
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.returncode == 0
+            if result.returncode != 0:
+                print(f"Build failed: {result.stderr}")
+                return False
 
-    def test_dependency_resolution(self):
-        """Тестирование разрешения зависимостей"""
-        cmd = ['rpi-image-gen', 'layer', '--list', '--depends', 'your-extension-name']
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.returncode == 0
+            # Check that expected layers are included
+            if 'apparmor-core' not in result.stdout:
+                print("apparmor-core layer not found in build output")
+                return False
 
-    def test_variable_expansion(self):
-        """Тестирование расширения переменных"""
-        # Создание тестового окружения
-        test_env = {
-            'IGconf_test_var1': 'value1',
-            'IGconf_test_var2': 'value2'
-        }
+            return True
 
-        # Тестирование расширения в шаблонах
-        template = "${IGconf_test_var1}/${IGconf_test_var2}"
-        expanded = os.path.expandvars(template)
+        finally:
+            os.unlink(config_file)
 
-        return expanded == "value1/value2"
-
-    def run_all_tests(self):
-        """Запуск всех тестов"""
-        tests = [
-            ("Сборка расширения", self.test_extension_build),
-            ("Валидация слоя", self.test_layer_validation),
-            ("Разрешение зависимостей", self.test_dependency_resolution),
-            ("Расширение переменных", self.test_variable_expansion),
-        ]
-
-        passed = 0
-        total = len(tests)
-
-        for test_name, test_func in tests:
-            if self.run_test(test_name, test_func):
-                passed += 1
-
-        print(f"\nРезультаты: {passed}/{total} тестов пройдено")
-
-        # Генерация отчета
-        self.generate_report()
-
-        return passed == total
-
-    def generate_report(self):
-        """Генерация отчета о тестировании"""
-        report_file = "/tmp/extension-test-report.txt"
-
-        with open(report_file, 'w') as f:
-            f.write("Отчет о тестировании расширения\n")
-            f.write("=" * 40 + "\n\n")
-
-            for test_name, result, error in self.test_results:
-                status = "ПРОЙДЕН" if result else "ПРОВАЛЕН"
-                f.write(f"{test_name}: {status}\n")
-                if error:
-                    f.write(f"  Ошибка: {error}\n")
-                f.write("\n")
-
-        print(f"Отчет сохранен: {report_file}")
-
-def main():
-    if len(sys.argv) != 2:
-        print("Использование: python3 test_extension.py <путь_к_расширению>")
-        sys.exit(1)
-
-    extension_path = sys.argv[1]
-
-    if not os.path.exists(extension_path):
-        print(f"Путь к расширению не существует: {extension_path}")
-        sys.exit(1)
-
-    test_suite = ExtensionTestSuite(extension_path)
-    success = test_suite.run_all_tests()
-
-    sys.exit(0 if success else 1)
-
-if __name__ == "__main__":
-    main()
+# Пример использования:
+# test_suite = IntegrationTestSuite("/path/to/rpi-image-gen")
+# test_suite.run_test("minimal security config", test_suite.test_minimal_security_config)
 ```
 
 ## Интеграция с CI/CD 🔴 ОВЯЗАТЕЛЬНЫЕ

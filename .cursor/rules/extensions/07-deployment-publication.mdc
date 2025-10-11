@@ -1,0 +1,312 @@
+---
+alwaysApply: ${cursor.file.path.includes("ansible/") || cursor.file.path.includes("terraform/")}
+---
+
+
+# Правило 07-1: Публикация расширений
+
+## Назначение правила
+Определяет стандарты и процедуры для подготовки, публикации и распространения расширений rpi-image-gen.
+
+## Публикация расширений 🔴 ОВЯЗАТЕЛЬНЫЕ
+
+### 1. Подготовка к публикации 🔴 ОВЯЗАТЕЛЬНЫЕ
+```bash
+#!/bin/bash
+# Скрипт подготовки расширения к публикации
+
+prepare_extension_for_release() {
+    local extension_name="$1"
+    local version="$2"
+
+    echo "Подготовка расширения $extension_name к релизу $version"
+
+    # 1. Финальное тестирование
+    echo "Запуск финального набора тестов..."
+    if ! run_comprehensive_tests "$extension_name"; then
+        echo "ОШИБКА: Тесты не пройдены"
+        exit 1
+    fi
+
+    # 2. Валидация документации
+    echo "Проверка документации..."
+    if ! validate_documentation "$extension_name"; then
+        echo "ОШИБКА: Документация неполная"
+        exit 1
+    fi
+
+    # 3. Создание архива релиза
+    echo "Создание архива релиза..."
+    create_release_archive "$extension_name" "$version"
+
+    # 4. Генерация контрольных сумм
+    echo "Генерация контрольных сумм..."
+    generate_checksums "$extension_name" "$version"
+
+    # 5. Создание CHANGELOG
+    echo "Обновление CHANGELOG..."
+    update_changelog "$extension_name" "$version"
+
+    echo "Подготовка к публикации завершена"
+}
+
+run_comprehensive_tests() {
+    local extension_name="$1"
+
+    # Модульные тесты
+    python3 -m pytest tests/unit/ -v --tb=short
+
+    # Интеграционные тесты
+    rpi-image-gen build -c tests/integration-config.yaml --dry-run
+
+    # Тесты совместимости
+    test_compatibility_matrix "$extension_name"
+
+    # Тесты производительности
+    test_performance_regression "$extension_name"
+}
+
+validate_documentation() {
+    local extension_name="$1"
+
+    # Проверка наличия обязательных файлов
+    local required_files=("README.md" "CHANGELOG.md" "LICENSE" "layer/${extension_name}.yaml")
+
+    for file in "${required_files[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            echo "ОШИБКА: Отсутствует обязательный файл: $file"
+            return 1
+        fi
+    done
+
+    # Валидация README.md
+    if ! grep -q "## Установка" README.md; then
+        echo "ОШИБКА: README.md не содержит раздел установки"
+        return 1
+    fi
+
+    # Проверка ссылок в документации
+    if command -v markdown-link-check >/dev/null 2>&1; then
+        markdown-link-check README.md
+    fi
+
+    return 0
+}
+
+create_release_archive() {
+    local extension_name="$1"
+    local version="$2"
+
+    local archive_name="${extension_name}-${version}.tar.gz"
+    local temp_dir="/tmp/release-${extension_name}"
+
+    mkdir -p "$temp_dir"
+
+    # Копирование файлов релиза
+    cp -r layer/ "$temp_dir/"
+    cp -r config/ "$temp_dir/"
+    cp -r tests/ "$temp_dir/"
+    cp README.md CHANGELOG.md LICENSE "$temp_dir/"
+
+    # Создание архива
+    tar -czf "$archive_name" -C "$temp_dir" .
+
+    # Очистка
+    rm -rf "$temp_dir"
+
+    echo "Архив релиза создан: $archive_name"
+}
+
+generate_checksums() {
+    local extension_name="$1"
+    local version="$2"
+
+    local archive_name="${extension_name}-${version}.tar.gz"
+    local checksum_file="${archive_name}.sha256"
+
+    # Генерация SHA256 контрольной суммы
+    sha256sum "$archive_name" > "$checksum_file"
+
+    # Генерация дополнительных контрольных сумм
+    md5sum "$archive_name" > "${archive_name}.md5"
+    sha1sum "$archive_name" > "${archive_name}.sha1"
+
+    echo "Контрольные суммы сгенерированы"
+}
+```
+
+### 2. Версионирование 🔴 ОВЯЗАТЕЛЬНЫЕ
+```markdown
+# Семантическое версионирование
+MAJOR.MINOR.PATCH
+
+- **MAJOR**: Несовместимые изменения API, изменения архитектуры
+- **MINOR**: Добавление новой функциональности, обратная совместимость
+- **PATCH**: Исправление ошибок, мелкие улучшения
+
+## Примеры версионирования
+
+### Правильные примеры:
+- `1.0.0` → `1.1.0` (добавление функциональности)
+- `1.1.0` → `1.1.1` (исправление ошибки)
+- `1.1.0` → `2.0.0` (критические изменения)
+
+### Неправильные примеры:
+- `1.0.0` → `1.0.1` (добавление большой функциональности)
+- `1.0.0` → `1.1.0` (критические изменения)
+- `1.0.0` → `2.0.0` (мелкое исправление)
+```
+
+### Скрипт управления версиями
+```bash
+#!/bin/bash
+# Управление версиями расширения
+
+manage_extension_version() {
+    local action="$1"
+    local extension_name="$2"
+
+    case "$action" in
+        "bump-major")
+            bump_version "$extension_name" "major"
+            ;;
+        "bump-minor")
+            bump_version "$extension_name" "minor"
+            ;;
+        "bump-patch")
+            bump_version "$extension_name" "patch"
+            ;;
+        "get")
+            get_current_version "$extension_name"
+            ;;
+        "validate")
+            validate_version_consistency "$extension_name"
+            ;;
+        *)
+            echo "Использование: $0 {bump-major|bump-minor|bump-patch|get|validate} extension-name"
+            exit 1
+            ;;
+    esac
+}
+
+bump_version() {
+    local extension_name="$1"
+    local bump_type="$2"
+
+    local current_version=$(get_current_version "$extension_name")
+    local new_version=$(increment_version "$current_version" "$bump_type")
+
+    # Обновление версии в метаданных
+    sed -i "s/X-Env-Layer-Version:.*/X-Env-Layer-Version: ${new_version}/" "layer/${extension_name}.yaml"
+
+    # Обновление CHANGELOG.md
+    update_changelog_entry "$new_version"
+
+    # Создание git тега
+    git add "layer/${extension_name}.yaml" CHANGELOG.md
+    git commit -m "Bump version to ${new_version}"
+    git tag -a "v${new_version}" -m "Release version ${new_version}"
+
+    echo "Версия обновлена: $current_version → $new_version"
+}
+
+increment_version() {
+    local version="$1"
+    local bump_type="$2"
+
+    IFS='.' read -ra VERSION_PARTS <<< "$version"
+    local major=${VERSION_PARTS[0]}
+    local minor=${VERSION_PARTS[1]}
+    local patch=${VERSION_PARTS[2]}
+
+    case "$bump_type" in
+        "major")
+            echo "$((major + 1)).0.0"
+            ;;
+        "minor")
+            echo "${major}.$((minor + 1)).0"
+            ;;
+        "patch")
+            echo "${major}.${minor}.$((patch + 1))"
+            ;;
+    esac
+}
+
+get_current_version() {
+    local extension_name="$1"
+
+    grep "X-Env-Layer-Version:" "layer/${extension_name}.yaml" | sed 's/.*: //' | tr -d ' '
+}
+
+validate_version_consistency() {
+    local extension_name="$1"
+
+    local metadata_version=$(get_current_version "$extension_name")
+    local git_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+
+    if [[ "$git_tag" != "v$metadata_version" && "$git_tag" != "none" ]]; then
+        echo "ПРЕДУПРЕЖДЕНИЕ: Несоответствие версий"
+        echo "  Метаданные: $metadata_version"
+        echo "  Git tag: $git_tag"
+        return 1
+    fi
+
+    echo "Версии согласованы: $metadata_version"
+}
+```
+
+### 3. Создание релизов 🔴 ОВЯЗАТЕЛЬНЫЕ
+```bash
+#!/bin/bash
+# Создание релиза расширения
+
+create_extension_release() {
+    local extension_name="$1"
+    local version="$2"
+    local release_notes="$3"
+
+    echo "Создание релиза $extension_name версии $version"
+
+    # Финальная подготовка
+    prepare_extension_for_release "$extension_name" "$version"
+
+    # Создание git тега
+    git tag -a "v$version" -m "Release version $version"
+
+    # Push тега
+    git push origin "v$version"
+
+    # Создание GitHub релиза
+    if command -v gh >/dev/null 2>&1; then
+        gh release create "v$version" \
+            --title "Release v$version" \
+            --notes-file "$release_notes" \
+            --latest
+    fi
+
+    # Публикация в реестр расширений
+    if [[ -n "${REGISTRY_URL:-}" ]]; then
+        publish_to_registry "$extension_name" "$version"
+    fi
+
+    echo "Релиз $version успешно создан"
+}
+
+publish_to_registry() {
+    local extension_name="$1"
+    local version="$2"
+
+    local archive="${extension_name}-${version}.tar.gz"
+    local checksum="${archive}.sha256"
+
+    # Загрузка в реестр
+    curl -X POST "${REGISTRY_URL}/api/extensions" \
+        -H "Authorization: Bearer ${REGISTRY_TOKEN}" \
+        -F "extension=@${archive}" \
+        -F "checksum=@${checksum}" \
+        -F "metadata=$(cat layer/${extension_name}.yaml)"
+
+    echo "Расширение опубликовано в реестре: ${extension_name}@${version}"
+}
+```
+

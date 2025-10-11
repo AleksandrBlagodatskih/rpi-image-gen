@@ -23,7 +23,7 @@ validate_all() {
     local errors=0
 
     for file in layer/*.yaml config/*.yaml; do
-        if [[ -f "$file" ]; then
+        if [ -f "$file" ]; then
             log_info "Проверка: $file"
             if ! rpi-image-gen metadata --lint "$file" 2>/dev/null; then
                 log_error "Ошибка валидации: $file"
@@ -32,7 +32,7 @@ validate_all() {
         fi
     done
 
-    if [[ $errors -eq 0 ]; then
+    if [ $errors -eq 0 ]; then
         log_success "Все файлы прошли валидацию"
     else
         log_error "Найдено ошибок: $errors"
@@ -56,7 +56,7 @@ build_full() {
     log_info "Полная сборка: $config (лог: $log_file)"
     rpi-image-gen build -c "$config" -v 2>&1 | tee "$log_file"
 
-    if [[ $? -eq 0 ]; then
+    if [ $? -eq 0 ]; then
         log_success "Сборка завершена успешно"
         echo "Лог сохранен: $log_file"
     else
@@ -73,7 +73,7 @@ analyze_dependencies() {
     log_info "Анализ зависимостей слоев..."
 
     for layer_file in layer/*.yaml; do
-        if [[ -f "$layer_file" ]; then
+        if [ -f "$layer_file" ]; then
             local layer_name=$(basename "$layer_file" .yaml)
             echo "=== $layer_name ==="
             rpi-image-gen layer --describe "$layer_name" 2>/dev/null || echo "Слой не найден или ошибка"
@@ -91,7 +91,7 @@ check_env_vars() {
 
     echo -e "\nПеременные в конфигурационных файлах:"
     for file in layer/*.yaml config/*.yaml; do
-        if [[ -f "$file" ]; then
+        if [ -f "$file" ]; then
             echo "$file:"
             grep -n "IGconf_" "$file" | head -3 || echo "  Нет переменных"
         fi
@@ -157,7 +157,7 @@ create_extension() {
     local type="$1"
     local name="$2"
 
-    if [[ -z "$type" ] || [ -z "$name" ]; then
+    if [ -z "$type" ] || [ -z "$name" ]; then
         log_error "Использование: create_extension <type> <name>"
         echo "Типы: device, application, infrastructure"
         return 1
@@ -166,7 +166,7 @@ create_extension() {
     local template_file=".cursor/rules/extensions/templates/${type}-extension-template.yaml"
     local target_file="layer/${name}.yaml"
 
-    if [[ ! -f "$template_file" ]; then
+    if [ ! -f "$template_file" ]; then
         log_error "Шаблон не найден: $template_file"
         return 1
     fi
@@ -201,7 +201,7 @@ check_image_size() {
 
     local images=$(find . -name "*.img" -type f 2>/dev/null)
 
-    if [[ -z "$images" ]; then
+    if [ -z "$images" ]; then
         log_warn "Образы не найдены"
         return 1
     fi
@@ -249,7 +249,7 @@ show_menu() {
 }
 
 # Автодополнение для bash
-if [[ -n "$BASH_VERSION" ]; then
+if [ -n "$BASH_VERSION" ]; then
     _rpi_commands() {
         local cur="${COMP_WORDS[COMP_CWORD]}"
         local commands="validate_all build_dry_run build_full analyze_dependencies check_env_vars profile_build monitor_resources create_extension clean_build check_image_size show_menu"
@@ -261,7 +261,7 @@ if [[ -n "$BASH_VERSION" ]; then
 fi
 
 # Если скрипт запущен напрямую, показать меню
-if [[[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+if [ "${BASH_SOURCE[0]}" == "$0" ]; then
     show_menu
 fi
 
