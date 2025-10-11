@@ -7,24 +7,34 @@
 # X-Env-VarPrefix: infra
 #
 # X-Env-Var-monitoring_enabled: true
-# X-Env-Var-monitoring_enabled-Description: Включить мониторинг системы
+# X-Env-Var-monitoring_enabled-Description: Включить комплексный мониторинг системы и сервисов
 # X-Env-Var-monitoring_enabled-Required: false
 # X-Env-Var-monitoring_enabled-Valid: true,false
 #
 # X-Env-Var-logging_level: info
-# X-Env-Var-logging_level-Description: Уровень логирования
+# X-Env-Var-logging_level-Description: Уровень логирования для инфраструктурных компонентов
 # X-Env-Var-logging_level-Required: false
 # X-Env-Var-logging_level-Valid: debug,info,warn,error
 #
 # X-Env-Var-backup_enabled: true
-# X-Env-Var-backup_enabled-Description: Включить автоматическое резервное копирование
+# X-Env-Var-backup_enabled-Description: Включить автоматическое резервное копирование системных данных
 # X-Env-Var-backup_enabled-Required: false
 # X-Env-Var-backup_enabled-Valid: true,false
 #
 # X-Env-Var-update_policy: security
-# X-Env-Var-update_policy-Description: Политика обновлений
+# X-Env-Var-update_policy-Description: Политика автоматических обновлений системы
 # X-Env-Var-update_policy-Required: false
 # X-Env-Var-update_policy-Valid: none,security,all
+#
+# X-Env-Var-security_hardening: true
+# X-Env-Var-security_hardening-Description: Включить дополнительное hardening системы
+# X-Env-Var-security_hardening-Required: false
+# X-Env-Var-security_hardening-Valid: true,false
+#
+# X-Env-Var-performance_optimization: balanced
+# X-Env-Var-performance_optimization-Description: Режим оптимизации производительности
+# X-Env-Var-performance_optimization-Required: false
+# X-Env-Var-performance_optimization-Valid: conservative,balanced,performance
 # METAEND
 ---
 mmdebstrap:

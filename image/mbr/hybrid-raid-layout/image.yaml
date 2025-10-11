@@ -1,10 +1,10 @@
 # METABEGIN
 # X-Env-Layer-Name: hybrid-raid-layout
 # X-Env-Layer-Category: image
-# X-Env-Layer-Desc: Hybrid SD + RAID1 storage layout with optional LUKS2 encryption (genimage-based disk images)
+# X-Env-Layer-Desc: Hybrid SD + RAID1 storage layout with optional LUKS2 encryption (genimage-based disk images). Supports ext4/btrfs/f2fs filesystems with automatic disk expansion.
 # X-Env-Layer-Version: 2.1.0
-# X-Env-Layer-Requires: image-base,rpi-essential-base
-# X-Env-Layer-Provides: image,encryption
+# X-Env-Layer-Requires: raid,luks
+# X-Env-Layer-Provides: image
 #
 # X-Env-VarPrefix: hybrid_raid_luks
 #
@@ -43,5 +43,24 @@
 # X-Env-Var-ssd_ids-Required: false
 # X-Env-Var-ssd_ids-Valid: string
 # X-Env-Var-ssd_ids-Set: immediate
+#
+# X-Env-Var-key_method: file
+# X-Env-Var-key_method-Desc: LUKS key storage method
+# X-Env-Var-key_method-Required: false
+# X-Env-Var-key_method-Valid: keywords:file
+# X-Env-Var-key_method-Set: immediate
+#
+# X-Env-Var-key_size: 512
+# X-Env-Var-key_size-Desc: LUKS key size in bits
+# X-Env-Var-key_size-Required: false
+# X-Env-Var-key_size-Valid: int:256-8192
+# X-Env-Var-key_size-Set: immediate
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Image asset directory for hybrid-raid-layout
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: string
+# X-Env-Var-assetdir-Set: y
+#
 # METAEND
 ---

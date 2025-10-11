@@ -7,51 +7,181 @@
 # X-Env-VarPrefix: device
 #
 # X-Env-Var-device_type: ${device_type}
-# X-Env-Var-device_type-Description: Тип устройства Raspberry Pi
+# X-Env-Var-device_type-Description: Тип устройства Raspberry Pi для оптимизации
 # X-Env-Var-device_type-Required: true
 # X-Env-Var-device_type-Valid: pi4,pi5,cm4,zero2w
 #
 # X-Env-Var-firmware_version: latest
-# X-Env-Var-firmware_version-Description: Версия firmware для загрузки
+# X-Env-Var-firmware_version-Description: Версия firmware Raspberry Pi для загрузки
 # X-Env-Var-firmware_version-Required: false
 # X-Env-Var-firmware_version-Valid: latest,stable,beta
 #
 # X-Env-Var-hostname: rpi-${device_type}-${HOST_SUFFIX}
-# X-Env-Var-hostname-Description: Имя хоста устройства
+# X-Env-Var-hostname-Description: Уникальное имя хоста для устройства
 # X-Env-Var-hostname-Required: false
 # X-Env-Var-hostname-Valid: regex:^[a-zA-Z0-9.-]+$
+#
+# X-Env-Var-enable_overclock: false
+# X-Env-Var-enable_overclock-Description: Включить разгон процессора и памяти
+# X-Env-Var-enable_overclock-Required: false
+# X-Env-Var-enable_overclock-Valid: true,false
+#
+# X-Env-Var-power_management: balanced
+# X-Env-Var-power_management-Description: Режим управления питанием
+# X-Env-Var-power_management-Required: false
+# X-Env-Var-power_management-Valid: performance,balanced,powersave
 # METAEND
 ---
 mmdebstrap:
+  # ============================================================================
+  # ЗАВИСИМОСТИ И ПАКЕТЫ
+  # ============================================================================
+
   packages:
+    # Raspberry Pi bootloader и firmware
     - raspberrypi-bootloader
     - raspberrypi-kernel
     - linux-firmware-raspi
     - rpi-eeprom
+
+    # Дополнительные инструменты для работы с устройствами
+    - raspi-config
+    - rpi-update
+    - usbutils
+    - pciutils
+
+  # ============================================================================
+  # ХУКИ ПОДГОТОВКИ
+  # ============================================================================
+
   setup-hooks:
     - |
       #!/bin/bash
+      # Hook: Device Setup - Подготовка окружения для устройства
       set -euo pipefail
 
-      echo "Подготовка устройства: ${IGconf_device_device_type}"
+      # Function for error handling
+      die() {
+        echo "ERROR: $*" >&2
+        exit 1
+      }
 
-      # Создание необходимых директорий
-      mkdir -p /boot/firmware
-      mkdir -p /var/lib/raspberrypi
+      # Валидация переменных окружения
+      device_type="${IGconf_device_device_type:?device_type not configured}"
+
+      echo "🔧 Подготовка устройства типа: $device_type"
+
+      # ============================================================================
+      # DIRECTORY STRUCTURE SETUP
+      # ============================================================================
+
+      echo "📁 Создание структуры директорий..."
+
+      # Создание необходимых директорий для Raspberry Pi
+      mkdir -p /boot/firmware || die "Failed to create /boot/firmware directory"
+      mkdir -p /var/lib/raspberrypi || die "Failed to create Raspberry Pi lib directory"
+      mkdir -p /opt/vc || die "Failed to create VideoCore directory"
+
+      # Создание директорий для логов и конфигураций устройства
+      mkdir -p /var/log/rpi || die "Failed to create device log directory"
+      mkdir -p /etc/rpi || die "Failed to create device config directory"
+
+      # ============================================================================
+      # DEVICE-SPECIFIC PREPARATION
+      # ============================================================================
+
+      echo "🔍 Подготовка специфичных настроек для $device_type..."
+
+      # Базовая подготовка в зависимости от типа устройства
+      case "$device_type" in
+        "pi4")
+          # Raspberry Pi 4 specific preparation
+          echo "🎯 Подготовка для Raspberry Pi 4"
+          ;;
+        "pi5")
+          # Raspberry Pi 5 specific preparation
+          echo "🎯 Подготовка для Raspberry Pi 5"
+          ;;
+        "cm4")
+          # Compute Module 4 specific preparation
+          echo "🎯 Подготовка для Compute Module 4"
+          ;;
+        "zero2w")
+          # Zero 2 W specific preparation
+          echo "🎯 Подготовка для Zero 2 W"
+          ;;
+        *)
+          echo "⚠️  Неизвестный тип устройства: $device_type, используется общая подготовка"
+          ;;
+      esac
+
+      # ============================================================================
+      # PERMISSIONS SETUP
+      # ============================================================================
+
+      echo "🔒 Настройка прав доступа..."
+
+      # Настройка прав для boot директории
+      chmod 755 /boot/firmware || die "Failed to set permissions for /boot/firmware"
+
+      # Настройка прав для Raspberry Pi специфичных директорий
+      chmod 755 /var/lib/raspberrypi || die "Failed to set permissions for Raspberry Pi lib"
+      chmod 755 /var/log/rpi || die "Failed to set permissions for device logs"
+      chmod 755 /etc/rpi || die "Failed to set permissions for device config"
+
+      echo "✅ Подготовка окружения для устройства $device_type завершена"
   customize-hooks:
     - |
       #!/bin/bash
+      # Hook: Device Configuration - Настройка устройства Raspberry Pi
       set -euo pipefail
 
-      device_type="${IGconf_device_device_type}"
-      firmware_version="${IGconf_device_firmware_version:-latest}"
-      hostname="${IGconf_device_hostname}"
+      # Function for error handling
+      die() {
+        echo "ERROR: $*" >&2
+        exit 1
+      }
 
-      echo "Настройка устройства $device_type с firmware $firmware_version"
+      # Валидация и установка переменных окружения
+      device_type="${IGconf_device_device_type:?device_type not configured}"
+      firmware_version="${IGconf_device_firmware_version:-latest}"
+      hostname="${IGconf_device_hostname:-rpi-$device_type}"
+      enable_overclock="${IGconf_device_enable_overclock:-false}"
+      power_management="${IGconf_device_power_management:-balanced}"
+
+      # Валидация значений
+      case "$device_type" in
+        pi4|pi5|cm4|zero2w) ;;
+        *) die "Unsupported device type: $device_type" ;;
+      esac
+
+      case "$firmware_version" in
+        latest|stable|beta) ;;
+        *) die "Unsupported firmware version: $firmware_version" ;;
+      esac
+
+      case "$power_management" in
+        performance|balanced|powersave) ;;
+        *) die "Unsupported power management mode: $power_management" ;;
+      esac
+
+      echo "🔧 Настройка устройства $device_type (firmware: $firmware_version)"
+
+      # ============================================================================
+      # HOSTNAME CONFIGURATION
+      # ============================================================================
+
+      echo "🏷️  Настройка hostname: $hostname"
 
       # Настройка hostname
-      echo "$hostname" > /etc/hostname
-      sed -i "s/127.0.1.1.*/127.0.1.1\t$hostname/" /etc/hosts
+      echo "$hostname" > /etc/hostname || die "Failed to set hostname"
+      sed -i "s/127.0.1.1.*/127.0.1.1\t$hostname/" /etc/hosts || die "Failed to update hosts file"
+
+      # ============================================================================
+      # DEVICE-SPECIFIC CONFIGURATION
+      # ============================================================================
+
+      echo "🎯 Применение специфичных настроек для $device_type..."
 
       # Специфичная настройка для разных устройств
       case "$device_type" in
@@ -68,86 +198,482 @@ mmdebstrap:
           configure_zero2w_specifics
           ;;
         *)
-          echo "WARN: Неизвестный тип устройства: $device_type" >&2
+          echo "⚠️  Неизвестный тип устройства: $device_type" >&2
           ;;
       esac
 
-      # Обновление firmware
+      # ============================================================================
+      # FIRMWARE MANAGEMENT
+      # ============================================================================
+
+      echo "📡 Управление firmware ($firmware_version)..."
+
+      # Обновление firmware с учетом версии
       case "$firmware_version" in
         "latest")
-          rpi-eeprom-update -a
+          echo "⬇️  Установка последней версии firmware..."
+          rpi-eeprom-update -a || echo "⚠️  EEPROM update failed, continuing..."
           ;;
         "stable")
-          rpi-eeprom-update
+          echo "⬇️  Установка стабильной версии firmware..."
+          rpi-eeprom-update || echo "⚠️  EEPROM update failed, continuing..."
           ;;
         "beta")
-          rpi-eeprom-update -r
+          echo "⬇️  Установка beta версии firmware..."
+          rpi-eeprom-update -r || echo "⚠️  EEPROM update failed, continuing..."
           ;;
       esac
+
+      # ============================================================================
+      # PERFORMANCE AND POWER MANAGEMENT
+      # ============================================================================
+
+      echo "⚡ Настройка производительности и управления питанием..."
+
+      # Настройка overclocking если включено
+      if [[ "$enable_overclock" == "true" ]]; then
+        configure_overclock "$device_type"
+      fi
+
+      # Настройка управления питанием
+      configure_power_management "$power_management"
+
+      # ============================================================================
+      # KERNEL PARAMETERS CONFIGURATION
+      # ============================================================================
+
+      echo "🔧 Настройка параметров ядра..."
 
       # Настройка специфичных параметров ядра
       configure_kernel_parameters
 
-      echo "Настройка устройства $device_type завершена"
+      # ============================================================================
+      # HARDWARE OPTIMIZATION
+      # ============================================================================
+
+      echo "🚀 Оптимизация оборудования..."
+
+      # Настройка GPU memory split
+      configure_gpu_memory "$device_type"
+
+      # Настройка USB и PCIe (для Pi 5)
+      if [[ "$device_type" == "pi5" ]]; then
+        configure_pcie_usb
+      fi
+
+      # ============================================================================
+      # SYSTEM TUNING
+      # ============================================================================
+
+      echo "🎛️  Системная оптимизация..."
+
+      # Настройка sysctl параметров
+      configure_sysctl_tuning "$device_type"
+
+      # Настройка systemd для лучшей производительности
+      optimize_systemd
+
+      echo "✅ Настройка устройства $device_type завершена успешно"
+
+  # ============================================================================
+  # ОЧИСТКА ПОСЛЕ НАСТРОЙКИ УСТРОЙСТВА
+  # ============================================================================
 
   cleanup-hooks:
     - |
       #!/bin/bash
+      # Hook: Device Cleanup - Очистка после настройки устройства
       set -euo pipefail
 
-      # Очистка временных файлов настройки устройства
-      rm -f /boot/firmware/*.bak
-      rm -f /etc/hostname.bak
+      # Function for error handling
+      die() {
+        echo "ERROR: $*" >&2
+        exit 1
+      }
 
-      echo "Очистка после настройки устройства завершена"
+      # Валидация переменных (без прерывания если не установлены)
+      device_type="${IGconf_device_device_type:-unknown-device}"
+
+      echo "🧹 Очистка после настройки устройства: $device_type"
+
+      # ============================================================================
+      # BACKUP FILE CLEANUP
+      # ============================================================================
+
+      echo "🗑️  Очистка резервных копий..."
+
+      # Удаление backup файлов из /boot/firmware
+      rm -f /boot/firmware/*.bak 2>/dev/null || true
+      rm -f /boot/firmware/*.old 2>/dev/null || true
+
+      # Удаление hostname backups
+      rm -f /etc/hostname.bak 2>/dev/null || true
+      rm -f /etc/hosts.bak 2>/dev/null || true
+
+      # ============================================================================
+      # TEMPORARY CONFIGURATION CLEANUP
+      # ============================================================================
+
+      echo "🧽 Очистка временных конфигураций..."
+
+      # Удаление временных конфигурационных файлов
+      rm -f /etc/default/cpufrequtils.tmp 2>/dev/null || true
+      rm -f /etc/sysctl.d/99-rpi-optimization.conf.tmp 2>/dev/null || true
+
+      # Очистка временных overlay файлов
+      find /boot/firmware -name "*.tmp" -delete 2>/dev/null || true
+
+      # ============================================================================
+      # PACKAGE CACHE CLEANUP
+      # ============================================================================
+
+      echo "📦 Очистка кэша пакетов..."
+
+      # Очистка apt cache если доступно
+      if command -v apt-get >/dev/null 2>&1; then
+        apt-get clean 2>/dev/null || true
+        rm -rf /var/lib/apt/lists/* 2>/dev/null || true
+      fi
+
+      # ============================================================================
+      # DEVICE LOGS OPTIMIZATION
+      # ============================================================================
+
+      echo "📝 Оптимизация логов устройства..."
+
+      # Создание конфигурации logrotate для device логов
+      if [[ -d "/var/log/rpi" ]]; then
+        cat > "/etc/logrotate.d/rpi-device" << EOF 2>/dev/null || true
+/var/log/rpi/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 root root
+    postrotate
+        systemctl reload rsyslog.service || true
+    endscript
+}
+EOF
+      fi
+
+      # ============================================================================
+      # FIRMWARE UPDATE ARTIFACTS CLEANUP
+      # ============================================================================
+
+      echo "📡 Очистка артефактов обновления firmware..."
+
+      # Удаление старых версий bootloader
+      find /boot/firmware -name "kernel*.old" -delete 2>/dev/null || true
+      find /boot/firmware -name "start*.old" -delete 2>/dev/null || true
+
+      # Очистка временных файлов rpi-update
+      rm -rf /boot/.firmware_revision 2>/dev/null || true
+
+      # ============================================================================
+      # FINAL VERIFICATION
+      # ============================================================================
+
+      echo "✅ Проверка финального состояния..."
+
+      # Проверка что основные конфигурационные файлы на месте
+      if [[ -f "/etc/hostname" ]] && [[ -f "/boot/firmware/config.txt" ]]; then
+        echo "✅ Основные конфигурационные файлы присутствуют"
+      else
+        echo "⚠️  Некоторые конфигурационные файлы могут отсутствовать"
+      fi
+
+      # Проверка прав доступа к boot директории
+      if [[ -d "/boot/firmware" ]]; then
+        boot_perms=$(stat -c '%a' /boot/firmware 2>/dev/null || echo "unknown")
+        if [[ "$boot_perms" == "755" ]]; then
+          echo "✅ Права доступа к /boot/firmware корректны"
+        else
+          echo "⚠️  Права доступа к /boot/firmware могут быть некорректными: $boot_perms"
+        fi
+      fi
+
+      echo "✅ Очистка после настройки устройства $device_type завершена успешно"
+
+# ============================================================================
+# DEVICE-SPECIFIC CONFIGURATION FUNCTIONS
+# ============================================================================
 
 configure_pi4_specifics() {
-  # Настройка специфичных параметров для Pi 4
+  echo "🎯 Настройка Raspberry Pi 4..."
+
+  # GPU и видео настройки для Pi 4
   cat >> /boot/firmware/config.txt << 'EOF'
 
-# Pi 4 specific configuration
+# Raspberry Pi 4 specific configuration
+# GPU and video core settings
 dtoverlay=vc4-fkms-v3d
 max_framebuffers=2
 gpu_mem=256
+hdmi_enable_4kp60=1
+
+# USB and Ethernet optimizations
+usb_max_current_enable=1
+dtparam=eth_led0=14
+dtparam=eth_led1=14
+
+# PCIe (если используется HAT)
+dtparam=pciex1_gen=3
+EOF
+
+  # CPU governor для Pi 4
+  cat > /etc/default/cpufrequtils << 'EOF'
+GOVERNOR="ondemand"
 EOF
 }
 
 configure_pi5_specifics() {
-  # Настройка специфичных параметров для Pi 5
+  echo "🎯 Настройка Raspberry Pi 5..."
+
   cat >> /boot/firmware/config.txt << 'EOF'
 
-# Pi 5 specific configuration
+# Raspberry Pi 5 specific configuration
+# Audio and video settings
 dtparam=audio=on
 dtoverlay=vc4-kms-v3d-pi5
+
+# PCIe Gen 3 support
+dtparam=pciex1_gen=3
+dtparam=pciex1
+
+# USB 3.0 optimizations
+usb_max_current_enable=1
+dtoverlay=dwc2,dr_mode=host
+
+# NVMe and high-speed storage
+dtparam=pciex1_gen=3
+dtoverlay=pciex1-ssd
+EOF
+
+  # Performance governor для Pi 5
+  cat > /etc/default/cpufrequtils << 'EOF'
+GOVERNOR="performance"
 EOF
 }
 
 configure_cm4_specifics() {
-  # Настройка для Compute Module 4
+  echo "🎯 Настройка Compute Module 4..."
+
   cat >> /boot/firmware/config.txt << 'EOF'
 
-# CM4 specific configuration
+# Compute Module 4 specific configuration
+# Interfaces
 dtparam=i2c_arm=on
 dtparam=spi=on
+dtparam=i2s=on
+dtparam=uart0=on
+dtparam=uart1=on
+
+# PCIe for NVMe (if available)
+dtparam=pciex1_gen=3
+dtoverlay=pciex1-ssd
+
+# Disable unused peripherals for power savings
+dtoverlay=disable-bt
+dtoverlay=disable-wifi
 EOF
 }
 
 configure_zero2w_specifics() {
-  # Настройка для Zero 2 W
+  echo "🎯 Настройка Zero 2 W..."
+
   cat >> /boot/firmware/config.txt << 'EOF'
 
 # Zero 2 W specific configuration
+# Wireless and interfaces
 dtparam=i2c_arm=on
 dtparam=spi=on
+dtparam=i2s=on
+dtparam=uart0=on
+
+# GPU memory (minimal for headless)
 gpu_mem=64
+
+# USB current limit (Zero form factor)
+usb_max_current_enable=1
+max_usb_current=1
+
+# CPU frequency scaling
+arm_freq=1000
+arm_freq_min=600
+over_voltage=6
 EOF
 }
 
+# ============================================================================
+# PERFORMANCE AND POWER MANAGEMENT FUNCTIONS
+# ============================================================================
+
+configure_overclock() {
+  local device_type="$1"
+  echo "⚡ Настройка overclocking для $device_type..."
+
+  case "$device_type" in
+    "pi4")
+      cat >> /boot/firmware/config.txt << 'EOF'
+
+# Raspberry Pi 4 Overclocking
+over_voltage=6
+arm_freq=2000
+gpu_freq=750
+EOF
+      ;;
+    "pi5")
+      cat >> /boot/firmware/config.txt << 'EOF'
+
+# Raspberry Pi 5 Overclocking
+over_voltage=6
+arm_freq=2800
+gpu_freq=900
+EOF
+      ;;
+    "zero2w")
+      cat >> /boot/firmware/config.txt << 'EOF'
+
+# Zero 2 W Overclocking (conservative)
+over_voltage=4
+arm_freq=1200
+EOF
+      ;;
+  esac
+}
+
+configure_power_management() {
+  local mode="$1"
+  echo "🔋 Настройка управления питанием: $mode"
+
+  case "$mode" in
+    "performance")
+      # Максимальная производительность
+      cat > /etc/default/cpufrequtils << 'EOF'
+GOVERNOR="performance"
+EOF
+      ;;
+    "balanced")
+      # Баланс производительности и энергопотребления
+      cat > /etc/default/cpufrequtils << 'EOF'
+GOVERNOR="ondemand"
+EOF
+      ;;
+    "powersave")
+      # Энергосбережение
+      cat > /etc/default/cpufrequtils << 'EOF'
+GOVERNOR="powersave"
+EOF
+      ;;
+  esac
+}
+
+configure_gpu_memory() {
+  local device_type="$1"
+
+  # Настройка GPU memory в зависимости от типа устройства и использования
+  case "$device_type" in
+    "pi4")
+      # Для Pi 4 - баланс между GPU и системной памятью
+      echo "gpu_mem=256" >> /boot/firmware/config.txt
+      ;;
+    "pi5")
+      # Для Pi 5 - больше памяти для GPU из-за PCIe и USB 3.0
+      echo "gpu_mem=384" >> /boot/firmware/config.txt
+      ;;
+    "zero2w")
+      # Для Zero - минимальная память для headless режима
+      echo "gpu_mem=64" >> /boot/firmware/config.txt
+      ;;
+    "cm4")
+      # Для CM4 - зависит от использования (здесь минимальная)
+      echo "gpu_mem=128" >> /boot/firmware/config.txt
+      ;;
+  esac
+}
+
+configure_pcie_usb() {
+  echo "🔌 Оптимизация PCIe и USB для Pi 5..."
+
+  # PCIe Gen 3 для NVMe
+  echo "dtparam=pciex1_gen=3" >> /boot/firmware/config.txt
+  echo "dtoverlay=pciex1-ssd" >> /boot/firmware/config.txt
+
+  # USB 3.0 optimizations
+  echo "dtoverlay=dwc2,dr_mode=host" >> /boot/firmware/config.txt
+}
+
 configure_kernel_parameters() {
-  # Общие параметры ядра для всех устройств
-  cat >> /etc/sysctl.d/99-rpi.conf << 'EOF'
-# Raspberry Pi specific kernel parameters
-vm.swappiness=1
+  echo "🔧 Настройка параметров ядра..."
+
+  # Общие параметры ядра для всех Raspberry Pi устройств
+  cat > /etc/sysctl.d/99-rpi-optimization.conf << 'EOF'
+# Raspberry Pi kernel optimizations
+
+# Memory management
+vm.swappiness=10
 vm.vfs_cache_pressure=50
+vm.dirty_ratio=20
+vm.dirty_background_ratio=5
+
+# Network optimizations
+net.core.rmem_max=262144
+net.core.wmem_max=262144
+net.ipv4.tcp_rmem=4096 87380 262144
+net.ipv4.tcp_wmem=4096 87380 262144
+
+# Filesystem optimizations
+vm.page-cluster=0
+EOF
+
+  # Специфичные параметры для разных ядер
+  uname -r | grep -q "raspi" && cat >> /etc/sysctl.d/99-rpi-optimization.conf << 'EOF'
+
+# Raspberry Pi specific parameters
+kernel.printk=3 3 3 3
+EOF
+}
+
+configure_sysctl_tuning() {
+  local device_type="$1"
+
+  case "$device_type" in
+    "pi5")
+      # Специфичные оптимизации для Pi 5
+      cat >> /etc/sysctl.d/99-rpi-optimization.conf << 'EOF'
+
+# Pi 5 specific optimizations
+kernel.sched_min_granularity_ns=10000000
+kernel.sched_wakeup_granularity_ns=15000000
+EOF
+      ;;
+    "pi4")
+      # Оптимизации для Pi 4
+      cat >> /etc/sysctl.d/99-rpi-optimization.conf << 'EOF'
+
+# Pi 4 specific optimizations
+vm.min_free_kbytes=16384
+EOF
+      ;;
+  esac
+}
+
+optimize_systemd() {
+  echo "⚙️  Оптимизация systemd..."
+
+  # Отключение ненужных сервисов для производительности
+  systemctl disable bluetooth.service 2>/dev/null || true
+  systemctl disable hciuart.service 2>/dev/null || true
+  systemctl disable triggerhappy.service 2>/dev/null || true
+
+  # Настройка journald для ограничения размера логов
+  cat > /etc/systemd/journald.conf << 'EOF'
+[Journal]
+Storage=volatile
+RuntimeMaxUse=64M
+RuntimeMaxFileSize=8M
 EOF
 }

@@ -10,6 +10,38 @@ genimg_in="$2"
 # Basic validation (rpi-image-gen framework handles most validation)
 : "${IGconf_hybrid_raid_luks_ssd_ids:?"ssd_ids not configured"}"
 
+# Validate encryption_enabled
+case "${IGconf_hybrid_raid_luks_encryption_enabled:-n}" in
+    y|n) ;;
+    *) die "encryption_enabled must be 'y' or 'n'" ;;
+esac
+
+# Validate rootfs_type
+case "${IGconf_hybrid_raid_luks_rootfs_type:-ext4}" in
+    ext4|btrfs|f2fs) ;;
+    *) die "Unsupported rootfs_type: ${IGconf_hybrid_raid_luks_rootfs_type}" ;;
+esac
+
+# Validate pmap
+case "${IGconf_hybrid_raid_luks_pmap:-clear}" in
+    clear|crypt) ;;
+    *) die "pmap must be 'clear' or 'crypt'" ;;
+esac
+
+# Validate key_method if encryption is enabled
+if [ "${IGconf_hybrid_raid_luks_encryption_enabled:-n}" = "y" ]; then
+    case "${IGconf_hybrid_raid_luks_key_method:-file}" in
+        file) ;;
+        *) die "Only 'file' key method is supported" ;;
+    esac
+
+    # Validate key_size
+    key_size="${IGconf_hybrid_raid_luks_key_size:-512}"
+    if ! [[ "$key_size" =~ ^[0-9]+$ ]] || (( key_size < 256 || key_size > 8192 )); then
+        die "key_size must be integer between 256 and 8192"
+    fi
+fi
+
 # Generate UUIDs for partitions (batch generation for performance)
 mapfile -t uuids < <(uuidgen && uuidgen && uuidgen && uuidgen)
 BOOT_UUID=${uuids[0]}

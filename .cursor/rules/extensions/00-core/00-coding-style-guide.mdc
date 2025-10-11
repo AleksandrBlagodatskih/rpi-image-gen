@@ -1,0 +1,580 @@
+---
+alwaysApply: ${cursor.file.path.includes("layer/") || cursor.file.path.includes("config/") || cursor.file.path.endsWith(".yaml") || cursor.file.path.endsWith(".sh")}
+---
+
+# Правило 00: Руководство по стилю кодирования расширений rpi-image-gen
+
+## Назначение правила
+Определяет общий консистентный стиль кодирования для всех расширений rpi-image-gen, обеспечивая единообразие, читаемость и поддерживаемость кода.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Архитектурные принципы стиля
+
+### Иерархическая организация файлов
+```yaml
+# ✅ ПРАВИЛЬНО - четкая иерархия с разделами
+# ============================================================================
+# ЗАГОЛОВОК РАЗДЕЛА
+# ============================================================================
+
+# Детальное описание раздела
+# с пояснениями назначения
+
+# Код раздела...
+```
+
+### Стандарты именования
+
+#### Переменные окружения IGconf_*
+```bash
+# ✅ ПРАВИЛЬНО - префикс + разделитель + имя
+IGconf_app_service_port=8080
+IGconf_device_hostname=my-rpi
+IGconf_security_firewall_enabled=true
+
+# ❌ НЕПРАВИЛЬНО - пробелы, заглавные буквы в разделителях
+IGconf_app-Service-Port=8080
+IGconf_Device_Hostname=my-rpi
+```
+
+#### Функции Bash
+```bash
+# ✅ ПРАВИЛЬНО - snake_case, префикс типа
+configure_nginx_proxy() { ... }
+validate_service_port() { ... }
+setup_systemd_service() { ... }
+
+# ❌ НЕПРАВИЛЬНО - camelCase, без префиксов
+configureNginxProxy() { ... }
+portValidation() { ... }
+systemdSetup() { ... }
+```
+
+#### Файлы и директории
+```bash
+# ✅ ПРАВИЛЬНО - kebab-case для имен файлов
+my-application-extension.yaml
+hybrid-raid-layout.sh
+device-optimization.conf
+
+# ❌ НЕПРАВИЛЬНО - camelCase или snake_case
+myApplicationExtension.yaml
+hybrid_raid_layout.sh
+```
+
+## Стандарты Bash скриптов
+
+### Структура скрипта
+```bash
+#!/bin/bash
+# Назначение скрипта и автор
+set -euo pipefail
+
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Основная функция main()
+main() {
+    # Логика скрипта
+    echo "🔧 Starting configuration..."
+
+    # Шаги выполнения
+    validate_environment
+    setup_components
+    configure_services
+    verify_configuration
+
+    echo "✅ Configuration completed successfully"
+}
+
+# Вспомогательные функции
+validate_environment() { ... }
+setup_components() { ... }
+configure_services() { ... }
+verify_configuration() { ... }
+
+# Обработчики сигналов
+trap cleanup EXIT INT TERM
+
+# Выполнение
+main "$@"
+```
+
+### Валидация и обработка ошибок
+```bash
+# ✅ ПРАВИЛЬНО - комплексная валидация
+validate_service_port() {
+    local port="${IGconf_app_service_port:-8080}"
+
+    # Проверка типа
+    if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+        die "service_port must be numeric: $port"
+    fi
+
+    # Проверка диапазона
+    if [[ "$port" -lt 1024 ]] || [[ "$port" -gt 65535 ]]; then
+        die "service_port must be between 1024 and 65535: $port"
+    fi
+
+    echo "✅ Service port validation passed: $port"
+}
+
+# Вызов валидации
+validate_service_port
+```
+
+### Безопасные паттерны
+```bash
+# ✅ ПРАВИЛЬНО - безопасная работа с файлами
+create_config_file() {
+    local file="$1"
+    local content="$2"
+
+    # Создание директории с проверкой
+    local dir
+    dir=$(dirname "$file")
+    mkdir -p "$dir" || die "Failed to create directory: $dir"
+
+    # Безопасная запись с бэкапом
+    if [[ -f "$file" ]] && [[ ! -f "${file}.backup" ]]; then
+        cp "$file" "${file}.backup" || die "Failed to create backup: $file"
+    fi
+
+    cat > "$file" << EOF || die "Failed to write config file: $file"
+$content
+EOF
+
+    # Установка прав доступа
+    chmod 644 "$file" || die "Failed to set permissions: $file"
+}
+
+# ✅ ПРАВИЛЬНО - безопасная работа с сервисами
+manage_systemd_service() {
+    local service="$1"
+    local action="$2"
+
+    case "$action" in
+        enable)
+            if ! systemctl is-enabled "$service" 2>/dev/null; then
+                systemctl enable "$service" || die "Failed to enable service: $service"
+                echo "✅ Service enabled: $service"
+            fi
+            ;;
+        start)
+            if ! systemctl is-active "$service" 2>/dev/null; then
+                systemctl start "$service" || die "Failed to start service: $service"
+                echo "✅ Service started: $service"
+            fi
+            ;;
+        *)
+            die "Unknown action: $action"
+            ;;
+    esac
+}
+```
+
+## Стандарты YAML конфигураций
+
+### Структура конфигурационных файлов
+```yaml
+# Полная структура согласно правилам
+---
+
+# ============================================================================
+# ПЕРЕМЕННЫЕ СЛОЕВ (вынесены для лучшей читаемости)
+# ============================================================================
+
+# Настройки в короткой форме (без IGconf_ префиксов)
+app_service:
+  port: 8080
+  host: localhost
+  debug: false
+
+security_hardening:
+  apparmor_mode: enforce
+  firewall_policy: deny
+  audit_enabled: true
+
+# ============================================================================
+# КОНФИГУРАЦИЯ УСТРОЙСТВА И ОБРАЗА
+# ============================================================================
+
+device:
+  layer: pi5
+  hostname: my-production-server
+
+image:
+  layer: hybrid-raid-luks
+  boot_part_size: 200%
+  root_part_size: 400%
+
+# ============================================================================
+# СЛОИ СИСТЕМЫ (только ссылки)
+# ============================================================================
+
+layer:
+  base: bookworm-minbase
+  security: apparmor-core
+  monitoring: prometheus-stack
+  app: my-application
+```
+
+### Стиль комментариев
+```yaml
+# ✅ ПРАВИЛЬНО - подробные комментарии
+# ============================================================================
+# ПРОДАКШН КОНФИГУРАЦИЯ ДЛЯ ВЫСОКОНАГРУЖЕННОГО СЕРВЕРА
+# ============================================================================
+#
+# Цель: Оптимизированный сервер для веб-приложений
+# Аппаратное обеспечение: Raspberry Pi 5 + NVMe SSD
+# Базовая система: Debian Bookworm
+#
+# Особенности конфигурации:
+# - Hybrid RAID1 + LUKS шифрование для надежности
+# - Полная система безопасности (AppArmor + UFW + Fail2Ban)
+# - Мониторинг производительности
+# - Автоматические обновления безопасности
+# ============================================================================
+
+# Настройки приложения
+app_service:
+  port: 8080          # Порт веб-сервиса (1024-65535)
+  host: 0.0.0.0       # Слушать на всех интерфейсах
+  debug: false        # Отключить отладку в продакшене
+  workers: 4          # Количество worker процессов
+
+# Настройки безопасности
+security_hardening:
+  apparmor_mode: enforce     # Строгый режим AppArmor
+  firewall_policy: deny      # Политика по умолчанию - запретить
+  audit_enabled: true        # Включить аудит системы
+  fail2ban_maxretry: 3       # Максимум попыток перед блокировкой
+
+# ❌ НЕПРАВИЛЬНО - минимальные комментарии
+app_service:
+  port: 8080          # port
+  host: 0.0.0.0       # host
+```
+
+## Стандарты метаданных слоев
+
+### Структура X-Env метаданных
+```yaml
+# ✅ ПРАВИЛЬНО - полная документация переменных
+# METABEGIN
+# X-Env-Layer-Name: my-application
+# X-Env-Layer-Category: extension
+# X-Env-Layer-Description: Полнофункциональное веб-приложение с мониторингом
+# X-Env-Layer-Version: 1.2.0
+# X-Env-Layer-Requires: essential,net-misc,security-basic
+# X-Env-VarPrefix: app
+#
+# X-Env-Var-service_port: 8080
+# X-Env-Var-service_port-Description: Порт для HTTP сервиса приложения
+# X-Env-Var-service_port-Required: false
+# X-Env-Var-service_port-Valid: int:1024-65535
+#
+# X-Env-Var-enable_ssl: false
+# X-Env-Var-enable_ssl-Description: Включить HTTPS с автоматическим сертификатом
+# X-Env-Var-enable_ssl-Required: false
+# X-Env-Var-enable_ssl-Valid: true,false
+# METAEND
+```
+
+### Соглашения по версионированию
+```yaml
+# ✅ ПРАВИЛЬНО - семантическое версионирование
+X-Env-Layer-Version: 1.2.3
+
+# Где:
+# 1 - MAJOR: breaking changes (несовместимые изменения)
+# 2 - MINOR: новые функции (обратная совместимость)
+# 3 - PATCH: исправления багов (обратная совместимость)
+
+# Примеры:
+# 1.0.0 - первый релиз
+# 1.1.0 - добавлена новая функция
+# 1.1.1 - исправлен баг
+# 2.0.0 - breaking changes в API
+```
+
+## Стандарты документации
+
+### Документирование функций
+```bash
+#!/bin/bash
+# configure_database_connection()
+# Настройка подключения к базе данных PostgreSQL
+#
+# Аргументы:
+#   $1 - тип базы данных (postgresql, mysql, sqlite)
+#   $2 - строка подключения
+#
+# Возвращает:
+#   0 - успех
+#   1 - ошибка конфигурации
+#
+# Пример использования:
+#   configure_database_connection "postgresql" "host=localhost dbname=myapp"
+#
+# Зависимости:
+#   - postgresql-client или mysql-client
+#   - curl для проверки подключения
+#
+# Автор: Команда разработки
+# Версия: 1.0.0
+configure_database_connection() {
+    local db_type="$1"
+    local connection_string="$2"
+
+    # Проверка аргументов
+    if [[ -z "$db_type" ]] || [[ -z "$connection_string" ]]; then
+        echo "ERROR: db_type and connection_string are required" >&2
+        return 1
+    fi
+
+    # Логика функции...
+}
+```
+
+### Документирование хуков
+```yaml
+mmdebstrap:
+  customize-hooks:
+    - |
+      #!/bin/bash
+      # Hook: Application Deployment and Configuration
+      #
+      # Назначение: Полная установка и настройка веб-приложения
+      # Выполняется на этапе customize в mmdebstrap
+      #
+      # Переменные окружения:
+      #   IGconf_app_service_port - порт сервиса (default: 8080)
+      #   IGconf_app_database_url - URL базы данных (required)
+      #
+      # Создает:
+      #   - Системного пользователя app_user
+      #   - Виртуальное окружение Python
+      #   - SystemD сервис
+      #   - Nginx конфигурацию
+      #
+      # Автор: Команда разработки приложений
+      # Версия: 1.0.0
+      # Дата: 2024-01-15
+
+      set -euo pipefail
+      # ... реализация хука ...
+```
+
+## Лучшие практики
+
+### Организация кода
+```bash
+# ✅ ПРАВИЛЬНО - разделение ответственности
+main() {
+    validate_inputs
+    setup_environment
+    install_dependencies
+    configure_services
+    enable_services
+    verify_deployment
+}
+
+validate_inputs() {
+    # Валидация всех входных данных
+}
+
+setup_environment() {
+    # Подготовка окружения
+}
+
+install_dependencies() {
+    # Установка зависимостей
+}
+
+configure_services() {
+    # Настройка сервисов
+}
+
+enable_services() {
+    # Включение и запуск
+}
+
+verify_deployment() {
+    # Проверка корректности развертывания
+}
+```
+
+### Обработка ошибок
+```bash
+# ✅ ПРАВИЛЬНО - graceful degradation
+configure_optional_feature() {
+    local feature_name="$1"
+
+    if command -v required_command >/dev/null 2>&1; then
+        echo "🔧 Configuring $feature_name..."
+        setup_feature || echo "⚠️  Failed to configure $feature_name, continuing..."
+    else
+        echo "⚠️  $feature_name not available, skipping..."
+    fi
+}
+
+# ✅ ПРАВИЛЬНО - информативные сообщения об ошибках
+validate_critical_component() {
+    local component="$1"
+
+    if ! check_component "$component"; then
+        cat >&2 << EOF
+ERROR: Critical component '$component' failed validation!
+
+Possible causes:
+- Missing dependencies
+- Incorrect configuration
+- Permission issues
+
+Please check:
+1. System requirements documentation
+2. Configuration variables
+3. System logs: journalctl -u $component
+
+For help, see: https://rpi-image-gen.readthedocs.io/components/$component
+EOF
+        exit 1
+    fi
+}
+```
+
+### Производительность
+```bash
+# ✅ ПРАВИЛЬНО - оптимизация циклов
+process_items() {
+    local items_file="$1"
+
+    # Эффективная обработка с progress indicator
+    local total_count
+    total_count=$(wc -l < "$items_file")
+    local current=0
+
+    while IFS= read -r item; do
+        ((current++))
+        echo "[$current/$total_count] Processing: $item"
+
+        # Параллельная обработка если возможно
+        process_item "$item" &
+        wait_for_jobs 4  # Максимум 4 параллельных задачи
+    done < "$items_file"
+}
+
+wait_for_jobs() {
+    local max_jobs="$1"
+    while [[ $(jobs -r | wc -l) -ge $max_jobs ]]; do
+        sleep 0.1
+    done
+}
+```
+
+## Инструменты контроля качества
+
+### Автоматическая проверка стиля
+```bash
+# Проверка Bash скриптов
+check_bash_style() {
+    local script_file="$1"
+
+    # Проверка наличия set -euo pipefail
+    if ! head -5 "$script_file" | grep -q "set -euo pipefail"; then
+        echo "ERROR: Missing 'set -euo pipefail' in $script_file"
+        return 1
+    fi
+
+    # Проверка наличия die функции
+    if ! grep -q "^die()" "$script_file"; then
+        echo "ERROR: Missing die() function in $script_file"
+        return 1
+    fi
+
+    # Проверка документирования функций
+    if grep -q "^[a-zA-Z_][a-zA-Z0-9_]*()" "$script_file"; then
+        # Проверка что функции документированы
+        echo "INFO: Functions found, checking documentation..."
+    fi
+}
+
+# Проверка YAML конфигураций
+check_yaml_style() {
+    local config_file="$1"
+
+    # Проверка структуры
+    if ! grep -q "^layer:" "$config_file"; then
+        echo "ERROR: Missing layer section in $config_file"
+        return 1
+    fi
+
+    # Проверка комментариев
+    if ! grep -q "^#" "$config_file"; then
+        echo "WARNING: No comments found in $config_file"
+    fi
+}
+```
+
+### Метрики качества кода
+```bash
+# Анализ сложности функций
+analyze_complexity() {
+    local script_file="$1"
+
+    echo "=== Code Complexity Analysis ==="
+
+    # Подсчет строк кода
+    local lines_count
+    lines_count=$(wc -l < "$script_file")
+    echo "Total lines: $lines_count"
+
+    # Подсчет функций
+    local functions_count
+    functions_count=$(grep -c "^[a-zA-Z_][a-zA-Z0-9_]*()" "$script_file")
+    echo "Functions: $functions_count"
+
+    # Средняя длина функции
+    if [[ $functions_count -gt 0 ]]; then
+        local avg_function_length=$(( lines_count / functions_count ))
+        echo "Average function length: $avg_function_length lines"
+
+        # Предупреждение о слишком длинных функциях
+        if [[ $avg_function_length -gt 50 ]]; then
+            echo "WARNING: Functions are too long, consider splitting"
+        fi
+    fi
+}
+```
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Все новые файлы следуют определенному стилю
+- [ ] Существующие файлы обновлены согласно стандартам
+- [ ] Автоматическая проверка стиля внедрена в CI/CD
+- [ ] Команда разработки обучена стандартам стиля
+
+### Качественные показатели
+- [ ] 100% новых файлов соответствуют стилю
+- [ ] Средняя длина функций не превышает 30 строк
+- [ ] Все скрипты имеют set -euo pipefail
+- [ ] Все переменные документированы
+- [ ] Все функции имеют документацию
+
+### Автоматизированная проверка
+- [ ] Линтинг Bash скриптов (shellcheck)
+- [ ] Линтинг YAML файлов (yamllint)
+- [ ] Проверка стиля кода
+- [ ] Анализ сложности кода
+
+### Источник
+Создано на основе анализа существующего кода в rpi-image-gen проекте и лучших практик разработки.

@@ -9,8 +9,9 @@ die() {
 
 echo "🔧 Configuring hybrid-raid-layout overlay templates..."
 
-# Set default values from environment or use defaults
-SSD_IDS="${IGconf_hybrid_raid_luks_ssd_ids:-ata-SAMSUNG_HD204UI_S1XWJ1LZ100000,ata-SAMSUNG_HD204UI_S1XWJ1LZ100001}"
+# Use hybrid_raid_layout ssd_ids variable (should be set by rpi-image-gen)
+SSD_IDS="${IGconf_hybrid_raid_luks_ssd_ids:?ssd_ids not configured}"
+echo "DEBUG: Using SSD_IDS=${SSD_IDS}"
 
 # Create output directories
 mkdir -p device/initramfs-tools/hooks

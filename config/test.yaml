@@ -2,6 +2,20 @@
 # Включает параметры тестирования RAID1 + LUKS шифрования
 
 # ============================================================================
+# ПЕРЕМЕННЫЕ СЛОЕВ (короткие имена без IGconf_)
+# ============================================================================
+
+hybrid_raid_layout:
+  rootfs_type: ext4                    # Тип корневой ФС (ext4, btrfs, f2fs)
+  root_part_size: 2G                   # Размер root раздела
+  boot_part_size: 200M                 # Размер boot раздела
+  encryption_enabled: y                # Включить LUKS шифрование
+  key_method: file                     # Метод хранения ключа
+  key_size: 512                        # Размер ключа LUKS (бит)
+  ssd_ids: "ata-SAMSUNG_HD204UI_S1XWJ1LZ100000,ata-SAMSUNG_HD204UI_S1XWJ1LZ100001"  # SSD device IDs
+  pmap: clear                          # Тип provision map
+
+# ============================================================================
 # КОНФИГУРАЦИЯ УСТРОЙСТВА И ОБРАЗА
 # ============================================================================
 
@@ -10,20 +24,10 @@ device:
 
 image:
   layer: hybrid-raid-layout
-  # Имя образа
   name: test-hybrid-raid-layout
-  # Параметры hybrid-raid-layout (префикс IGconf_hybrid_raid_luks_)
-  IGconf_hybrid_raid_luks_rootfs_type: ext4                    # Тип корневой ФС (ext4, btrfs, f2fs)
-  IGconf_hybrid_raid_luks_root_part_size: 2G                   # Размер root раздела
-  IGconf_hybrid_raid_luks_boot_part_size: 200M                 # Размер boot раздела
-  IGconf_hybrid_raid_luks_encryption_enabled: y                # Включить LUKS шифрование
-  IGconf_hybrid_raid_luks_key_method: file                     # Метод хранения ключа
-  IGconf_hybrid_raid_luks_key_size: 512                        # Размер ключа LUKS (бит)
-  IGconf_hybrid_raid_luks_ssd_ids: "ata-SAMSUNG_HD204UI_S1XWJ1LZ100000,ata-SAMSUNG_HD204UI_S1XWJ1LZ100001"  # SSD device IDs
-  IGconf_hybrid_raid_luks_pmap: clear                          # Тип provision map
 
 # ============================================================================
-# СЛОИ СИСТЕМЫ
+# СЛОИ СИСТЕМЫ (только ссылки)
 # ============================================================================
 
 layer:
