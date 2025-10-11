@@ -4,7 +4,7 @@
 # X-Env-Layer-Desc: Hybrid SD + RAID1 storage layout with optional LUKS2 encryption (genimage-based disk images). Supports ext4/btrfs/f2fs filesystems with automatic disk expansion.
 # X-Env-Layer-Version: 2.1.0
 # X-Env-Layer-Requires: raid,luks
-# X-Env-Layer-Provides: image
+# X-Env-Layer-Provides: raid,disk-expansion,luks,encryption,image
 #
 # X-Env-VarPrefix: hybrid_raid_luks
 #
@@ -64,3 +64,24 @@
 #
 # METAEND
 ---
+mmdebstrap:
+  packages:
+    # RAID1 packages
+    - mdadm
+    - initramfs-tools
+    - parted
+    - e2fsprogs  # for resize2fs
+    - btrfs-progs  # for btrfs filesystem resize
+    - f2fs-tools  # for resize.f2fs
+    # LUKS packages
+    - cryptsetup
+
+  customize-hooks:
+    # RAID configuration hook
+    - source: bdebstrap/customize01-raid-setup.sh
+
+    # LUKS configuration hook
+    - source: bdebstrap/customize02-luks-setup.sh
+
+    # Disk expansion service setup hook
+    - source: bdebstrap/customize03-disk-expansion.sh

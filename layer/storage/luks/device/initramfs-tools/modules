@@ -1,6 +1,0 @@
-# Essential modules for LUKS encryption
-# Based on Debian crypto setup requirements
-
-# Crypto modules
-dm_crypt
-dm_mod

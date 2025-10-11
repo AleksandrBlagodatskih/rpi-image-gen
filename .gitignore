@@ -1,6 +1,3 @@
 work/*
 site/__pycache__
 
-# Runtime файлы hybrid-raid-layout (генерируются configure-overlay.sh)
-image/mbr/hybrid-raid-layout/device/initramfs-tools/
-image/mbr/hybrid-raid-layout/device/rootfs-overlay/

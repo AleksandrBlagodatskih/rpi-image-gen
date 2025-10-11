@@ -178,11 +178,7 @@ image mdraid-a.img {
    mdraid {
       level = 1                    # RAID1 (mirroring)
       devices = 2                  # Two devices in array
-      %if ENCRYPTION_ENABLED == "y"
-      image = "root.luks"          # LUKS container as RAID content
-      %else
       image = "root.<IGconf_hybrid_raid_luks_rootfs_type>"          # Filesystem as RAID content
-      %endif
    }
 }
 
