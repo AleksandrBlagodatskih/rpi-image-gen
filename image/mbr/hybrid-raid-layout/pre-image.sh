@@ -8,7 +8,7 @@ fs="$1"
 genimg_in="$2"
 
 # Basic validation (rpi-image-gen framework handles most validation)
-: "${IGconf_hybrid_raid_luks_ssd_devices:?"ssd_devices not configured"}"
+: "${IGconf_hybrid_raid_luks_ssd_ids:?"ssd_ids not configured"}"
 
 # Generate UUIDs for partitions (batch generation for performance)
 mapfile -t uuids < <(uuidgen && uuidgen && uuidgen && uuidgen)
@@ -19,13 +19,21 @@ RAID_UUID=${uuids[3]}
 # Validate UUID format
 validate_uuid() {
     local uuid="$1" name="$2"
-    [[ "$uuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || die "Invalid $name UUID format: $uuid"
+    [[ "$uuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || die "Invalid ${name} UUID format: ${uuid}"
 }
 
 # Validate all UUIDs at once
 validate_uuid "$BOOT_UUID" "BOOT"
 validate_uuid "$ROOT_UUID" "ROOT"
 validate_uuid "$RAID_UUID" "RAID"
+
+# Configure overlay templates with actual values (before genimage generation)
+if [ -f "configure-overlay.sh" ]; then
+    echo "🔧 Configuring overlay templates..."
+    bash configure-overlay.sh
+else
+    echo "WARNING: configure-overlay.sh not found, overlay templates not processed" >&2
+fi
 
 # Encryption configuration (optional) - ultra compact
 encryption_enabled="${IGconf_hybrid_raid_luks_encryption_enabled:-n}"
@@ -60,10 +68,10 @@ if [ -n "${IGconf_hybrid_raid_luks_ssd_ids:-}" ]; then
     for id in "${ssd_ids[@]}"; do
         id_path="/dev/disk/by-id/$id"
         if [ ! -b "$id_path" ] && [ ! -L "$id_path" ]; then
-            echo "WARNING: SSD device ID not found during build: $id ($id_path)" >&2
+            echo "WARNING: SSD device ID not found during build: ${id} (${id_path})" >&2
             echo "This is normal during image build - IDs will be validated at runtime" >&2
         else
-            echo "✅ SSD device ID found: $id -> $id_path"
+            echo "✅ SSD device ID found: ${id} -> ${id_path}"
         fi
     done
 fi
@@ -74,7 +82,7 @@ fi
 # Validate rootfs_type - single line case
 case "${IGconf_hybrid_raid_luks_rootfs_type:-ext4}" in
     ext4|btrfs|f2fs) rootfs_type="${IGconf_hybrid_raid_luks_rootfs_type:-ext4}" ;;
-    *) die "Unsupported rootfs_type: $IGconf_hybrid_raid_luks_rootfs_type" ;;
+    *) die "Unsupported rootfs_type: ${IGconf_hybrid_raid_luks_rootfs_type}" ;;
 esac
 
 # Calculate sizes with overhead considerations
@@ -87,7 +95,7 @@ boot_size="${IGconf_hybrid_raid_luks_boot_part_size:-200M}"
     case "$root_size" in
         *G) luks_container_size="$(( ${root_size%G} * 1024 + 20 ))M" ;;
         *M) luks_container_size="$(( ${root_size%M} + 20 ))M" ;;
-        *) die "Unsupported size format: $root_size" ;;
+        *) die "Unsupported size format: ${root_size}" ;;
     esac
     raid_partition_size="$luks_container_size"
 } || raid_partition_size="$root_size"
@@ -106,20 +114,11 @@ sed \
     -e "s|<ENCRYPTION_ENABLED>|$encryption_enabled|g" \
     -e "s|<LUKS_CONTAINER_SIZE>|${luks_container_size:-}|g" \
     -e "s|<CRYPT_UUID>|${CRYPT_UUID:-}|g" \
-    -e "s|<SSD_DEVICES>|${IGconf_hybrid_raid_luks_ssd_devices:-/dev/sda,/dev/sdb}|g" \
     -e "s|<KEY_SIZE>|${IGconf_hybrid_raid_luks_key_size:-512}|g" \
     -e "s|<LUKS_KEY_FILE>|${luks_key_file:-}|g" \
     -e "s|<MKE2FS_CONFIG>|$(readlink -f mke2fs.conf)|g" \
     -e "s|<SETUP>|$(readlink -f setup.sh)|g" \
     "genimage.cfg.in" > "${genimg_in}/genimage.cfg"
-
-# Configure overlay templates with actual values
-if [ -f "configure-overlay.sh" ]; then
-    echo "🔧 Configuring overlay templates..."
-    bash configure-overlay.sh
-else
-    echo "WARNING: configure-overlay.sh not found, overlay templates not processed" >&2
-fi
 
 # Install provision map - select based on encryption status
 provisionmap_file="device/provisionmap-${encryption_enabled:+crypt}${encryption_enabled:-clear}.json"
@@ -129,4 +128,4 @@ provisionmap_file="device/provisionmap-${encryption_enabled:+crypt}${encryption_
 }
 
 # Final status - compact
-echo "Generated genimage configuration for encryption=$encryption_enabled"
+echo "Generated genimage configuration for encryption=${encryption_enabled}"

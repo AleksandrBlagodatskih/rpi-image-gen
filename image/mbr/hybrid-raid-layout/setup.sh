@@ -27,7 +27,7 @@ case "$LABEL" in
             rootfs_type="${IGconf_hybrid_raid_luks_rootfs_type:-ext4}"
             root_entry="${encryption_enabled:+/dev/mapper/cryptroot}${encryption_enabled:-UUID=$RAID_UUID} / $rootfs_type ${rootfs_type:+defaults,noatime}${rootfs_type:+,errors=remount-ro}${rootfs_type:+,compress=zstd} 0 1"
             ;;
-         *) die "Unsupported filesystem type: $IGconf_hybrid_raid_luks_rootfs_type" ;;
+         *) die "Unsupported filesystem type: ${IGconf_hybrid_raid_luks_rootfs_type}" ;;
       esac
 
       # Single conditional heredoc for fstab - compact

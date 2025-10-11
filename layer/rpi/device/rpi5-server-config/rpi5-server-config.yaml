@@ -50,7 +50,7 @@ mmdebstrap:
   customize-hooks:
     # Raspberry Pi 5 Server Configuration with idempotency and error handling
     - |
-      set -eu
+      set -euo pipefail
       CONFIG_FILE="$1/boot/firmware/config.txt"
 
       # Validate environment
@@ -90,8 +90,27 @@ mmdebstrap:
         add_config_if_not_exists "hdmi_ignore_cec=1" ""
       fi
 
-      # Enable PCIe Gen 3.0 for maximum NVMe SSD performance (idempotent)
-      if [ "${IGconf_rpi5_server_pcie_max_speed:-y}" = "y" ]; then
+      # Disable WiFi interface (idempotent)
+      if [ "${IGconf_rpi5_server_disable_wifi:-y}" = "y" ]; then
+        add_config_if_not_exists "dtoverlay=disable-wifi" "# Disable WiFi interface"
       fi
 
-      # Disable unused interfaces for server operation (idempotent)
+      # Disable Bluetooth interface (idempotent)
+      if [ "${IGconf_rpi5_server_disable_bluetooth:-y}" = "y" ]; then
+        add_config_if_not_exists "dtoverlay=disable-bt" "# Disable Bluetooth interface"
+      fi
+
+      # Disable audio interfaces (idempotent)
+      if [ "${IGconf_rpi5_server_disable_audio:-y}" = "y" ]; then
+        add_config_if_not_exists "dtparam=audio=off" "# Disable audio interfaces"
+      fi
+
+      # Server performance optimizations (idempotent)
+      add_config_if_not_exists "arm_boost=1" "# Server performance optimizations"
+      add_config_if_not_exists "gpu_mem=16" ""
+
+      # Disable unnecessary services for memory savings (idempotent)
+      add_config_if_not_exists "disable_camera_led=1" "# Disable unnecessary services for memory savings"
+      add_config_if_not_exists "disable_splash=1" ""
+
+      echo "✅ Raspberry Pi 5 server configuration completed (idempotent)"

@@ -1,0 +1,119 @@
+#!/bin/bash
+# Radxa SATA Penta HAT Status Script
+
+echo "=== Radxa SATA Penta HAT Status ==="
+echo "UUID-based SATA device detection"
+echo
+
+# Check controller presence
+echo "1. SATA Controller:"
+if lspci -d "197b:0585" >/dev/null 2>&1; then
+    CONTROLLER_INFO=$(lspci -d "197b:0585" -v | head -1)
+    echo "   ✅ JMB585 SATA controller detected: $CONTROLLER_INFO"
+else
+    echo "   ❌ JMB585 SATA controller not detected"
+fi
+
+# Check PCIe configuration
+echo
+echo "2. PCIe Configuration:"
+if grep -q "dtparam=pciex1_gen=3" /boot/firmware/config.txt 2>/dev/null; then
+    echo "   ✅ PCIe Gen 3.0 enabled"
+else
+    echo "   ⚠️ PCIe Gen 3.0 not enabled (may limit performance)"
+fi
+
+# Check connected drives
+echo
+echo "3. Connected SATA Devices:"
+# Use UUID-based detection for more reliable identification
+SATA_DEVICES=()
+UUID_INFO=()
+
+# Check for SATA devices by ID (more reliable than /dev/sd*)
+for id_path in /dev/disk/by-id/ata-*; do
+    if [ -L "$id_path" ] && [ -b "$id_path" ]; then
+        real_device=$(readlink -f "$id_path")
+        # Check if this is actually a SATA device (not USB, etc.)
+        if [[ "$id_path" == *ata-* ]] && [[ "$real_device" == /dev/sd* ]]; then
+            SATA_DEVICES+=("$real_device")
+            # Get UUID if filesystem exists
+            uuid=$(blkid -s UUID -o value "$real_device" 2>/dev/null || echo "no-fs")
+            UUID_INFO+=("$uuid")
+        fi
+    fi
+done
+
+# Fallback to direct /dev/sd* check if no ID-based devices found
+if [ ${#SATA_DEVICES[@]} -eq 0 ]; then
+    for device in /dev/sd[a-z]; do
+        if [ -b "$device" ]; then
+            # Check if this device is actually connected to SATA controller
+            if udevadm info -n "$device" -q property | grep -q "ID_BUS=ata" 2>/dev/null; then
+                SATA_DEVICES+=("$device")
+                uuid=$(blkid -s UUID -o value "$device" 2>/dev/null || echo "no-fs")
+                UUID_INFO+=("$uuid")
+            fi
+        fi
+    done
+fi
+
+DEVICE_COUNT=${#SATA_DEVICES[@]}
+if [ "$DEVICE_COUNT" -gt 0 ]; then
+    echo "   ✅ $DEVICE_COUNT SATA device(s) detected:"
+    for i in "${!SATA_DEVICES[@]}"; do
+        device="${SATA_DEVICES[$i]}"
+        uuid="${UUID_INFO[$i]}"
+        SIZE=$(lsblk -b -n -o SIZE "$device" 2>/dev/null | head -1)
+        MODEL=$(lsblk -n -o MODEL "$device" 2>/dev/null | head -1)
+        SERIAL=$(lsblk -n -o SERIAL "$device" 2>/dev/null | head -1)
+        echo "      $device: ${MODEL:-Unknown} (${SIZE:-Unknown} bytes)"
+        if [ "$uuid" != "no-fs" ]; then
+            echo "         UUID: $uuid"
+        else
+            echo "         UUID: No filesystem detected"
+        fi
+        if [ -n "$SERIAL" ]; then
+            echo "         Serial: $SERIAL"
+        fi
+    done
+else
+    echo "   ⚠️ No SATA devices detected"
+fi
+
+# Check initramfs configuration
+echo
+echo "4. Initramfs Configuration:"
+if [ -f /etc/initramfs-tools/hooks/sata_penta ]; then
+    echo "   ✅ SATA initramfs hook installed"
+else
+    echo "   ⚠️ SATA initramfs hook not found"
+fi
+
+# Check GPIO power management
+echo
+echo "5. Power Management:"
+if systemctl is-enabled --quiet radxa-sata-power.service 2>/dev/null; then
+    if systemctl is-active --quiet radxa-sata-power.service 2>/dev/null; then
+        echo "   ✅ GPIO power management active"
+    else
+        echo "   ⚠️ GPIO power management enabled but not active"
+    fi
+else
+    echo "   ⚪ GPIO power management not configured"
+fi
+
+echo
+echo "=== Performance Recommendations ==="
+if [ "$DEVICE_COUNT" -gt 0 ]; then
+    # Use first detected SATA device for examples
+    first_device="${SATA_DEVICES[0]}"
+    device_name=$(basename "$first_device")
+    echo "• Test performance: hdparm -tT $first_device"
+    echo "• Check SMART: smartctl -a $first_device"
+    echo "• Monitor temps: watch -n 5 'lsblk -o NAME,SIZE,MODEL,TYPE /dev/${device_name:0:3}*'"
+    echo "• Check UUID: blkid $first_device"
+fi
+echo "• PCIe info: lspci -d 197b:0585 -vvv"
+echo "• SATA info: lsblk -o NAME,SIZE,MODEL,SERIAL,UUID /dev/sd*"
+echo "• Disk by-id: ls -la /dev/disk/by-id/ata-*"

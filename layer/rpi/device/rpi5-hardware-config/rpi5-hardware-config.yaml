@@ -31,7 +31,7 @@ mmdebstrap:
   customize-hooks:
     # PCIe Gen 3.0 and SATA optimizations for JMB585 controller (idempotent)
     - |
-      set -eu
+      set -euo pipefail
       CONFIG_FILE="$1/boot/firmware/config.txt"
 
       # Validate environment
@@ -64,7 +64,7 @@ mmdebstrap:
 
     # Initramfs SATA initialization (idempotent)
     - |
-      set -eu
+      set -euo pipefail
       if [ "${IGconf_rpi5_hw_initramfs_sata:-y}" = "y" ]; then
         echo "🔧 Setting up initramfs SATA initialization for JMB585"
 
@@ -104,106 +104,11 @@ mmdebstrap:
         if [ "${IGconf_rpi5_hw_enable_gpio_power}" = "y" ]; then
           # Create systemd service for safe GPIO management
           mkdir -p $1/etc/systemd/system
-          cat > $1/etc/systemd/system/radxa-sata-power.service << 'EOF'
-[Unit]
-Description=Radxa SATA Penta HAT Power Management
-After=local-fs.target
-ConditionPathExists=/sys/class/pci_bus/0000:01
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/local/bin/radxa-sata-power-control start
-ExecStop=/usr/local/bin/radxa-sata-power-control stop
-TimeoutStartSec=30
-TimeoutStopSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
+          printf '[Unit]\nDescription=Radxa SATA Penta HAT Power Management\nAfter=local-fs.target\nConditionPathExists=/sys/class/pci_bus/0000:01\n\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/local/bin/radxa-sata-power-control start\nExecStop=/usr/local/bin/radxa-sata-power-control stop\nTimeoutStartSec=30\nTimeoutStopSec=10\n\n[Install]\nWantedBy=multi-user.target\n' > $1/etc/systemd/system/radxa-sata-power.service
 
           # Create safe power control script
           mkdir -p $1/usr/local/bin
-          cat > $1/usr/local/bin/radxa-sata-power-control << 'EOF'
-#!/bin/bash
-set -euo pipefail
-
-# Safe GPIO power control for Radxa SATA Penta HAT
-# Only allows specific, validated operations
-
-GPIO_PIN=26
-GPIO_CHIP="gpiochip4"
-
-validate_environment() {
-    # Validate that we're running in expected environment
-    if [ ! -d "/sys/class/pci_bus/0000:01" ]; then
-        echo "ERROR: PCIe bus not found - HAT may not be connected" >&2
-        exit 1
-    fi
-
-    # Check for JMB585 controller presence
-    if ! lspci -d "197b:0585" >/dev/null 2>&1; then
-        echo "ERROR: JMB585 SATA controller not detected" >&2
-        exit 1
-    fi
-}
-
-setup_gpio() {
-    local gpio_base="/sys/class/gpio"
-
-    # Export GPIO pin if not already exported
-    if [ ! -d "${gpio_base}/gpio${GPIO_PIN}" ]; then
-        echo "${GPIO_PIN}" > "${gpio_base}/export" 2>/dev/null || {
-            echo "WARNING: Could not export GPIO ${GPIO_PIN}" >&2
-            return 1
-        }
-    fi
-
-    # Set direction to output
-    echo "out" > "${gpio_base}/gpio${GPIO_PIN}/direction" 2>/dev/null || {
-        echo "WARNING: Could not set GPIO ${GPIO_PIN} direction" >&2
-        return 1
-    }
-
-    return 0
-}
-
-power_on() {
-    validate_environment
-
-    if setup_gpio; then
-        echo "1" > "/sys/class/gpio/gpio${GPIO_PIN}/value" 2>/dev/null || {
-            echo "WARNING: Could not set GPIO ${GPIO_PIN} to high" >&2
-            return 1
-        }
-        echo "Radxa SATA Penta HAT power enabled (GPIO ${GPIO_PIN})"
-    else
-        echo "WARNING: GPIO setup failed, HAT may not receive power" >&2
-    fi
-}
-
-power_off() {
-    if [ -d "/sys/class/gpio/gpio${GPIO_PIN}" ]; then
-        echo "0" > "/sys/class/gpio/gpio${GPIO_PIN}/value" 2>/dev/null || {
-            echo "WARNING: Could not set GPIO ${GPIO_PIN} to low" >&2
-        }
-        echo "Radxa SATA Penta HAT power disabled (GPIO ${GPIO_PIN})"
-    fi
-}
-
-case "${1:-}" in
-    start)
-        power_on
-        ;;
-    stop)
-        power_off
-        ;;
-    *)
-        echo "Usage: $0 {start|stop}" >&2
-        exit 1
-        ;;
-esac
-EOF
+          printf '#!/bin/bash\nset -euo pipefail\n\n# Safe GPIO power control for Radxa SATA Penta HAT\n# Only allows specific, validated operations\n\nGPIO_PIN=26\nGPIO_CHIP="gpiochip4"\n\nvalidate_environment() {\n    # Validate that we'\''re running in expected environment\n    if [ ! -d "/sys/class/pci_bus/0000:01" ]; then\n        echo "ERROR: PCIe bus not found - HAT may not be connected" >&2\n        exit 1\n    fi\n\n    # Check for JMB585 controller presence\n    if ! lspci -d "197b:0585" >/dev/null 2>&1; then\n        echo "ERROR: JMB585 SATA controller not detected" >&2\n        exit 1\n    fi\n}\n\nsetup_gpio() {\n    local gpio_base="/sys/class/gpio"\n\n    # Export GPIO pin if not already exported\n    if [ ! -d "${gpio_base}/gpio${GPIO_PIN}" ]; then\n        echo "${GPIO_PIN}" > "${gpio_base}/export" 2>/dev/null || {\n            echo "WARNING: Could not export GPIO ${GPIO_PIN}" >&2\n            return 1\n        }\n    fi\n\n    # Set direction to output\n    echo "out" > "${gpio_base}/gpio${GPIO_PIN}/direction" 2>/dev/null || {\n        echo "WARNING: Could not set GPIO ${GPIO_PIN} direction" >&2\n        return 1\n    }\n\n    return 0\n}\n\npower_on() {\n    validate_environment\n\n    if setup_gpio; then\n        echo "1" > "/sys/class/gpio/gpio${GPIO_PIN}/value" 2>/dev/null || {\n            echo "WARNING: Could not set GPIO ${GPIO_PIN} to high" >&2\n            return 1\n        }\n        echo "Radxa SATA Penta HAT power enabled (GPIO ${GPIO_PIN})"\n    else\n        echo "WARNING: GPIO setup failed, HAT may not receive power" >&2\n    fi\n}\n\npower_off() {\n    if [ -d "/sys/class/gpio/gpio${GPIO_PIN}" ]; then\n        echo "0" > "/sys/class/gpio/gpio${GPIO_PIN}/value" 2>/dev/null || {\n            echo "WARNING: Could not set GPIO ${GPIO_PIN} to low" >&2\n        }\n        echo "Radxa SATA Penta HAT power disabled (GPIO ${GPIO_PIN})"\n    fi\n}\n\ncase "${1:-}" in\n    start)\n        power_on\n        ;;\n    stop)\n        power_off\n        ;;\n    *)\n        echo "Usage: $0 {start|stop}" >&2\n        exit 1\n        ;;\nesac\n' > $1/usr/local/bin/radxa-sata-power-control
 
           chmod 755 $1/usr/local/bin/radxa-sata-power-control
 
@@ -217,102 +122,3 @@ EOF
         chroot $1 update-initramfs -u -k all
       fi
 
-    # Add SATA monitoring integration (optional)
-    - |
-      set -eu
-
-      # Setup monitoring for Radxa SATA Penta HAT (optional)
-      if command -v curl >/dev/null 2>&1 && systemctl is-active --quiet prometheus-node-exporter 2>/dev/null; then
-        echo "📊 Setting up Radxa SATA Penta HAT monitoring integration"
-
-        # Create Prometheus textfile collector for SATA metrics
-        mkdir -p "$1/var/lib/prometheus/node-exporter"
-
-        # Generate basic SATA controller metrics
-        cat > "$1/var/lib/prometheus/node-exporter/radxa-sata.prom" << EOF
-# Radxa SATA Penta HAT Metrics
-rpi5_hw_hat_configured 1
-rpi5_hw_devices_detected $(ls /dev/sd* 2>/dev/null | grep -c "^/dev/sd[a-z]$" || echo 0)
-EOF
-
-        # Create SATA status script
-        mkdir -p "$1/usr/local/bin"
-        cat > "$1/usr/local/bin/radxa-sata-status" << 'EOF'
-#!/bin/bash
-# Radxa SATA Penta HAT Status Script
-
-echo "=== Radxa SATA Penta HAT Status ==="
-echo
-
-# Check controller presence
-echo "1. SATA Controller:"
-if lspci -d "197b:0585" >/dev/null 2>&1; then
-    CONTROLLER_INFO=$(lspci -d "197b:0585" -v | head -1)
-    echo "   ✅ JMB585 SATA controller detected: $CONTROLLER_INFO"
-else
-    echo "   ❌ JMB585 SATA controller not detected"
-fi
-
-# Check PCIe configuration
-echo
-echo "2. PCIe Configuration:"
-if grep -q "dtparam=pciex1_gen=3" /boot/firmware/config.txt 2>/dev/null; then
-    echo "   ✅ PCIe Gen 3.0 enabled"
-else
-    echo "   ⚠️ PCIe Gen 3.0 not enabled (may limit performance)"
-fi
-
-# Check connected drives
-echo
-echo "3. Connected SATA Devices:"
-DEVICE_COUNT=$(ls /dev/sd* 2>/dev/null | grep -c "^/dev/sd[a-z]$" || echo 0)
-if [ "$DEVICE_COUNT" -gt 0 ]; then
-    echo "   ✅ $DEVICE_COUNT SATA device(s) detected:"
-    for device in /dev/sd[a-z]; do
-        if [ -b "$device" ]; then
-            SIZE=$(lsblk -b -n -o SIZE "$device" 2>/dev/null | head -1)
-            MODEL=$(lsblk -n -o MODEL "$device" 2>/dev/null | head -1)
-            echo "      $device: ${MODEL:-Unknown} (${SIZE:-Unknown} bytes)"
-        fi
-    done
-else
-    echo "   ⚠️ No SATA devices detected"
-fi
-
-# Check initramfs configuration
-echo
-echo "4. Initramfs Configuration:"
-if [ -f /etc/initramfs-tools/hooks/sata_penta ]; then
-    echo "   ✅ SATA initramfs hook installed"
-else
-    echo "   ⚠️ SATA initramfs hook not found"
-fi
-
-# Check GPIO power management
-echo
-echo "5. Power Management:"
-if systemctl is-enabled --quiet radxa-sata-power.service 2>/dev/null; then
-    if systemctl is-active --quiet radxa-sata-power.service 2>/dev/null; then
-        echo "   ✅ GPIO power management active"
-    else
-        echo "   ⚠️ GPIO power management enabled but not active"
-    fi
-else
-    echo "   ⚪ GPIO power management not configured"
-fi
-
-echo
-echo "=== Performance Recommendations ==="
-if [ "$DEVICE_COUNT" -gt 0 ]; then
-    echo "• Test performance: hdparm -tT /dev/sda"
-    echo "• Check SMART: smartctl -a /dev/sda"
-    echo "• Monitor temps: watch -n 5 'lsblk -o NAME,SIZE,MODEL,TYPE /dev/sd*'"
-fi
-echo "• PCIe info: lspci -d 197b:0585 -vvv"
-echo "• SATA info: lsblk -o NAME,SIZE,MODEL,SERIAL /dev/sd*"
-EOF
-
-        chmod 755 "$1/usr/local/bin/radxa-sata-status"
-        echo "📈 Radxa SATA monitoring configured"
-        echo "   Status command: radxa-sata-status"
-      fi

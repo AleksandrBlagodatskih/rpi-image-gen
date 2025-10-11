@@ -51,4 +51,4 @@ if [ -f "templates/rootfs-overlay/usr/local/bin/disk-expansion.in" ]; then
     chmod +x device/rootfs-overlay/usr/local/bin/disk-expansion
 fi
 
-echo "✅ Overlay templates configured with SSD IDs: $SSD_IDS"
+echo "✅ Overlay templates configured with SSD IDs: ${SSD_IDS}"

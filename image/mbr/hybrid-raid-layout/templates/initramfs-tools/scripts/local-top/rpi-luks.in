@@ -41,7 +41,7 @@ if [ -z "$CRYPT_UUID" ] && [ -n "$RAID_UUID" ]; then
     # In hybrid layout, LUKS is typically on /dev/md0
     if cryptsetup isLuks /dev/md0 2>/dev/null; then
         CRYPT_UUID=$(blkid -s UUID -o value /dev/md0)
-        echo "Found LUKS container on /dev/md0 with UUID: $CRYPT_UUID"
+        echo "Found LUKS container on /dev/md0 with UUID: ${CRYPT_UUID}"
     fi
 fi
 
@@ -62,7 +62,7 @@ if [ -z "$CRYPT_UUID" ]; then
 fi
 
 # Unlock LUKS container with hybrid layout specific error messages
-echo "Unlocking LUKS container for hybrid RAID layout UUID=$CRYPT_UUID..."
+echo "Unlocking LUKS container for hybrid RAID layout UUID=${CRYPT_UUID}..."
 if [ -x /usr/bin/rpi-raid ]; then
     # Use custom keyscript if available
     if cryptsetup luksOpen --keyscript /usr/bin/rpi-raid UUID="$CRYPT_UUID" cryptroot; then

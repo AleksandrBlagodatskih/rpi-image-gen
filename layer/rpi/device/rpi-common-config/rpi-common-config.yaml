@@ -9,9 +9,9 @@
 mmdebstrap:
   customize-hooks:
     - |
-      set -eu
+      set -euo pipefail
       CONFIG_FILE="$1/boot/firmware/config.txt"
-      
+
       # Add common RPi settings (idempotent)
       add_if_not_exists() {
         if ! grep -q "^${1%%=*}" "$CONFIG_FILE" 2>/dev/null; then
@@ -23,7 +23,7 @@ mmdebstrap:
           echo "⚪ Common config already present: $1"
         fi
       }
-      
+
       # Basic settings for all Raspberry Pi models
       add_if_not_exists "auto_initramfs=1" "# Automatically load initramfs files, if found"
       add_if_not_exists "arm_boost=1" "# Run as fast as firmware / board allows"
