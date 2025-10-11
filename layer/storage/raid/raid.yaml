@@ -1,0 +1,45 @@
+# METABEGIN
+# X-Env-Layer-Name: raid
+# X-Env-Layer-Desc: RAID1 storage configuration with automatic disk expansion
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Provides: raid,disk-expansion
+# X-Env-Layer-Category: extension
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - mdadm
+    - initramfs-tools
+    - parted
+    - e2fsprogs  # for resize2fs
+    - btrfs-progs  # for btrfs filesystem resize
+    - f2fs-tools  # for resize.f2fs
+
+  customize-hooks:
+    # RAID configuration with idempotency and error handling
+    - |
+      set -eu
+      echo "🔧 Configuring RAID1 storage"
+
+      # Ensure mdadm service is enabled with automatic recovery
+      systemctl enable mdadm.service 2>/dev/null || true
+
+      # Configure mdadm for automatic RAID assembly
+      if [ ! -f /etc/mdadm/mdadm.conf.backup ]; then
+        cp /etc/mdadm/mdadm.conf /etc/mdadm/mdadm.conf.backup 2>/dev/null || true
+      fi
+
+      echo "✅ RAID1 storage configured"
+
+    # Copy initramfs hooks and scripts for RAID
+    - |
+      mkdir -p $1/etc/initramfs-tools/hooks
+      mkdir -p $1/etc/initramfs-tools/scripts/local-top
+      cp /home/admin/rpi-image-gen/layer/storage/raid/device/initramfs-tools/hooks/rpi-raid $1/etc/initramfs-tools/hooks/
+      chmod +x $1/etc/initramfs-tools/hooks/rpi-raid
+      cp /home/admin/rpi-image-gen/layer/storage/raid/device/initramfs-tools/scripts/local-top/rpi-raid $1/etc/initramfs-tools/scripts/local-top/
+      chmod +x $1/etc/initramfs-tools/scripts/local-top/rpi-raid
+      cp /home/admin/rpi-image-gen/layer/storage/raid/device/initramfs-tools/modules $1/etc/initramfs-tools/
+
+    # Enable disk expansion service
+    - chroot $1 systemctl enable disk-expansion.service

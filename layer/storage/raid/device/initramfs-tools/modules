@@ -1,0 +1,23 @@
+# Essential modules for RAID1 on Raspberry Pi
+# Based on Debian Reference 3.9 and Raspberry Pi BSP requirements
+
+# Core block device and filesystem support
+sd_mod
+ahci
+usb_storage
+uas
+
+# RAID modules
+raid1
+dm_raid
+dm_mod
+
+# Raspberry Pi specific modules
+raspberrypi_hwmon
+i2c_bcm2835
+spi_bcm2835
+
+# Network support for remote operations (optional)
+r8152
+lan78xx
+smsc95xx

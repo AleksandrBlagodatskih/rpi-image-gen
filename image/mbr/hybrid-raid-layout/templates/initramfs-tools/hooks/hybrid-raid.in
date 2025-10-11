@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+
+case "$1" in
+   prereqs) echo ""; exit 0;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Copy hybrid RAID layout specific tools and configurations
+echo "Including hybrid RAID layout initramfs tools for SSD IDs: __SSD_IDS__..."
+
+# Copy RAID tools (already handled by storage/raid layer)
+# Copy LUKS tools (already handled by storage/luks layer)
+
+# Add hybrid-specific configurations if any
+# For now, hybrid layout uses standard RAID and LUKS tools

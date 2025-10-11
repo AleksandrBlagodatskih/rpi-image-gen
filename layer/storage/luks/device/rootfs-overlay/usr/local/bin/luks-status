@@ -1,0 +1,34 @@
+#!/bin/bash
+# LUKS Status Script
+# Provides comprehensive status information about LUKS encryption
+
+echo "=== LUKS Encryption Status ==="
+echo
+
+# Check LUKS status
+echo "1. LUKS Encryption Status:"
+if [ -b /dev/mapper/cryptroot ]; then
+  echo "   ✅ LUKS container cryptroot active"
+  cryptsetup status cryptroot | grep -E "(type|cipher|keysize)" | sed 's/^/   /'
+else
+  echo "   ❌ LUKS container cryptroot not active"
+fi
+echo
+
+# Check filesystem
+echo "2. Filesystem Status:"
+ROOT_MOUNT=$(findmnt -n -o TARGET / 2>/dev/null || echo "unknown")
+FS_TYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || echo "unknown")
+echo "   Mount point: \"$ROOT_MOUNT\""
+echo "   Filesystem: \"$FS_TYPE\""
+echo
+
+# Check services
+echo "3. Services Status:"
+if systemctl is-active --quiet cryptsetup 2>/dev/null; then
+  echo "   ✅ cryptsetup: active"
+elif systemctl is-enabled --quiet cryptsetup 2>/dev/null; then
+  echo "   ⚠️  cryptsetup: enabled but inactive"
+else
+  echo "   ❌ cryptsetup: not configured"
+fi

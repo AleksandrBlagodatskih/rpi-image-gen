@@ -1,0 +1,90 @@
+#!/bin/bash
+set -euo pipefail
+
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Hybrid RAID layout specific: Get device UUIDs from cmdline
+CRYPT_UUID=""
+ROOT_UUID=""
+RAID_UUID=""
+
+# Parse kernel command line for device UUIDs
+# According to hybrid-raid-layout specification:
+# - root=/dev/mapper/cryptroot points to decrypted device
+# - cryptdevice=UUID= specifies the LUKS container to unlock
+# - RAID UUID may be used for fallback device detection
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        cryptdevice=UUID=*)
+            CRYPT_UUID="${param#cryptdevice=UUID=}"
+            ;;
+        root=UUID=*)
+            # In hybrid layout, root=UUID= refers to RAID UUID when not encrypted
+            # But when encrypted, it points to decrypted mapper device
+            ROOT_UUID="${param#root=UUID=}"
+            ;;
+        raiduuid=*)
+            # Hybrid layout specific parameter
+            RAID_UUID="${param#raiduuid=}"
+            ;;
+    esac
+done
+
+# Hybrid RAID layout specific logic:
+# If we have RAID_UUID but no CRYPT_UUID, try to find LUKS on RAID devices
+if [ -z "$CRYPT_UUID" ] && [ -n "$RAID_UUID" ]; then
+    echo "Searching for LUKS container on RAID devices..."
+    # In hybrid layout, LUKS is typically on /dev/md0
+    if cryptsetup isLuks /dev/md0 2>/dev/null; then
+        CRYPT_UUID=$(blkid -s UUID -o value /dev/md0)
+        echo "Found LUKS container on /dev/md0 with UUID: $CRYPT_UUID"
+    fi
+fi
+
+# If still no UUIDs from cmdline, try to find by device name (hybrid layout specific)
+if [ -z "$CRYPT_UUID" ]; then
+    # Hybrid layout uses /dev/md0 as RAID device
+    if cryptsetup isLuks /dev/md0 2>/dev/null; then
+        CRYPT_UUID=$(blkid -s UUID -o value /dev/md0)
+    fi
+fi
+
+# If still no UUID, try environment variables or fallback
+CRYPT_UUID="${CRYPT_UUID:-$ROOT_UUID}"
+
+if [ -z "$CRYPT_UUID" ]; then
+    echo "WARNING: No crypt UUID found, skipping LUKS unlock" >&2
+    exit 0
+fi
+
+# Unlock LUKS container with hybrid layout specific error messages
+echo "Unlocking LUKS container for hybrid RAID layout UUID=$CRYPT_UUID..."
+if [ -x /usr/bin/rpi-raid ]; then
+    # Use custom keyscript if available
+    if cryptsetup luksOpen --keyscript /usr/bin/rpi-raid UUID="$CRYPT_UUID" cryptroot; then
+        echo "Successfully unlocked LUKS container for hybrid RAID"
+    else
+        echo "ERROR: Failed to unlock LUKS container with keyscript" >&2
+        exit 1
+    fi
+else
+    # Fallback: try with key file if available
+    if [ -f /key ]; then
+        if cryptsetup luksOpen --key-file /key UUID="$CRYPT_UUID" cryptroot; then
+            echo "Successfully unlocked LUKS container with key file"
+        else
+            echo "ERROR: Failed to unlock LUKS container with key file" >&2
+            exit 1
+        fi
+    else
+        echo "ERROR: No keyscript or key file available for LUKS unlock in hybrid RAID layout" >&2
+        exit 1
+    fi
+fi
+
+echo "LUKS initialization complete for hybrid RAID layout"
+exit 0

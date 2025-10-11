@@ -1,0 +1,75 @@
+#!/bin/bash
+set -euo pipefail
+
+# Function for error handling
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+# Get device UUIDs from cmdline if available
+CRYPT_UUID=""
+ROOT_UUID=""
+
+# Parse kernel command line for device UUIDs
+# According to Raspberry Pi documentation:
+# - root=/dev/mapper/cryptroot points to decrypted device
+# - cryptdevice=UUID= specifies the LUKS container to unlock
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        cryptdevice=UUID=*)
+            CRYPT_UUID="${param#cryptdevice=UUID=}"
+            ;;
+        root=UUID=*)
+            # If root=UUID= is specified, it might be the RAID UUID for direct mounting
+            ROOT_UUID="${param#root=UUID=}"
+            ;;
+    esac
+done
+
+# If no UUIDs from cmdline, try to find by device name
+if [ -z "$CRYPT_UUID" ]; then
+    # Try to find the crypt device by scanning partitions
+    for dev in /dev/sd*; do
+        if cryptsetup isLuks "$dev" 2>/dev/null; then
+            CRYPT_UUID=$(blkid -s UUID -o value "$dev")
+            break
+        fi
+    done
+fi
+
+# If still no UUID, try environment variables or fallback
+CRYPT_UUID="${CRYPT_UUID:-$ROOT_UUID}"
+
+if [ -z "$CRYPT_UUID" ]; then
+    echo "WARNING: No crypt UUID found, skipping LUKS unlock" >&2
+    exit 0
+fi
+
+# Unlock LUKS container
+echo "Unlocking LUKS container UUID=$CRYPT_UUID..."
+if [ -x /usr/bin/rpi-raid ]; then
+    # Use custom keyscript if available
+    if cryptsetup luksOpen --keyscript /usr/bin/rpi-raid UUID="$CRYPT_UUID" cryptroot; then
+        echo "Successfully unlocked LUKS container"
+    else
+        echo "ERROR: Failed to unlock LUKS container with keyscript" >&2
+        exit 1
+    fi
+else
+    # Fallback: try with key file if available
+    if [ -f /key ]; then
+        if cryptsetup luksOpen --key-file /key UUID="$CRYPT_UUID" cryptroot; then
+            echo "Successfully unlocked LUKS container with key file"
+        else
+            echo "ERROR: Failed to unlock LUKS container with key file" >&2
+            exit 1
+        fi
+    else
+        echo "ERROR: No keyscript or key file available for LUKS unlock" >&2
+        exit 1
+    fi
+fi
+
+echo "LUKS initialization complete"
+exit 0

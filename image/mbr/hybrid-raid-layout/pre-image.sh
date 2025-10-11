@@ -53,6 +53,21 @@ RAID_UUID=$RAID_UUID
 ENCRYPTION_ENABLED=$encryption_enabled
 EOF
 
+# Validate SSD device IDs if specified (hybrid-raid-layout specific)
+if [ -n "${IGconf_hybrid_raid_luks_ssd_ids:-}" ]; then
+    echo "🔍 Validating SSD device IDs..."
+    IFS=',' read -ra ssd_ids <<< "$IGconf_hybrid_raid_luks_ssd_ids"
+    for id in "${ssd_ids[@]}"; do
+        id_path="/dev/disk/by-id/$id"
+        if [ ! -b "$id_path" ] && [ ! -L "$id_path" ]; then
+            echo "WARNING: SSD device ID not found during build: $id ($id_path)" >&2
+            echo "This is normal during image build - IDs will be validated at runtime" >&2
+        else
+            echo "✅ SSD device ID found: $id -> $id_path"
+        fi
+    done
+fi
+
 # Generate genimage configuration - compact file check
 [[ -f "genimage.cfg.in" ]] || die "Template file genimage.cfg.in not found"
 
@@ -97,6 +112,14 @@ sed \
     -e "s|<MKE2FS_CONFIG>|$(readlink -f mke2fs.conf)|g" \
     -e "s|<SETUP>|$(readlink -f setup.sh)|g" \
     "genimage.cfg.in" > "${genimg_in}/genimage.cfg"
+
+# Configure overlay templates with actual values
+if [ -f "configure-overlay.sh" ]; then
+    echo "🔧 Configuring overlay templates..."
+    bash configure-overlay.sh
+else
+    echo "WARNING: configure-overlay.sh not found, overlay templates not processed" >&2
+fi
 
 # Install provision map - select based on encryption status
 provisionmap_file="device/provisionmap-${encryption_enabled:+crypt}${encryption_enabled:-clear}.json"
