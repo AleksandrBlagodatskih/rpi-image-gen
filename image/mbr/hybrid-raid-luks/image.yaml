@@ -122,8 +122,8 @@ mmdebstrap:
       echo "3. Filesystem Status:"
       ROOT_MOUNT=$(findmnt -n -o TARGET / 2>/dev/null || echo "unknown")
       FS_TYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || echo "unknown")
-      echo "   Mount point: $ROOT_MOUNT"
-      echo "   Filesystem: $FS_TYPE"
+      echo "   Mount point: \"$ROOT_MOUNT\""
+      echo "   Filesystem: \"$FS_TYPE\""
 
       # Check disk expansion
       if [ -f /var/lib/disk-expansion.done ]; then
@@ -136,9 +136,9 @@ mmdebstrap:
       # Check services
       echo "4. Services Status:"
       for service in mdadm cryptsetup disk-expansion; do
-        if systemctl is-active --quiet $service 2>/dev/null; then
+        if systemctl is-active --quiet "$service" 2>/dev/null; then
           echo "   ✅ $service: active"
-        elif systemctl is-enabled --quiet $service 2>/dev/null; then
+        elif systemctl is-enabled --quiet "$service" 2>/dev/null; then
           echo "   ⚠️  $service: enabled but inactive"
         else
           echo "   ❌ $service: not configured"

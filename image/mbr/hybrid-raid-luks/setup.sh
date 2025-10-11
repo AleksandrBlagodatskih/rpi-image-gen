@@ -38,7 +38,7 @@ UUID=$CRYPT_UUID / f2fs rw,relatime,compress_algorithm=zstd 0 0
 EOF
             ;;
          *)
-            echo "Unsupported filesystem type: $IGconf_hybrid_raid_luks_rootfs_type" >&2
+            echo "Unsupported filesystem type: \"$IGconf_hybrid_raid_luks_rootfs_type\"" >&2
             exit 1
             ;;
       esac

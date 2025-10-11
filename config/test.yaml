@@ -1,0 +1,21 @@
+device:
+  layer: rpi5
+
+image:
+  layer: hybrid-raid-luks
+  # Имя образа
+  name: test-hybrid-raid-luks
+
+hybrid_raid_luks:
+  rootfs_type: ext4
+  encryption_enabled: y
+  key_method: file
+  key_size: 512
+  ssd_devices: /dev/sda,/dev/sdb
+  boot_part_size: 200M
+  root_part_size: 2G
+  pmap: crypt
+  disk_expansion_enabled: y
+
+layer:
+  base: bookworm-minbase

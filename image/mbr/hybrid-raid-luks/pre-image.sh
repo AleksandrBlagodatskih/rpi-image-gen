@@ -30,7 +30,7 @@ validate_uuid "$ROOT_UUID" "ROOT"
 validate_uuid "$CRYPT_UUID" "CRYPT"
 
 # Generate LUKS key if encryption is enabled
-if [[[ "${IGconf_hybrid_raid_luks_encryption_enabled:-n}" == "y" ]]; then
+if [[ "${IGconf_hybrid_raid_luks_encryption_enabled:-n}" == "y" ]]; then
     # Only file-based key storage is supported for security
     key_method="${IGconf_hybrid_raid_luks_key_method:-file}"
     [[ "$key_method" == "file" ]] || die "Only 'file' key method is supported for security reasons"
@@ -68,7 +68,7 @@ EOF
 
 # Generate genimage configuration
 template_file="genimage.cfg.in"
-if [[[ ! -f "$template_file" ]]; then
+if [[ ! -f "$template_file" ]]; then
     die "Template file $template_file not found"
 fi
 
@@ -101,8 +101,8 @@ luks_container_size="${luks_container_size_mb}M"
 raid_partition_size="$luks_container_size"
 
 sed \
-    -e "s|<IMAGE_NAME>|$IGconf_image_name|g" \
-    -e "s|<IMAGE_SUFFIX>|$IGconf_image_suffix|g" \
+    -e "s|<IMAGE_NAME>|\"$IGconf_image_name\"|g" \
+    -e "s|<IMAGE_SUFFIX>|\"$IGconf_image_suffix\"|g" \
     -e "s|<BOOT_SIZE>|$boot_size|g" \
     -e "s|<ROOT_SIZE>|$root_size|g" \
     -e "s|<LUKS_CONTAINER_SIZE>|$luks_container_size|g" \
