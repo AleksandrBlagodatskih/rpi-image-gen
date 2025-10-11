@@ -1,0 +1,18 @@
+[
+   {
+      "attributes": {
+         "PMAPversion": "1.1.0",
+         "system_type": "flat"
+      }
+   },
+   {
+      "partitions": [
+         {
+            "image": "boot"
+         },
+         {
+            "image": "root"
+         }
+      ]
+   }
+]

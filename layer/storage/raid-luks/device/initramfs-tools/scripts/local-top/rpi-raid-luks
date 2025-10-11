@@ -11,14 +11,18 @@ die() {
 CRYPT_UUID=""
 ROOT_UUID=""
 
-# Parse kernel command line for crypt device UUID
+# Parse kernel command line for device UUIDs
+# According to Raspberry Pi documentation:
+# - root=/dev/mapper/cryptroot points to decrypted device
+# - cryptdevice=UUID= specifies the LUKS container to unlock
 for param in $(cat /proc/cmdline); do
     case "$param" in
-        root=UUID=*)
-            ROOT_UUID="${param#root=UUID=}"
-            ;;
         cryptdevice=UUID=*)
             CRYPT_UUID="${param#cryptdevice=UUID=}"
+            ;;
+        root=UUID=*)
+            # If root=UUID= is specified, it might be the RAID UUID for direct mounting
+            ROOT_UUID="${param#root=UUID=}"
             ;;
     esac
 done
@@ -47,11 +51,33 @@ echo "Waiting for devices to settle..."
 sleep 2
 
 # Assemble RAID array if needed
-if [ -n "$ROOT_UUID" ]; then
-    echo "Assembling RAID array UUID=$ROOT_UUID..."
-    if ! mdadm --assemble --uuid="$ROOT_UUID" /dev/md0 2>/dev/null; then
-        echo "WARNING: RAID assembly failed or no RAID devices found" >&2
+# Try to find RAID UUID from cmdline or scan for RAID devices
+RAID_UUID=""
+for param in $(cat /proc/cmdline); do
+    case "$param" in
+        raiduuid=*)
+            RAID_UUID="${param#raiduuid=}"
+            ;;
+    esac
+done
+
+if [ -n "$RAID_UUID" ]; then
+    echo "Assembling RAID array UUID=$RAID_UUID..."
+    if ! mdadm --assemble --uuid="$RAID_UUID" /dev/md0 2>/dev/null; then
+        echo "WARNING: RAID assembly with UUID failed, trying scan..." >&2
+        mdadm --assemble --scan /dev/md0 2>/dev/null || echo "WARNING: RAID assembly failed" >&2
     fi
+elif [ -n "$ROOT_UUID" ]; then
+    # Fallback: try ROOT_UUID if no explicit RAID UUID (for compatibility)
+    echo "Assembling RAID array with ROOT_UUID=$ROOT_UUID..."
+    if ! mdadm --assemble --uuid="$ROOT_UUID" /dev/md0 2>/dev/null; then
+        echo "WARNING: RAID assembly failed, trying scan..." >&2
+        mdadm --assemble --scan /dev/md0 2>/dev/null || echo "WARNING: RAID assembly failed" >&2
+    fi
+else
+    # Last resort: try to scan for any available RAID arrays
+    echo "No RAID UUID specified, trying to scan for arrays..."
+    mdadm --assemble --scan 2>/dev/null || echo "WARNING: No RAID arrays found" >&2
 fi
 
 # Unlock LUKS container

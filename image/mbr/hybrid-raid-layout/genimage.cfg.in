@@ -1,5 +1,5 @@
-# Hybrid SD + RAID1 + LUKS2 configuration with ext4
-# SD card with MBR (boot) + SATA SSD RAID1 GPT (encrypted root)
+# Hybrid SD + RAID1 configuration with optional LUKS2 encryption
+# SD card with MBR (boot) + SATA SSD RAID1 GPT (encrypted or plain root)
 # Based on genimage documentation: https://github.com/pengutronix/genimage
 
 # SD Card Image (MBR)
@@ -26,10 +26,11 @@ image boot.vfat {
    }
    size = <BOOT_SIZE>
    mountpoint = "/boot/firmware"
+   exec-pre = "<SETUP>"
 }
 
 # ============================================================================
-# RAID1 + LUKS2 Root Filesystem Images for SATA SSD
+# Root Filesystem Images - with optional encryption
 # ============================================================================
 
 # Create filesystem based on IGconf_hybrid_raid_luks_rootfs_type
@@ -49,6 +50,7 @@ image root.ext4 {
    }
    size = <ROOT_SIZE>
    mountpoint = "/"
+   exec-pre = "<SETUP>"
 }
 %elif IGconf_hybrid_raid_luks_rootfs_type == "btrfs"
 image root.btrfs {
@@ -63,6 +65,7 @@ image root.btrfs {
    }
    size = <ROOT_SIZE>
    mountpoint = "/"
+   exec-pre = "<SETUP>"
 }
 %elif IGconf_hybrid_raid_luks_rootfs_type == "f2fs"
 image root.f2fs {
@@ -77,9 +80,12 @@ image root.f2fs {
    }
    size = <ROOT_SIZE>
    mountpoint = "/"
+   exec-pre = "<SETUP>"
 }
 %endif
 
+# Conditional LUKS encryption
+%if ENCRYPTION_ENABLED == "y"
 # Encrypt filesystem into LUKS2 container
 # Note: LUKS container size accounts for LUKS2 header overhead (~16MB) + filesystem size
 image root.luks {
@@ -97,9 +103,10 @@ image root.luks {
    # LUKS2 header: ~16MB + data area matching filesystem size
    size = <LUKS_CONTAINER_SIZE>
 }
+%endif
 
 # ============================================================================
-# SATA SSD Disk Images (GPT) with RAID1 LUKS partitions
+# SATA SSD Disk Images (GPT) with RAID1 partitions
 # ============================================================================
 
 # SATA SSD A - GPT disk containing RAID1 member
@@ -110,10 +117,14 @@ image disk-a.img {
    }
 
    partition raid {
-      # Partition for RAID1 member containing LUKS
+      # Partition for RAID1 member (containing LUKS or filesystem directly)
       # GPT partition type for Linux RAID
       partition-type-uuid = "raid"
+      %if ENCRYPTION_ENABLED == "y"
+      image = "mdraid-a-luks.img"
+      %else
       image = "mdraid-a.img"
+      %endif
       size = <RAID_PARTITION_SIZE>
    }
 }
@@ -126,25 +137,52 @@ image disk-b.img {
    }
 
    partition raid {
-      # Partition for RAID1 member containing LUKS
+      # Partition for RAID1 member (containing LUKS or filesystem directly)
       # GPT partition type for Linux RAID
       partition-type-uuid = "raid"
+      %if ENCRYPTION_ENABLED == "y"
+      image = "mdraid-b-luks.img"
+      %else
       image = "mdraid-b.img"
+      %endif
       size = <RAID_PARTITION_SIZE>
    }
 }
 
 # ============================================================================
-# RAID1 Configuration - Two members with LUKS containers
+# RAID1 Configuration - Two members with optional LUKS containers
 # ============================================================================
 
+%if ENCRYPTION_ENABLED == "y"
 # RAID1 member A containing LUKS encrypted filesystem
+# First member defines the complete RAID configuration
+image mdraid-a-luks.img {
+   mdraid {
+      level = 1                    # RAID1 (mirroring)
+      devices = 2                  # Two devices in array
+      image = "root.luks"          # LUKS container as RAID content
+   }
+}
+
+# RAID1 member B - inherits configuration from member A
+# According to genimage docs: second member inherits RAID identity from parent
+image mdraid-b-luks.img {
+   mdraid {
+      parent = "mdraid-a-luks.img"      # Inherit RAID config from first member
+   }
+}
+%else
+# RAID1 member A containing plain filesystem
 # First member defines the complete RAID configuration
 image mdraid-a.img {
    mdraid {
       level = 1                    # RAID1 (mirroring)
       devices = 2                  # Two devices in array
+      %if ENCRYPTION_ENABLED == "y"
       image = "root.luks"          # LUKS container as RAID content
+      %else
+      image = "root.<IGconf_hybrid_raid_luks_rootfs_type>"          # Filesystem as RAID content
+      %endif
    }
 }
 
@@ -155,3 +193,4 @@ image mdraid-b.img {
       parent = "mdraid-a.img"      # Inherit RAID config from first member
    }
 }
+%endif

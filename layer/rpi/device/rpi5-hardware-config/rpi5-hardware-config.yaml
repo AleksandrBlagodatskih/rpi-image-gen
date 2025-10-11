@@ -1,12 +1,12 @@
 # METABEGIN
-# X-Env-Layer-Name: radxa-sata-penta-hat
+# X-Env-Layer-Name: rpi5-hardware-config
 # X-Env-Layer-Category: device
-# X-Env-Layer-Desc: Radxa SATA Penta HAT support for Raspberry Pi 5 with PCIe Gen 3.0 and SATA initramfs hooks
-# X-Env-Layer-Version: 1.1.0
+# X-Env-Layer-Desc: Raspberry Pi 5 hardware configuration with PCIe Gen 3.0, SATA controllers and USB optimizations
+# X-Env-Layer-Version: 1.0.0
 # X-Env-Layer-Requires: device-base,rpi-boot-firmware
-# X-Env-Layer-Provides: sata-controller,jmb585-support
+# X-Env-Layer-Provides: rpi5-hardware,pcie-gen3,sata-controller
 #
-# X-Env-VarPrefix: radxa_sata
+# X-Env-VarPrefix: rpi5_hw
 #
 # X-Env-Var-pcie_gen3: y
 # X-Env-Var-pcie_gen3-Desc: Enable PCIe Gen 3.0 and SATA optimizations for JMB585 controller
@@ -55,7 +55,7 @@ mmdebstrap:
         fi
       }
 
-      if [ "${IGconf_radxa_sata_pcie_gen3:-y}" = "y" ]; then
+      if [ "${IGconf_rpi5_hw_pcie_gen3:-y}" = "y" ]; then
         add_config_if_not_exists "dtparam=pciex1_gen=3" "# Radxa SATA Penta HAT: PCIe Gen 3.0 for JMB585"
         add_config_if_not_exists "dtparam=pciex1_aspm=off" ""
         add_config_if_not_exists "dtparam=pciex1" ""
@@ -65,7 +65,7 @@ mmdebstrap:
     # Initramfs SATA initialization (idempotent)
     - |
       set -eu
-      if [ "${IGconf_radxa_sata_initramfs_sata:-y}" = "y" ]; then
+      if [ "${IGconf_rpi5_hw_initramfs_sata:-y}" = "y" ]; then
         echo "🔧 Setting up initramfs SATA initialization for JMB585"
 
         # Setup initramfs directories (idempotent)
@@ -101,7 +101,7 @@ mmdebstrap:
         fi
 
         # GPIO power management (experimental) - SECURE VERSION
-        if [ "${IGconf_radxa_sata_enable_gpio_power}" = "y" ]; then
+        if [ "${IGconf_rpi5_hw_enable_gpio_power}" = "y" ]; then
           # Create systemd service for safe GPIO management
           mkdir -p $1/etc/systemd/system
           cat > $1/etc/systemd/system/radxa-sata-power.service << 'EOF'
@@ -231,8 +231,8 @@ EOF
         # Generate basic SATA controller metrics
         cat > "$1/var/lib/prometheus/node-exporter/radxa-sata.prom" << EOF
 # Radxa SATA Penta HAT Metrics
-radxa_sata_hat_configured 1
-radxa_sata_devices_detected $(ls /dev/sd* 2>/dev/null | grep -c "^/dev/sd[a-z]$" || echo 0)
+rpi5_hw_hat_configured 1
+rpi5_hw_devices_detected $(ls /dev/sd* 2>/dev/null | grep -c "^/dev/sd[a-z]$" || echo 0)
 EOF
 
         # Create SATA status script

@@ -1,0 +1,31 @@
+# METABEGIN
+# X-Env-Layer-Name: rpi-common-config
+# X-Env-Layer-Desc: Common Raspberry Pi configuration settings for all models
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: rpi-boot-firmware
+# X-Env-Layer-Provides: rpi-base-config
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |
+      set -eu
+      CONFIG_FILE="$1/boot/firmware/config.txt"
+      
+      # Add common RPi settings (idempotent)
+      add_if_not_exists() {
+        if ! grep -q "^${1%%=*}" "$CONFIG_FILE" 2>/dev/null; then
+          echo "$2" >> "$CONFIG_FILE"
+          echo "$1" >> "$CONFIG_FILE"
+          echo "" >> "$CONFIG_FILE"
+          echo "✅ Added common config: $1"
+        else
+          echo "⚪ Common config already present: $1"
+        fi
+      }
+      
+      # Basic settings for all Raspberry Pi models
+      add_if_not_exists "auto_initramfs=1" "# Automatically load initramfs files, if found"
+      add_if_not_exists "arm_boost=1" "# Run as fast as firmware / board allows"
+      add_if_not_exists "disable_overscan=1" "# Disable compensation for displays with overscan"
+      add_if_not_exists "disable_fw_kms_setup=1" "# Don't have the firmware create an initial video= setting in cmdline.txt"

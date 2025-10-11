@@ -1,0 +1,410 @@
+---
+alwaysApply: ${cursor.file.path.endsWith(".sh")}
+---
+
+# Правило 06: Оптимизация Bash скриптов в rpi-image-gen
+
+## Назначение правила
+Определяет техники оптимизации Bash скриптов для достижения максимальной эффективности, читаемости и минимализма кода в расширениях rpi-image-gen.
+
+## Обязательные требования 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+## Техники оптимизации Bash кода
+
+### Parameter Expansion для валидации и присваивания
+
+#### Валидация с присваиванием в одной строке
+```bash
+# ❌ СТАРОЕ - раздельная валидация и присваивание
+if [[ $# -lt 5 ]]; then
+    die "Not enough arguments"
+fi
+LABEL="$1"
+BOOTUUID="$2"
+# ...
+
+# ✅ НОВОЕ - parameter expansion валидация + присваивание
+: "${1:?"LABEL parameter required"}" && LABEL="$1"
+: "${2:?"BOOTUUID parameter required"}" && BOOTUUID="$2"
+: "${3:?"ROOTUUID parameter required"}" && ROOTUUID="$3"
+: "${4:?"CRYPTUUID parameter required"}" && CRYPTUUID="$4"
+: "${5:?"RAIDUUID parameter required"}" && RAIDUUID="$5"
+```
+
+#### Условная подстановка значений
+```bash
+# ❌ СТАРОЕ - многословные проверки
+if [[ "$encryption_enabled" == "y" ]]; then
+    root_device="/dev/mapper/cryptroot"
+else
+    root_device="UUID=$RAID_UUID"
+fi
+
+# ✅ НОВОЕ - conditional parameter expansion
+root_device="${encryption_enabled:+/dev/mapper/cryptroot}${encryption_enabled:-UUID=$RAID_UUID}"
+```
+
+### Command Chaining для компактности
+
+#### Условное выполнение команд
+```bash
+# ❌ СТАРОЕ - verbose if-else блоки
+if [[ -f "${genimg_in:-}/img_uuids" ]]; then
+    source "${genimg_in}/img_uuids"
+fi
+
+# ✅ НОВОЕ - command chaining
+[[ -f "${genimg_in:-}/img_uuids" ]] && source "${genimg_in}/img_uuids"
+```
+
+#### Тернарные операторы с &&
+```bash
+# ❌ СТАРОЕ - многострочные условия
+if [[ "$encryption_enabled" == "y" ]]; then
+    setup_encryption
+    configure_cryptdevice
+else
+    setup_plain_raid
+fi
+
+# ✅ НОВОЕ - && || chaining
+[[ "$encryption_enabled" == "y" ]] && {
+    setup_encryption
+    configure_cryptdevice
+} || setup_plain_raid
+```
+
+### Массивы и mapfile для эффективной работы с данными
+
+#### Генерация UUID массивов
+```bash
+# ❌ СТАРОЕ - последовательные команды с echo/head/tail
+uuid1=$(uuidgen)
+uuid2=$(uuidgen)
+uuid3=$(uuidgen)
+uuid4=$(uuidgen)
+
+# ✅ НОВОЕ - mapfile для прямого доступа
+mapfile -t uuids < <(uuidgen && uuidgen && uuidgen && uuidgen)
+BOOT_UUID=${uuids[0]}
+ROOT_UUID=${uuids[1]}
+CRYPT_UUID=${uuids[2]}
+RAID_UUID=${uuids[3]}
+```
+
+### Inline case с присваиванием
+
+#### Объединение case вариантов
+```bash
+# ❌ СТАРОЕ - отдельные case блоки
+case "$filesystem" in
+    ext4)
+        setup_ext4
+        ;;
+    btrfs)
+        setup_btrfs
+        ;;
+    f2fs)
+        setup_f2fs
+        ;;
+    *)
+        die "Unsupported filesystem"
+        ;;
+esac
+
+# ✅ НОВОЕ - inline case с группировкой
+case "${IGconf_hybrid_raid_luks_rootfs_type:-ext4}" in
+    ext4|btrfs|f2fs)
+        rootfs_type="${IGconf_hybrid_raid_luks_rootfs_type:-ext4}"
+        root_entry="...config..."
+        ;;
+    *) die "Unsupported filesystem type: $IGconf_hybrid_raid_luks_rootfs_type" ;;
+esac
+```
+
+### sed -i вместо awk с временными файлами
+
+#### Прямое inline редактирование
+```bash
+# ❌ СТАРОЕ - awk + temp files + mv (неэффективно)
+grep -q "root=" "$cmdline_file" && awk '{
+    sub(/root=[^[:space:]*/,"root=/dev/mapper/cryptroot");
+    print
+}' "$cmdline_file" > "$cmdline_file.tmp" && mv "$cmdline_file.tmp" "$cmdline_file"
+
+# ✅ НОВОЕ - sed -i (эффективно)
+grep -q "root=" "$cmdline_file" && sed -i 's|root=[^[:space:]]*|root=/dev/mapper/cryptroot|g' "$cmdline_file"
+```
+
+#### Комплексные замены в одной команде
+```bash
+# Многострочная замена параметров
+sed -i \
+    -e "s|<IMAGE_NAME>|\"$IGconf_image_name\"|g" \
+    -e "s|<BOOT_SIZE>|$boot_size|g" \
+    -e "s|<ENCRYPTION_ENABLED>|$encryption_enabled|g" \
+    "genimage.cfg.in" > "${genimg_in}/genimage.cfg"
+```
+
+### Conditional heredoc для динамического контента
+
+#### Условная генерация файлов
+```bash
+# ❌ СТАРОЕ - множественные heredoc
+if [[ "$encryption_enabled" == "y" ]]; then
+    cat > "$IMAGEMOUNTPATH/etc/fstab" << EOF
+UUID=$BOOT_UUID /boot/firmware vfat defaults 0 2
+/dev/mapper/cryptroot / ext4 defaults,noatime,errors=remount-ro 0 1
+EOF
+else
+    cat > "$IMAGEMOUNTPATH/etc/fstab" << EOF
+UUID=$BOOT_UUID /boot/firmware vfat defaults 0 2
+UUID=$RAID_UUID / ext4 defaults,noatime,errors=remount-ro 0 1
+EOF
+fi
+
+# ✅ НОВОЕ - один heredoc с conditional expansion
+cat > "$IMAGEMOUNTPATH/etc/fstab" << EOF
+UUID=$BOOT_UUID /boot/firmware vfat defaults 0 2
+${encryption_enabled:+/dev/mapper/cryptroot}${encryption_enabled:-UUID=$RAID_UUID} / $rootfs_type ${rootfs_options} 0 1
+EOF
+```
+
+### Компактные awk one-liners
+
+#### Замена многострочных awk скриптов
+```bash
+# ❌ СТАРОЕ - многострочный awk
+awk '
+{
+    if ($0 !~ /initrd/) {
+        print $0 " initrd=initrd.img"
+    } else {
+        print $0
+    }
+}
+' "$file"
+
+# ✅ НОВОЕ - однострочный awk
+awk '{print ($0 !~ /initrd/ ? $0" initrd=initrd.img" : $0)}' "$file"
+```
+
+## Практические примеры оптимизации
+
+### До оптимизации (181 строка)
+```bash
+#!/bin/bash
+set -euo pipefail
+
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+LABEL="$1"
+BOOTUUID="$2"
+# ... много присваиваний
+
+case "$LABEL" in
+   ROOT)
+      case "${IGconf_hybrid_raid_luks_rootfs_type:-ext4}" in
+         ext4)
+            cat << EOF > "$IMAGEMOUNTPATH/etc/fstab"
+UUID=$BOOT_UUID /boot/firmware vfat defaults 0 2
+EOF
+            if [[ "$encryption_enabled" == "y" ]]; then
+                cat << EOF >> "$IMAGEMOUNTPATH/etc/fstab"
+/dev/mapper/cryptroot / ext4 defaults,noatime,errors=remount-ro 0 1
+EOF
+            else
+                cat << EOF >> "$IMAGEMOUNTPATH/etc/fstab"
+UUID=$RAID_UUID / ext4 defaults,noatime,errors=remount-ro 0 1
+EOF
+            fi
+            ;;
+         # ... аналогично для btrfs и f2fs
+      esac
+      ;;
+   BOOT)
+      if [[ "$encryption_enabled" == "y" ]]; then
+         if grep -q "root=" "$IMAGEMOUNTPATH/cmdline.txt"; then
+             awk '...' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+         fi
+         # ... много подобных блоков
+      fi
+      ;;
+esac
+```
+
+### После оптимизации (73 строки, -60%)
+```bash
+#!/bin/bash
+set -euo pipefail
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+: "${1:?"LABEL parameter required"}" && LABEL="$1"
+: "${2:?"BOOTUUID parameter required"}" && BOOTUUID="$2"
+# ... parameter expansion для всех параметров
+
+[[ -f "${genimg_in:-}/img_uuids" ]] && source "${genimg_in}/img_uuids"
+encryption_enabled="${ENCRYPTION_ENABLED:-n}"
+
+case "$LABEL" in
+   ROOT)
+      case "${IGconf_hybrid_raid_luks_rootfs_type:-ext4}" in
+         ext4|btrfs|f2fs)
+            rootfs_type="${IGconf_hybrid_raid_luks_rootfs_type:-ext4}"
+            root_entry="${encryption_enabled:+/dev/mapper/cryptroot}${encryption_enabled:-UUID=$RAID_UUID} / $rootfs_type ..."
+            ;;
+         *) die "Unsupported filesystem type: $IGconf_hybrid_raid_luks_rootfs_type" ;;
+      esac
+
+      cat > "$IMAGEMOUNTPATH/etc/fstab" << EOF
+UUID=$BOOT_UUID /boot/firmware vfat defaults 0 2
+$root_entry
+EOF
+
+      [[ "$encryption_enabled" != "y" ]] && cat > "$IMAGEMOUNTPATH/etc/mdadm/mdadm.conf" << EOF
+...
+EOF
+      ;;
+   BOOT)
+      cmdline_file="$IMAGEMOUNTPATH/cmdline.txt"
+
+      [[ "$encryption_enabled" == "y" ]] && {
+         grep -q "root=" "$cmdline_file" && sed -i 's|root=[^[:space:]]*|root=/dev/mapper/cryptroot|g' "$cmdline_file"
+         ! grep -q "cryptdevice" "$cmdline_file" && sed -i "s|root=/dev/mapper/cryptroot|root=/dev/mapper/cryptroot cryptdevice=UUID=$RAID_UUID:cryptroot|g" "$cmdline_file"
+      } || {
+         grep -q "root=" "$cmdline_file" && sed -i "s|root=[^[:space:]]*|root=UUID=$RAID_UUID|g" "$cmdline_file"
+      }
+
+      ! grep -q "initrd" "$cmdline_file" && sed -i 's|$| initrd=initrd.img|' "$cmdline_file"
+      ! grep -q "rootdelay" "$cmdline_file" && sed -i 's|initrd=initrd\.img|initrd=initrd.img rootdelay=5|g' "$cmdline_file"
+      ;;
+esac
+```
+
+## Метрики эффективности оптимизации
+
+### Количественные метрики:
+- **Сокращение кода**: 181 → 73 строки (-60%)
+- **Увеличение читаемости**: Устранение избыточных конструкций
+- **Снижение сложности**: Меньше условных блоков и повторений
+- **Повышение производительности**: sed -i вместо temp files
+
+### Качественные метрики:
+- **Безопасность**: Сохранение всех проверок и валидаций
+- **Поддерживаемость**: Более ясная логика и структуры
+- **Тестируемость**: Компоненты легче тестировать отдельно
+- **Расширяемость**: Легче добавлять новые функции
+
+## Интеграция с Cursor IDE
+
+### Автоматические предложения оптимизации
+
+#### Parameter Expansion предложения:
+```bash
+# Предложение: "Заменить на parameter expansion"
+if [[ -n "${VAR:-}" ]]; then ... fi
+# ->
+: "${VAR:?"error message"}"
+```
+
+#### Command Chaining предложения:
+```bash
+# Предложение: "Использовать command chaining"
+if [[ condition ]]; then command; fi
+# ->
+[[ condition ]] && command
+```
+
+#### sed -i предложения:
+```bash
+# Предложение: "Заменить awk + temp files на sed -i"
+awk '...' file > file.tmp && mv file.tmp file
+# ->
+sed -i '...' file
+```
+
+### Code Actions для быстрого рефакторинга
+
+#### Быстрые исправления:
+- [ ] Преобразование if-else в command chaining
+- [ ] Замена awk на sed для простых замен
+- [ ] Parameter expansion для валидации
+- [ ] Inline case объединение
+- [ ] Удаление временных файлов
+
+## Антипаттерны оптимизации
+
+### Переусложнение читаемости
+```bash
+# ❌ СЛИШКОМ СЛОЖНО - тернарный оператор в тернарном
+result="${condition1:+${condition2:+value1}${condition2:-value2}}${condition1:-${condition3:+value3}${condition3:-value4}}"
+
+# ✅ ЧИТАЕМО - разделить на несколько строк
+if [[ "$condition1" == "y" ]]; then
+    if [[ "$condition2" == "y" ]]; then
+        result="value1"
+    else
+        result="value2"
+    fi
+else
+    result="${condition3:+value3}${condition3:-value4}"
+fi
+```
+
+### Игнорирование ошибок
+```bash
+# ❌ ОПАСНО - игнорирование ошибок при оптимизации
+grep -q "pattern" file && sed -i 's|old|new|g' file || true
+
+# ✅ БЕЗОПАСНО - явная обработка ошибок
+if grep -q "pattern" file; then
+    sed -i 's|old|new|g' file || die "Failed to update file"
+fi
+```
+
+## Лучшие практики применения
+
+### Когда применять оптимизацию:
+- ✅ **Всегда**: Parameter expansion для валидации
+- ✅ **Всегда**: sed -i вместо awk с temp files
+- ✅ **Часто**: Command chaining для простых условий
+- ✅ **Осторожно**: Conditional expansion для сложных строк
+- ❌ **Избегать**: Переусложнение читаемости
+
+### Порядок применения техник:
+1. **Parameter expansion** - базовая валидация
+2. **Command chaining** - упрощение условий
+3. **sed -i** - замена файловых операций
+4. **Conditional expansion** - динамический контент
+5. **Inline case** - объединение похожих блоков
+
+---
+
+## Метрики соблюдения правила 🔴 ОБЯЗАТЕЛЬНЫЕ
+
+### Обязательные элементы
+- [ ] Правило изучено и понято командой разработки
+- [ ] Соблюдение требования отслеживается в CI/CD
+- [ ] Нарушения правила приводят к блокировке мерджа
+- [ ] Документация правила актуальна и доступна
+- [ ] Регулярный аудит соблюдения правила
+
+### Качественные показатели
+- [ ] 100% соблюдение правила в новом коде
+- [ ] Отсутствие нарушений в основных ветках
+- [ ] Автоматизированная проверка соблюдения
+- [ ] Обратная связь от команды разработки
+- [ ] Непрерывное улучшение формулировок правила
+
+### Автоматизированная проверка
+- [ ] Parameter expansion используется для валидации
+- [ ] sed -i вместо awk с временными файлами
+- [ ] Command chaining для простых условий
+- [ ] Отсутствие избыточных temp файлов
+
+### Источник
+Создано на основе практических оптимизаций bash скриптов в проекте rpi-image-gen с применением современных bash техник и idioms.
